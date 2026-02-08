@@ -1,20 +1,18 @@
 import { test, expect } from '@playwright/test';
 
+// Helper: login with admin credentials
+async function loginAsAdmin(page: import('@playwright/test').Page) {
+  await page.locator('#email').fill('admin@sportscard.local');
+  await page.locator('#password').fill('admin123');
+  await page.locator('button[type="submit"]').click();
+  await expect(page.locator('.auth-container')).not.toBeVisible({ timeout: 5000 });
+}
+
 test.describe('Navigation', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    // Try to login first
-    const emailField = page.getByLabel(/email/i).or(page.getByPlaceholder(/email/i));
-    if (await emailField.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await emailField.fill('admin@sportscard.local');
-      const passwordField = page.getByLabel(/password/i).or(page.getByPlaceholder(/password/i));
-      await passwordField.fill('admin123');
-      const submitBtn = page.getByRole('button', { name: /login|sign in/i });
-      if (await submitBtn.isVisible()) {
-        await submitBtn.click();
-        await page.waitForTimeout(1000);
-      }
-    }
+    await expect(page.locator('.auth-container')).toBeVisible({ timeout: 10000 });
+    await loginAsAdmin(page);
   });
 
   test('all navigation links load without errors', async ({ page }) => {

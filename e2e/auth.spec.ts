@@ -1,118 +1,72 @@
 import { test, expect } from '@playwright/test';
 
+// Helper: login with admin credentials
+async function loginAsAdmin(page: import('@playwright/test').Page) {
+  await page.locator('#email').fill('admin@sportscard.local');
+  await page.locator('#password').fill('admin123');
+  await page.locator('button[type="submit"]').click();
+  // Wait for auth form to disappear (login complete)
+  await expect(page.locator('.auth-container')).not.toBeVisible({ timeout: 5000 });
+}
+
 test.describe('Authentication', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
+    // Wait for auth form to appear
+    await expect(page.locator('.auth-container')).toBeVisible({ timeout: 10000 });
   });
 
   test('allows a new user to register', async ({ page }) => {
-    // Look for register/sign-up link or button
-    const registerLink = page.getByRole('link', { name: /register|sign up/i })
-      .or(page.getByRole('button', { name: /register|sign up/i }));
+    // Default mode is login - switch to register
+    await page.locator('button.toggle-link').click();
 
-    if (await registerLink.isVisible()) {
-      await registerLink.click();
-    }
+    // Wait for registration form heading
+    await expect(page.locator('.auth-header h2')).toContainText('Create Account');
 
-    // Fill registration form
-    const usernameField = page.getByLabel(/username/i).or(page.getByPlaceholder(/username/i));
-    const emailField = page.getByLabel(/email/i).or(page.getByPlaceholder(/email/i));
-    const passwordField = page.getByLabel(/password/i).or(page.getByPlaceholder(/password/i));
+    // Fill registration form using specific IDs
+    await page.locator('#username').fill('testuser');
+    await page.locator('#email').fill('newuser@example.com');
+    await page.locator('#password').fill('testpass123');
+    await page.locator('#confirmPassword').fill('testpass123');
 
-    if (await usernameField.isVisible()) {
-      await usernameField.fill('testuser');
-    }
-    if (await emailField.isVisible()) {
-      await emailField.fill('test@example.com');
-    }
-    if (await passwordField.isVisible()) {
-      await passwordField.fill('testpass123');
-    }
+    // Submit
+    await page.locator('button[type="submit"]').click();
 
-    const submitBtn = page.getByRole('button', { name: /register|sign up|create/i });
-    if (await submitBtn.isVisible()) {
-      await submitBtn.click();
-      // Should redirect to dashboard or show success
-      await expect(page).not.toHaveURL(/register|signup/i, { timeout: 5000 });
-    }
+    // Should redirect away from auth form
+    await expect(page.locator('.auth-container')).not.toBeVisible({ timeout: 5000 });
   });
 
   test('allows login with valid credentials', async ({ page }) => {
-    const loginLink = page.getByRole('link', { name: /login|sign in/i })
-      .or(page.getByRole('button', { name: /login|sign in/i }));
+    // Already on login form by default
+    await expect(page.locator('.auth-header h2')).toContainText('Sign In');
 
-    if (await loginLink.isVisible()) {
-      await loginLink.click();
-    }
+    await loginAsAdmin(page);
 
-    const emailField = page.getByLabel(/email/i).or(page.getByPlaceholder(/email/i));
-    const passwordField = page.getByLabel(/password/i).or(page.getByPlaceholder(/password/i));
-
-    if (await emailField.isVisible()) {
-      await emailField.fill('admin@sportscard.local');
-    }
-    if (await passwordField.isVisible()) {
-      await passwordField.fill('admin123');
-    }
-
-    const submitBtn = page.getByRole('button', { name: /login|sign in/i });
-    if (await submitBtn.isVisible()) {
-      await submitBtn.click();
-      await page.waitForTimeout(1000);
-    }
+    // Should now see the main app (body visible, auth form gone)
+    await expect(page.locator('body')).toBeVisible();
   });
 
   test('shows error for invalid credentials', async ({ page }) => {
-    const loginLink = page.getByRole('link', { name: /login|sign in/i })
-      .or(page.getByRole('button', { name: /login|sign in/i }));
+    await page.locator('#email').fill('wrong@example.com');
+    await page.locator('#password').fill('wrongpassword');
+    await page.locator('button[type="submit"]').click();
 
-    if (await loginLink.isVisible()) {
-      await loginLink.click();
-    }
-
-    const emailField = page.getByLabel(/email/i).or(page.getByPlaceholder(/email/i));
-    const passwordField = page.getByLabel(/password/i).or(page.getByPlaceholder(/password/i));
-
-    if (await emailField.isVisible()) {
-      await emailField.fill('wrong@example.com');
-    }
-    if (await passwordField.isVisible()) {
-      await passwordField.fill('wrongpassword');
-    }
-
-    const submitBtn = page.getByRole('button', { name: /login|sign in/i });
-    if (await submitBtn.isVisible()) {
-      await submitBtn.click();
-      // Should show error message
-      const errorMsg = page.getByText(/invalid|error|incorrect|failed/i);
-      await expect(errorMsg).toBeVisible({ timeout: 5000 }).catch(() => {
-        // Error display may vary
-      });
-    }
+    // Should show error message
+    await expect(page.locator('.auth-error')).toBeVisible({ timeout: 5000 });
   });
 
   test('allows user to logout', async ({ page }) => {
     // First login
-    const emailField = page.getByLabel(/email/i).or(page.getByPlaceholder(/email/i));
-    const passwordField = page.getByLabel(/password/i).or(page.getByPlaceholder(/password/i));
+    await loginAsAdmin(page);
 
-    if (await emailField.isVisible()) {
-      await emailField.fill('admin@sportscard.local');
-      await passwordField.fill('admin123');
-      const submitBtn = page.getByRole('button', { name: /login|sign in/i });
-      if (await submitBtn.isVisible()) {
-        await submitBtn.click();
-        await page.waitForTimeout(1000);
-      }
-    }
-
-    // Now logout
+    // Find and click logout button
     const logoutBtn = page.getByRole('button', { name: /logout|sign out/i })
       .or(page.getByRole('link', { name: /logout|sign out/i }));
 
-    if (await logoutBtn.isVisible()) {
+    if (await logoutBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await logoutBtn.click();
-      await page.waitForTimeout(500);
+      // Should show auth form again
+      await expect(page.locator('.auth-container')).toBeVisible({ timeout: 5000 });
     }
   });
 });
