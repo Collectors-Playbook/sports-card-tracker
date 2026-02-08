@@ -137,11 +137,20 @@ project-root/
 
 ### Common Commands
 ```bash
-npm start          # Start development server
-npm run build      # Build for production
-npm run lint       # Run ESLint
-npm run typecheck  # Run TypeScript compiler
+npm start              # Start development server
+npm run build          # Build for production
+npm run lint           # Run ESLint
+npm run typecheck      # Run TypeScript compiler
+npm test               # Run unit and integration tests
+npm run test:coverage  # Run tests with coverage report
+npm run test:e2e       # Run E2E tests
 ```
+
+### Testing
+- **Unit tests** (Jest): All services in `src/services/` and utilities in `src/utils/`, mocking external deps. Uses `fake-indexeddb` for Dexie testing. Coverage target: 80%+.
+- **Integration tests** (Jest): Multi-service workflows, database operations, React context + component integration, backend API routes.
+- **E2E tests** (Playwright or Cypress): Full user workflows — add card, export to eBay, backup/restore, image pipeline end-to-end.
+- **CI**: GitHub Actions runs all tests on every PR with coverage enforcement.
 
 ### Error Handling Principles
 - Failures on individual cards must not halt the batch pipeline

@@ -329,14 +329,54 @@ project-root/
 [YYYY-MM-DD HH:MM:SS] FILENAME: source (SportsCardsPro|eBay|CardLadder|MarketMovers|All) - reason for failure
 ```
 
-## 7. Non-Functional Requirements
+## 7. Testing
+
+### 7.1 Unit Tests
+- Framework: Jest (bundled with react-scripts)
+- Test all services in `src/services/` in isolation (card detection, text extraction, eBay listing generation, comp service, pricing/fee calculations, reporting)
+- Test all utility functions in `src/utils/` (CSV export, PDF generation, data migration, validation)
+- Test database operations using `fake-indexeddb`
+- Mock external dependencies (APIs, filesystem)
+- Coverage target: 80%+ on services and utilities
+
+### 7.2 Integration Tests
+- Test service-to-service workflows (e.g., image processing → comp generation → eBay CSV)
+- Test database operations with real IndexedDB (via fake-indexeddb)
+- Test React context providers with components
+- Test backend API routes (Express endpoints)
+
+### 7.3 Functional / E2E Tests
+- Framework: Playwright or Cypress
+- Test full user workflows:
+  - Add card → view in inventory → export to eBay
+  - Image processing pipeline end-to-end (raw → processed → comps → CSV)
+  - Authentication flow (login → access cards → logout)
+  - Backup/restore cycle
+  - Collection management
+- Cover all major user journeys
+
+### 7.4 CI/CD Integration
+- GitHub Actions workflow runs all tests on every PR
+- Test coverage reporting with minimum threshold enforcement
+- E2E tests run against built application
+- Test results visible in PR checks
+
+### 7.5 Test Commands
+```bash
+npm test              # Run unit and integration tests
+npm run test:coverage # Run tests with coverage report
+npm run test:e2e      # Run E2E tests
+```
+
+## 8. Non-Functional Requirements
 
 - **Performance**: Image processing and comp generation should handle batches of 100+ cards
 - **Portability**: Must work identically on local machines and GCP VMs
 - **Resilience**: Failures on individual cards must not halt the batch; errors are logged and processing continues
 - **Idempotency**: Re-running the pipeline on the same raw images should not create duplicates in processed/
+- **Test Coverage**: 80%+ code coverage on services and utilities; all critical user workflows covered by E2E tests
 
-## 8. Future Considerations
+## 9. Future Considerations
 
 - Mobile app version for on-the-go photo capture and QR code scanning
 - Real OCR integration (e.g., Google Cloud Vision API) for card identification
