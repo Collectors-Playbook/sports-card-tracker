@@ -30,6 +30,9 @@ const EbayListings: React.FC = () => {
   // Removed automatic export functionality
 
   const evaluateCard = (card: Card): ListingRecommendation | null => {
+    // Skip Personal Collection cards - they are never for sale
+    if (card.collectionType === 'PC') return null;
+
     // Skip already sold cards if filter is on
     if (showOnlyUnsold && card.sellDate) return null;
 
@@ -292,18 +295,18 @@ const EbayListings: React.FC = () => {
         <h1>eBay Listing Recommendations</h1>
         <p>AI-powered suggestions for your most profitable eBay listings</p>
         <div className="export-buttons">
-          <button 
+          <button
             className="btn-instant-export"
             onClick={() => {
               const result = instantExportAllUnsoldCards(state.cards);
               if (result) {
-                alert(`✅ Exported ${result.count} cards!\n\nTotal value: $${result.totalValue.toFixed(2)}\nFile: ${result.filename}`);
+                alert(`Exported ${result.count} cards!\n\nTotal value: $${result.totalValue.toFixed(2)}\nFile: ${result.filename}`);
               } else {
                 alert('No unsold cards to export!');
               }
             }}
           >
-            ⚡ INSTANT Export ALL Unsold Cards ({state.cards.filter(c => !c.sellDate).length})
+            ⚡ INSTANT Export ALL Unsold Cards ({state.cards.filter(c => !c.sellDate && c.collectionType !== 'PC').length})
           </button>
           <button 
             className="btn-quick-export"
@@ -492,6 +495,12 @@ const EbayListings: React.FC = () => {
           </div>
         ))}
       </div>
+
+      {state.cards.some(c => c.collectionType === 'PC') && (
+        <div className="pc-exclusion-note" style={{ padding: '8px 16px', margin: '0 0 16px', background: '#f0f4ff', borderRadius: '6px', fontSize: '0.85rem', color: '#555' }}>
+          Personal Collection cards are excluded from all eBay exports and recommendations.
+        </div>
+      )}
 
       {recommendations.length === 0 && (
         <div className="no-recommendations">

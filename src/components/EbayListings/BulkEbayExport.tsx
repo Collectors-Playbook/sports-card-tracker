@@ -135,12 +135,13 @@ const BulkEbayExport: React.FC<Props> = ({ cards, onClose }) => {
   };
 
   const createListings = (): EbayListing[] => {
-    let filteredCards = cards;
-    
+    // Always exclude PC cards from eBay exports
+    let filteredCards = cards.filter(card => card.collectionType !== 'PC');
+
     if (!includeUnsold) {
       filteredCards = filteredCards.filter(card => card.sellDate);
     }
-    
+
     if (!includeSold) {
       filteredCards = filteredCards.filter(card => !card.sellDate);
     }
