@@ -8,13 +8,13 @@
       "type": "image/png"
     },
     {
-      "src": "logo-smp.png",
+      "src": "logo.png",
       "type": "image/png",
       "sizes": "512x512"
     }
   ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#000000",
+  "theme_color": "#0f1b2d",
   "background_color": "#ffffff"
 }

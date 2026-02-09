@@ -13,12 +13,12 @@
 
 .card-list-header h1 {
   margin: 0;
-  color: #333;
+  color: var(--text-primary);
   font-size: 2.5rem;
 }
 
 .card-count {
-  color: #666;
+  color: var(--text-secondary);
   font-size: 1.1rem;
   display: flex;
   align-items: center;
@@ -43,9 +43,10 @@
 .filters-section {
   background: white;
   padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
   margin-bottom: 30px;
+  border: 1px solid var(--border-light);
 }
 
 .search-bar {
@@ -56,14 +57,15 @@
   width: 100%;
   padding: 12px;
   font-size: 1rem;
-  border: 2px solid #e0e0e0;
+  border: 2px solid var(--border-light);
   border-radius: 6px;
   outline: none;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .search-input:focus {
-  border-color: #007bff;
+  border-color: var(--brand-gold);
+  box-shadow: 0 0 0 3px rgba(245, 166, 35, 0.15);
 }
 
 .filters-grid {
@@ -76,15 +78,16 @@
 .filter-select {
   padding: 10px;
   font-size: 0.9rem;
-  border: 2px solid #e0e0e0;
+  border: 2px solid var(--border-light);
   border-radius: 6px;
   background: white;
   outline: none;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .filter-select:focus {
-  border-color: #007bff;
+  border-color: var(--brand-gold);
+  box-shadow: 0 0 0 3px rgba(245, 166, 35, 0.15);
 }
 
 .clear-filters-btn {
@@ -104,12 +107,13 @@
 
 .bulk-ebay-btn {
   padding: 10px 20px;
-  background: #0654ba;
-  color: white;
+  background: var(--brand-gold);
+  color: var(--brand-navy);
   border: none;
   border-radius: 6px;
   cursor: pointer;
   font-size: 0.9rem;
+  font-weight: 600;
   transition: background 0.2s;
   display: flex;
   align-items: center;
@@ -117,7 +121,7 @@
 }
 
 .bulk-ebay-btn:hover {
-  background: #0547a0;
+  background: var(--brand-gold-hover);
 }
 
 .sort-section {
@@ -128,32 +132,34 @@
 
 .sort-section label {
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .sort-select {
   padding: 8px 12px;
   font-size: 0.9rem;
-  border: 2px solid #e0e0e0;
+  border: 2px solid var(--border-light);
   border-radius: 6px;
   background: white;
   outline: none;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .sort-select:focus {
-  border-color: #007bff;
+  border-color: var(--brand-gold);
+  box-shadow: 0 0 0 3px rgba(245, 166, 35, 0.15);
 }
 
 /* Bulk Selection Controls */
 .bulk-selection-controls {
-  background: #f3f4f6;
+  background: var(--bg-tertiary);
   padding: 12px 20px;
   border-radius: 8px;
   margin-bottom: 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  border: 1px solid var(--border-light);
 }
 
 .selection-info {
@@ -161,7 +167,7 @@
   align-items: center;
   gap: 12px;
   font-size: 14px;
-  color: #374151;
+  color: var(--text-primary);
 }
 
 .selection-info span {
@@ -192,17 +198,18 @@
 }
 
 .move-cards-btn {
-  background: #6366f1;
-  color: white;
+  background: var(--brand-gold);
+  color: var(--brand-navy);
+  font-weight: 600;
 }
 
 .move-cards-btn:hover {
-  background: #4f46e5;
+  background: var(--brand-gold-hover);
 }
 
 .select-all-btn {
   background: white;
-  color: #374151;
+  color: var(--text-primary);
   border: 1px solid #e5e7eb;
 }
 
@@ -213,21 +220,22 @@
 
 .cards-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
 }
 
 .card-item {
   background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
   overflow: hidden;
   transition: transform 0.2s, box-shadow 0.2s;
   position: relative;
+  border: 1px solid var(--border-light);
 }
 
 .card-item.selected {
-  box-shadow: 0 0 0 2px #6366f1, 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 0 0 2px var(--brand-gold), var(--shadow-md);
 }
 
 .card-selection {
@@ -241,7 +249,7 @@
   width: 18px;
   height: 18px;
   cursor: pointer;
-  accent-color: #6366f1;
+  accent-color: var(--brand-gold);
 }
 
 .card-item.sold .card-image-section {
@@ -249,8 +257,8 @@
 }
 
 .card-item:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
 }
 
 .card-actions {
@@ -274,12 +282,12 @@
 }
 
 .edit-btn {
-  background: rgba(0, 123, 255, 0.9);
+  background: rgba(26, 43, 69, 0.9);
   color: white;
 }
 
 .edit-btn:hover {
-  background: rgba(0, 86, 179, 0.95);
+  background: rgba(15, 27, 45, 0.95);
 }
 
 .delete-btn {
@@ -329,10 +337,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f8f9fa;
-  border-radius: 8px 8px 0 0;
+  background: #f0f0f0;
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
   overflow: hidden;
   min-height: 200px;
+  aspect-ratio: 3 / 4;
   position: relative;
 }
 
@@ -366,11 +375,11 @@
 
 
 .card-player-name {
-  padding: 12px 16px;
+  padding: 14px 16px;
   padding-bottom: 40px;
   background: white;
-  border-radius: 0 0 8px 8px;
-  text-align: center;
+  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+  text-align: left;
   position: relative;
   border: none;
   border-left: none;
@@ -378,10 +387,10 @@
 
 .card-player-name h4 {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   font-weight: 700;
-  color: #333;
-  line-height: 1.2;
+  color: var(--text-primary);
+  line-height: 1.3;
 }
 
 /* Cleaned up - these styles are now handled by the new layout */
@@ -389,7 +398,7 @@
 .empty-state {
   text-align: center;
   padding: 60px 20px;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .empty-state p {
@@ -397,58 +406,65 @@
   margin-bottom: 20px;
 }
 
+/* ===== RESPONSIVE: Tablet ===== */
+@media (max-width: 1024px) {
+  .cards-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 @media (max-width: 768px) {
   .card-list-container {
     padding: 15px;
   }
-  
+
   .sold-banner {
     font-size: 1rem;
     padding: 10px 15px;
   }
-  
+
   .card-list-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 10px;
   }
-  
+
   .card-list-header h1 {
     font-size: 2rem;
   }
-  
+
   .filters-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .sort-section {
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;
   }
-  
+
   .cards-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .card-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 10px;
   }
-  
+
   .card-actions {
     width: 100%;
     justify-content: flex-end;
   }
-  
+
   .card-info-compact {
     flex-direction: column;
     align-items: center;
     text-align: center;
     gap: 8px;
   }
-  
+
   .card-price-summary {
     margin-left: 0;
     text-align: center;
