@@ -6,6 +6,7 @@ export interface Card {
   id: string;
   userId: string;
   collectionId?: string;
+  collectionType: 'PC' | 'Inventory';
   player: string;
   team: string;
   year: number;
@@ -29,6 +30,7 @@ export interface Card {
 export interface CardInput {
   userId?: string;
   collectionId?: string;
+  collectionType?: 'PC' | 'Inventory';
   player: string;
   team: string;
   year: number;
