@@ -224,8 +224,12 @@ describe('EbayListingService', () => {
     it('generates CSV with headers', () => {
       const listing = service.generateListing(createCard(), defaultOptions);
       const csv = service.exportToCSV([listing]);
-      expect(csv.split('\n')[0]).toContain('Title');
-      expect(csv.split('\n')[0]).toContain('Category');
+      // eBay draft format: 4 #INFO rows, then column header on line 4
+      const headerLine = csv.split('\n')[4];
+      expect(headerLine).toContain('Title');
+      expect(headerLine).toContain('Category ID');
+      // Verify #INFO rows are present
+      expect(csv.split('\n')[0]).toContain('#INFO');
     });
 
     it('includes data rows', () => {

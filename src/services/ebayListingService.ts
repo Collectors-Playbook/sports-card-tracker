@@ -552,29 +552,40 @@ export class EbayListingService {
    * Exports multiple listings to CSV
    */
   exportToCSV(listings: EbayListing[]): string {
-    const headers = [
-      'Title',
-      'Description',
-      'Category',
-      'Condition',
-      'Starting Price',
-      'Buy It Now Price',
-      'Shipping Cost',
-      'Keywords'
+    const infoRows = [
+      '#INFO,Version=0.0.2,Template= eBay-draft-listings-template_US,,,,,,,,',
+      '#INFO Action and Category ID are required fields. 1) Set Action to Draft 2) Please find the category ID for your listings here: https://pages.ebay.com/sellerinformation/news/categorychanges.html,,,,,,,,,,',
+      '"#INFO After you\'ve successfully uploaded your draft from the Seller Hub Reports tab, complete your drafts to active listings here: https://www.ebay.com/sh/lst/drafts",,,,,,,,,,',
+      '#INFO,,,,,,,,,,',
+      'Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SKU),Category ID,Title,UPC,Price,Quantity,Item photo URL,Condition ID,Description,Format',
     ];
 
-    const rows = listings.map(listing => [
-      `"${listing.title}"`,
-      `"${listing.description.replace(/"/g, '""')}"`,
-      `"${listing.category}"`,
-      `"${listing.condition}"`,
-      listing.startingPrice?.toFixed(2) || '',
-      listing.buyItNowPrice?.toFixed(2) || '',
-      listing.shippingCost.toFixed(2),
-      `"${listing.searchKeywords.join(', ')}"`
-    ]);
+    const rows = listings.map(listing => {
+      const sku = listing.itemSpecifics?.['Player']
+        ? `${listing.itemSpecifics['Player'].split(' ').pop()?.toUpperCase()}-${listing.itemSpecifics['Year'] || '0000'}-${listing.itemSpecifics['Card Number'] || '0'}`
+        : '';
+      const price = listing.buyItNowPrice?.toFixed(2) || listing.startingPrice?.toFixed(2) || '0.00';
+      const photoUrl = listing.images.length > 0 ? listing.images[0] : '';
+      const desc = listing.description.includes(',') || listing.description.includes('"')
+        ? `"${listing.description.replace(/"/g, '""')}"`
+        : listing.description;
 
-    return [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+      return [
+        'Draft',
+        sku,
+        listing.categoryId.toString(),
+        listing.title,
+        '',
+        price,
+        '1',
+        photoUrl,
+        listing.conditionId.toString(),
+        desc,
+        'FixedPrice',
+      ].join(',');
+    });
+
+    return [...infoRows, ...rows].join('\n') + '\n';
   }
 
   /**

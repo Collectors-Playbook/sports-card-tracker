@@ -116,6 +116,10 @@ class FileService {
     return this.processedDir;
   }
 
+  getDataDir(): string {
+    return this.dataDir;
+  }
+
   private getSafePath(dir: string): string {
     const resolved = path.resolve(dir);
     return resolved;

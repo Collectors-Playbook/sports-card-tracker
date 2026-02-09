@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Card } from '../../types';
 import { generateEbayFileExchange, generateSimpleListings } from '../../utils/ebayExport';
+import apiService from '../../services/api';
 import './BulkEbayExport.css';
 
 interface EbayListing {
@@ -33,6 +34,8 @@ const BulkEbayExport: React.FC<Props> = ({ cards, onClose }) => {
   const [location, setLocation] = useState('USA');
   const [paypalEmail, setPaypalEmail] = useState('');
   const [autoExportAll, setAutoExportAll] = useState(false);
+  const [useBackend, setUseBackend] = useState(false);
+  const [serverExporting, setServerExporting] = useState(false);
 
   const generateEbayTitle = (card: Card): string => {
     const parts = [];
@@ -269,14 +272,50 @@ ${listing.description}
     URL.revokeObjectURL(url);
   };
 
+  const handleServerExport = async () => {
+    setServerExporting(true);
+    try {
+      const result = await apiService.generateEbayCsv({
+        priceMultiplier,
+        shippingCost,
+        duration,
+        location,
+        dispatchTime: 1,
+      });
+
+      const blob = await apiService.downloadEbayCsv();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = result.filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      alert(
+        `Server generated ${result.totalCards} listings (${result.skippedPcCards} PC cards excluded). Total value: $${result.totalListingValue.toFixed(2)}`
+      );
+    } catch (err) {
+      alert(`Server export failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setServerExporting(false);
+    }
+  };
+
   const handleExport = () => {
+    if (useBackend) {
+      handleServerExport();
+      return;
+    }
+
     const listings = createListings();
-    
+
     if (listings.length === 0) {
       alert('No cards match the selected criteria');
       return;
     }
-    
+
     if (exportFormat === 'csv') {
       exportAsCSV(listings);
     } else if (exportFormat === 'txt') {
@@ -284,7 +323,7 @@ ${listing.description}
     } else if (exportFormat === 'ebay') {
       exportAsEbayFE(listings);
     }
-    
+
     alert(`Successfully exported ${listings.length} eBay listings!`);
   };
 
@@ -350,6 +389,14 @@ ${listing.description}
 
           <div className="option-group">
             <h3>Listing Settings</h3>
+            <label>
+              <input
+                type="checkbox"
+                checked={useBackend}
+                onChange={(e) => setUseBackend(e.target.checked)}
+              />
+              Generate on server
+            </label>
             <label>
               Duration
               <select value={duration} onChange={(e) => setDuration(e.target.value)}>
@@ -428,8 +475,8 @@ ${listing.description}
           <button className="btn-secondary" onClick={onClose}>
             Cancel
           </button>
-          <button className="btn-primary" onClick={handleExport}>
-            Export {previewListings.length} Listings
+          <button className="btn-primary" onClick={handleExport} disabled={serverExporting}>
+            {serverExporting ? 'Generating...' : `Export ${previewListings.length} Listings`}
           </button>
         </div>
       </div>

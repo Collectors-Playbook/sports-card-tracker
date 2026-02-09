@@ -226,6 +226,65 @@ class ApiService {
     return this.request<User>('/auth/me');
   }
 
+  // ─── eBay Export ──────────────────────────────────────────────────────────
+
+  public async generateEbayCsv(options: {
+    priceMultiplier: number;
+    shippingCost: number;
+    duration?: string;
+    location?: string;
+    dispatchTime?: number;
+    cardIds?: string[];
+  }): Promise<{
+    filename: string;
+    totalCards: number;
+    skippedPcCards: number;
+    totalListingValue: number;
+    generatedAt: string;
+  }> {
+    return this.request('/ebay/generate', {
+      method: 'POST',
+      body: JSON.stringify(options),
+    });
+  }
+
+  public async generateEbayCsvAsync(options: {
+    priceMultiplier: number;
+    shippingCost: number;
+    duration?: string;
+    location?: string;
+    dispatchTime?: number;
+    cardIds?: string[];
+  }): Promise<{ id: string; type: string; status: string }> {
+    return this.request('/ebay/generate-async', {
+      method: 'POST',
+      body: JSON.stringify(options),
+    });
+  }
+
+  public async downloadEbayCsv(): Promise<Blob> {
+    const url = `${API_BASE_URL}/ebay/download`;
+    const token = localStorage.getItem('token');
+    const response = await fetch(url, {
+      headers: {
+        ...(token && { 'Authorization': `Bearer ${token}` }),
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to download CSV: ${response.statusText}`);
+    }
+    return response.blob();
+  }
+
+  public async getEbayExportStatus(): Promise<{
+    templateExists: boolean;
+    outputExists: boolean;
+  }> {
+    return this.request('/ebay/status');
+  }
+
+  // ─── Health ───────────────────────────────────────────────────────────────
+
   public async healthCheck(): Promise<{ status: string; message: string }> {
     try {
       logDebug('ApiService', 'Performing health check');
