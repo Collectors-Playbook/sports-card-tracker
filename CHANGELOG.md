@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.7.0] - 2026-02-09
+
+### Added
+- Server-side eBay File Exchange CSV generation service with title/description generation, category/condition mapping, and CSV escaping ([#3](https://github.com/Collectors-Playbook/sports-card-tracker/issues/3), [PR #39](https://github.com/Collectors-Playbook/sports-card-tracker/pull/39))
+- `eBay-draft-listing-template.csv` with 24-column eBay File Exchange headers and example row ([PR #39](https://github.com/Collectors-Playbook/sports-card-tracker/pull/39))
+- eBay export API routes: POST /generate (sync), POST /generate-async, GET /download, GET /template, GET /status ([PR #39](https://github.com/Collectors-Playbook/sports-card-tracker/pull/39))
+- "Generate on server" toggle in BulkEbayExport UI with loading state, keeping all existing client-side export paths unchanged ([PR #39](https://github.com/Collectors-Playbook/sports-card-tracker/pull/39))
+- `EbayExportOptions` and `EbayExportResult` type interfaces ([PR #39](https://github.com/Collectors-Playbook/sports-card-tracker/pull/39))
+- `fileService.getDataDir()` accessor method ([PR #39](https://github.com/Collectors-Playbook/sports-card-tracker/pull/39))
+- Frontend API methods: `generateEbayCsv`, `generateEbayCsvAsync`, `downloadEbayCsv`, `getEbayExportStatus` ([PR #39](https://github.com/Collectors-Playbook/sports-card-tracker/pull/39))
+- API cards synced into Dexie on load via `useApi` hook ([PR #39](https://github.com/Collectors-Playbook/sports-card-tracker/pull/39))
+- 21 new backend tests: 12 service unit tests + 9 route integration tests (217 total server tests across 18 suites) ([PR #39](https://github.com/Collectors-Playbook/sports-card-tracker/pull/39))
+
+### Changed
+- `exportToCSV` updated to eBay draft upload format with File Exchange column structure ([PR #39](https://github.com/Collectors-Playbook/sports-card-tracker/pull/39))
+- PC card exclusion enforced at the server-side eBay export service layer ([PR #39](https://github.com/Collectors-Playbook/sports-card-tracker/pull/39))
+
+---
+
 ## [0.6.0] - 2026-02-09
 
 ### Added

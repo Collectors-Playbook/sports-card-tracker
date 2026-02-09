@@ -91,18 +91,23 @@ This roadmap organizes all planned work into sequential phases based on dependen
 
 **Blockers**: Requires API access/credentials for SportsCardsPro, eBay Developer Program, Card Ladder enterprise API, and Market Movers.
 
-### 1D: Template-Driven eBay CSV
+### 1D: Template-Driven eBay CSV -- PARTIALLY COMPLETE
 
-| Issue | Feature | Priority | Effort |
-|-------|---------|----------|--------|
-| [#3](https://github.com/Collectors-Playbook/sports-card-tracker/issues/3) | Template-driven eBay CSV + store API connection | Critical | Large |
+| Issue | Feature | Priority | Effort | Status |
+|-------|---------|----------|--------|--------|
+| [#3](https://github.com/Collectors-Playbook/sports-card-tracker/issues/3) | Template-driven eBay CSV + store API connection | Critical | Large | In Progress ([PR #39](https://github.com/Collectors-Playbook/sports-card-tracker/pull/39)) |
 
 **Deliverables**:
-- `eBay-draft-listing-template.csv` with all required eBay columns and defaults
-- Template parser that populates rows from card + comp data
-- `ebay-draft-upload-batch.csv` output file
-- eBay Developer Program registration and OAuth flow
-- eBay API service for listing CRUD, sales tracking, inventory sync
+- [x] `eBay-draft-listing-template.csv` with 24-column eBay File Exchange headers and example row
+- [x] Server-side CSV generation service with title/description generation, category/condition mapping, CSV escaping
+- [x] `ebay-draft-upload-batch.csv` output file via sync and async generation endpoints
+- [x] API routes: POST /generate, POST /generate-async, GET /download, GET /template, GET /status
+- [x] Frontend toggle for server-side eBay export in BulkEbayExport UI
+- [x] PC card exclusion enforced at service layer
+- [x] Frontend API cards synced into Dexie on load
+- [x] 21 new backend tests (217 total server tests across 18 suites)
+- [ ] eBay Developer Program registration and OAuth flow
+- [ ] eBay API service for listing CRUD, sales tracking, inventory sync
 
 ---
 
@@ -378,7 +383,7 @@ Brand Phase 1 ── Brand Phase 2  (parallel track, no feature dependencies)
 | Milestone | Phases | What Users Can Do |
 |-----------|--------|-------------------|
 | **M0: Quality Gate** | Phase 0 | **COMPLETE** - 355 unit/integration tests, 15 E2E tests, CI pipeline running |
-| **M1: Core Pipeline** | Phase 1 | Drop photos in folder -> get comps -> get eBay CSV. **Phase 1A complete**: backend service with auth, comp proxy, job queue, 194 server tests. **Phase 1B complete**: Tesseract.js OCR, card parsing, duplicate detection, front/back pairing, frontend auth wired to backend. |
+| **M1: Core Pipeline** | Phase 1 | Drop photos in folder -> get comps -> get eBay CSV. **Phase 1A complete**: backend service with auth, comp proxy, job queue, 194 server tests. **Phase 1B complete**: Tesseract.js OCR, card parsing, duplicate detection, front/back pairing, frontend auth wired to backend. **Phase 1D in progress**: server-side eBay CSV generation with template, sync/async endpoints, download, PC exclusion, 217 server tests. Remaining: eBay OAuth and API integration. |
 | **Brand** | Brand Phases | **Phase 1 complete**: Collectors Playbook brand identity (navy/gold palette, Inter font, dark header, gold nav, multi-column footer, marketplace card grid). Phase 2 (dashboard, reports, forms) planned. |
 | **M2: Full Inventory** | Phase 2 | Track grading submissions, find cards physically, tag PC vs. inventory. **Phase 2A complete**: PC vs Inventory split with filtered dashboard, card list filter, eBay export exclusion. |
 | **M3: True Profitability** | Phase 3 | Know actual profit per card after all fees. Tax-ready reports. |
