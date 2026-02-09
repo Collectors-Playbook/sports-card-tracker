@@ -187,6 +187,25 @@ export interface CompAdapter {
   fetchComps(request: CompRequest): Promise<CompResult>;
 }
 
+// ─── eBay Export ────────────────────────────────────────────────────────────
+
+export interface EbayExportOptions {
+  priceMultiplier: number;
+  shippingCost: number;
+  duration: string;
+  location: string;
+  dispatchTime: number;
+  cardIds?: string[];
+}
+
+export interface EbayExportResult {
+  filename: string;
+  totalCards: number;
+  skippedPcCards: number;
+  totalListingValue: number;
+  generatedAt: string;
+}
+
 // ─── Image Processing ───────────────────────────────────────────────────────
 
 export interface ImageProcessingPayload {
