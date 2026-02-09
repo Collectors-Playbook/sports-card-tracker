@@ -135,3 +135,52 @@ export interface AuthPayload {
 export interface AuthenticatedRequest extends Request {
   user?: AuthPayload;
 }
+
+// ─── Comps ───────────────────────────────────────────────────────────────────
+
+export type CompSource = 'SportsCardsPro' | 'eBay' | 'CardLadder' | 'MarketMovers';
+
+export interface CompSale {
+  date: string;
+  price: number;
+  grade?: string;
+  venue: string;
+}
+
+export interface CompResult {
+  source: CompSource;
+  marketValue: number | null;
+  sales: CompSale[];
+  averagePrice: number | null;
+  low: number | null;
+  high: number | null;
+  error?: string;
+}
+
+export interface CompReport {
+  cardId: string;
+  player: string;
+  year: number;
+  brand: string;
+  cardNumber: string;
+  condition?: string;
+  sources: CompResult[];
+  aggregateAverage: number | null;
+  aggregateLow: number | null;
+  aggregateHigh: number | null;
+  generatedAt: string;
+}
+
+export interface CompRequest {
+  cardId: string;
+  player: string;
+  year: number;
+  brand: string;
+  cardNumber: string;
+  condition?: string;
+}
+
+export interface CompAdapter {
+  source: CompSource;
+  fetchComps(request: CompRequest): Promise<CompResult>;
+}
