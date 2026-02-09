@@ -51,23 +51,28 @@ This roadmap organizes all planned work into sequential phases based on dependen
 - [x] Request logging and error handling middleware
 - [x] 120 backend tests across 12 suites (93 core + 27 auth/comp)
 
-### 1B: Image Processing Pipeline
+### 1B: Image Processing Pipeline -- COMPLETE
 
-| Issue | Feature | Priority | Effort |
-|-------|---------|----------|--------|
-| [#1](https://github.com/Collectors-Playbook/sports-card-tracker/issues/1) | Filesystem image processing pipeline (raw -> processed) | Critical | Large |
-| [#7](https://github.com/Collectors-Playbook/sports-card-tracker/issues/7) | Duplicate card detection | High | Medium |
-| [#16](https://github.com/Collectors-Playbook/sports-card-tracker/issues/16) | Front/back photo pairing | Medium | Small |
+| Issue | Feature | Priority | Effort | Status |
+|-------|---------|----------|--------|--------|
+| [#1](https://github.com/Collectors-Playbook/sports-card-tracker/issues/1) | Filesystem image processing pipeline (raw -> processed) | Critical | Large | Done ([PR #34](https://github.com/Collectors-Playbook/sports-card-tracker/pull/34)) |
+| [#7](https://github.com/Collectors-Playbook/sports-card-tracker/issues/7) | Duplicate card detection | High | Medium | Done ([PR #34](https://github.com/Collectors-Playbook/sports-card-tracker/pull/34)) |
+| [#16](https://github.com/Collectors-Playbook/sports-card-tracker/issues/16) | Front/back photo pairing | Medium | Small | Done ([PR #34](https://github.com/Collectors-Playbook/sports-card-tracker/pull/34)) |
 
 **Deliverables**:
-- `raw/` folder monitoring (manual trigger or file watcher)
-- Real OCR integration (Tesseract.js or Google Cloud Vision API)
-- Content-based file renaming and copy to `processed/`
-- `image-error.log` for failed identifications
-- Duplicate detection during processing
-- Front/back photo association with naming convention
-- Idempotent re-runs (no duplicate files)
-- Frontend UI for pipeline status and error log viewing
+- [x] Tesseract.js OCR integration for real card text extraction
+- [x] Card text parser with brand/player/team/feature detection
+- [x] Batch image processing orchestrator with async job support
+- [x] Content-based file renaming and copy to `processed/`
+- [x] `image-error.log` for failed identifications
+- [x] Duplicate detection during processing
+- [x] Front/back photo pairing with naming convention
+- [x] Idempotent re-runs (no duplicate files)
+- [x] Player/team database for lookup validation
+- [x] API routes: POST /process (async job), POST /process-sync, GET /status
+- [x] Frontend auth wired to backend JWT API (replacing local userService)
+- [x] Admin user seed script for initial setup
+- [x] 74 new server tests (194 total server tests across 12+ suites)
 
 ### 1C: Comp Generation
 
@@ -98,6 +103,48 @@ This roadmap organizes all planned work into sequential phases based on dependen
 - `ebay-draft-upload-batch.csv` output file
 - eBay Developer Program registration and OAuth flow
 - eBay API service for listing CRUD, sales tracking, inventory sync
+
+---
+
+## Frontend Brand & UX (Parallel Track)
+
+**Goal**: Align the app's visual identity with the Collectors Playbook brand from collectorsplaybook.com — clean marketplace aesthetic, brand colors, modern navigation, consistent visual language.
+
+**Dependencies**: None (runs in parallel with feature phases)
+
+### Brand Phase 1: Foundation & Layout -- COMPLETE
+
+| Issue | Feature | Priority | Effort | Status |
+|-------|---------|----------|--------|--------|
+| [#36](https://github.com/Collectors-Playbook/sports-card-tracker/issues/36) | Brand redesign Phase 1: colors, layout, cards | High | Medium | Done ([PR #37](https://github.com/Collectors-Playbook/sports-card-tracker/pull/37)) |
+
+**Deliverables**:
+- [x] Brand color system as CSS custom properties: navy (`#0f1b2d`), gold (`#f5a623`), supporting tokens
+- [x] Inter font (Google Fonts, weights 400/500/600/700)
+- [x] `logo.png` integrated in header (with white border), footer, favicon, and manifest
+- [x] Dark navy header with white text, gold accent buttons, pill-shaped stat badges
+- [x] Gold `::after` active indicator on navigation items
+- [x] Multi-column footer: brand + tagline + social icons (X, Instagram, Facebook, Discord, eBay), Quick Links, Account
+- [x] Auth page: navy gradient background, gold submit button, gold focus rings and toggle links
+- [x] Form type selector buttons recolored from purple to gold/navy
+- [x] Card grid: fixed 3-column layout (2-col tablet, 1-col mobile), `aspect-ratio: 3/4` image section, left-aligned card info, gold focus rings and selection ring
+- [x] Mobile responsive: single-column footer, hamburger menu, gold-light active nav highlight
+- [x] All 355 unit tests + E2E tests pass unchanged (no class name or structural changes)
+
+### Brand Phase 2: Dashboard, Reports & Forms (Upcoming)
+
+| Issue | Feature | Priority | Effort | Status |
+|-------|---------|----------|--------|--------|
+| [#36](https://github.com/Collectors-Playbook/sports-card-tracker/issues/36) | Brand redesign Phase 2: remaining pages | Medium | Large | Planned |
+
+**Scope**:
+- Dashboard redesign with section-based layout and brand styling
+- Reports pages with consistent card/section patterns
+- BackupRestore, AdminDashboard, UserManagement, UserProfile page restyling
+- CardDetail and CardForm brand alignment
+- EbayListings and ErrorBoundary CSS updates
+- Grade badges (PSA, BGS, SGC styling) on card grid
+- Lazy-loaded card images with placeholder backgrounds
 
 ---
 
@@ -278,6 +325,8 @@ Phase 1A: Backend Service ──────────────────
     ├── Phase 2: Inventory Management               ├── Phase 7: Sourcing & Buying
     │                                               │
     └───────────────────────────────────────────────└── Phase 8: Multi-Channel
+
+Brand Phase 1 ── Brand Phase 2  (parallel track, no feature dependencies)
 ```
 
 ---
@@ -310,8 +359,9 @@ Phase 1A: Backend Service ──────────────────
 
 | Milestone | Phases | What Users Can Do |
 |-----------|--------|-------------------|
-| **M0: Quality Gate** | Phase 0 | **COMPLETE** - 354 unit/integration tests, 15 E2E tests, CI pipeline running |
-| **M1: Core Pipeline** | Phase 1 | Drop photos in folder -> get comps -> get eBay CSV. **Phase 1A complete**: backend service with auth, comp proxy, job queue, 120 tests. |
+| **M0: Quality Gate** | Phase 0 | **COMPLETE** - 355 unit/integration tests, 15 E2E tests, CI pipeline running |
+| **M1: Core Pipeline** | Phase 1 | Drop photos in folder -> get comps -> get eBay CSV. **Phase 1A complete**: backend service with auth, comp proxy, job queue, 194 server tests. **Phase 1B complete**: Tesseract.js OCR, card parsing, duplicate detection, front/back pairing, frontend auth wired to backend. |
+| **Brand** | Brand Phases | **Phase 1 complete**: Collectors Playbook brand identity (navy/gold palette, Inter font, dark header, gold nav, multi-column footer, marketplace card grid). Phase 2 (dashboard, reports, forms) planned. |
 | **M2: Full Inventory** | Phase 2 | Track grading submissions, find cards physically, tag PC vs. inventory |
 | **M3: True Profitability** | Phase 3 | Know actual profit per card after all fees. Tax-ready reports. |
 | **M4: Sell Smarter** | Phase 4 | See what's selling, what's not, auto-relist, track sold items |
