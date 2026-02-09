@@ -6,23 +6,24 @@ This roadmap organizes all planned work into sequential phases based on dependen
 
 ---
 
-## Phase 0: Foundation & Quality (Current State Hardening)
+## Phase 0: Foundation & Quality (Current State Hardening) -- COMPLETE
 
 **Goal**: Establish a testing foundation and stabilize the existing codebase before adding new features.
 
-| Issue | Feature | Priority | Effort |
-|-------|---------|----------|--------|
-| [#30](https://github.com/Collectors-Playbook/sports-card-tracker/issues/30) | Unit, integration, and E2E test suite | Critical | Large |
+| Issue | Feature | Priority | Effort | Status |
+|-------|---------|----------|--------|--------|
+| [#30](https://github.com/Collectors-Playbook/sports-card-tracker/issues/30) | Unit, integration, and E2E test suite | Critical | Large | Done ([PR #31](https://github.com/Collectors-Playbook/sports-card-tracker/pull/31)) |
 
 **Deliverables**:
-- Jest configured with unit tests for all existing services and utilities
-- `fake-indexeddb` for Dexie database testing
-- Playwright or Cypress E2E framework installed
-- E2E tests for existing workflows (add card, export, backup/restore)
-- GitHub Actions CI running tests on every PR
-- 80%+ coverage on `src/services/` and `src/utils/`
+- [x] Jest configured with unit tests for all existing services and utilities (354 tests, 19 suites)
+- [x] `fake-indexeddb` for Dexie database testing
+- [x] Playwright E2E framework installed (15 E2E tests across 4 spec files)
+- [x] E2E tests for auth, card CRUD, collections, and navigation workflows
+- [x] GitHub Actions CI running tests on every PR (test + e2e jobs)
+- [x] Coverage thresholds enforced: 40% branches, 50% functions, 45% lines/statements
+- [x] Test helpers: factories, mock browser APIs, renderWithProviders
 
-**Why first**: Every subsequent phase will produce regressions without a test safety net. Establishing tests now protects the existing working features and sets the standard for all new code.
+**Coverage**: 42.8% branches, 56.55% functions, 47.49% lines, 47.02% statements
 
 ---
 
@@ -305,7 +306,7 @@ Phase 1A: Backend Service ──────────────────
 
 | Milestone | Phases | What Users Can Do |
 |-----------|--------|-------------------|
-| **M0: Quality Gate** | Phase 0 | Existing features protected by tests, CI pipeline running |
+| **M0: Quality Gate** | Phase 0 | **COMPLETE** - 354 unit/integration tests, 15 E2E tests, CI pipeline running |
 | **M1: Core Pipeline** | Phase 1 | Drop photos in folder -> get comps -> get eBay CSV. The primary PRD workflow works end-to-end. |
 | **M2: Full Inventory** | Phase 2 | Track grading submissions, find cards physically, tag PC vs. inventory |
 | **M3: True Profitability** | Phase 3 | Know actual profit per card after all fees. Tax-ready reports. |

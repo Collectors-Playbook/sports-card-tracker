@@ -1,0 +1,131 @@
+import { Router, Request, Response } from 'express';
+import multer from 'multer';
+import path from 'path';
+import FileService from '../services/fileService';
+
+const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tiff'];
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+const MAX_FILES = 50;
+
+export function createFileRoutes(fileService: FileService): Router {
+  const router = Router();
+
+  const storage = multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      cb(null, fileService.getRawDir());
+    },
+    filename: (_req, file, cb) => {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+      const ext = path.extname(file.originalname).toLowerCase();
+      const baseName = path.basename(file.originalname, path.extname(file.originalname))
+        .replace(/[^a-zA-Z0-9._-]/g, '_');
+      cb(null, `${baseName}-${uniqueSuffix}${ext}`);
+    },
+  });
+
+  const upload = multer({
+    storage,
+    limits: { fileSize: MAX_FILE_SIZE },
+    fileFilter: (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      if (IMAGE_EXTENSIONS.includes(ext)) {
+        cb(null, true);
+      } else {
+        cb(new Error(`Invalid file type: ${ext}. Allowed: ${IMAGE_EXTENSIONS.join(', ')}`));
+      }
+    },
+  });
+
+  // List raw files
+  router.get('/raw', (_req: Request, res: Response) => {
+    try {
+      const files = fileService.listFiles(fileService.getRawDir());
+      res.json(files);
+    } catch (error) {
+      console.error('Error listing raw files:', error);
+      res.status(500).json({ error: 'Failed to list raw files' });
+    }
+  });
+
+  // List processed files
+  router.get('/processed', (_req: Request, res: Response) => {
+    try {
+      const files = fileService.listFiles(fileService.getProcessedDir());
+      res.json(files);
+    } catch (error) {
+      console.error('Error listing processed files:', error);
+      res.status(500).json({ error: 'Failed to list processed files' });
+    }
+  });
+
+  // Serve a raw file
+  router.get('/raw/:filename', (req: Request, res: Response) => {
+    const filePath = fileService.getFilePath(fileService.getRawDir(), req.params.filename);
+    if (!filePath || !fileService.fileExists(fileService.getRawDir(), req.params.filename)) {
+      res.status(404).json({ error: 'File not found' });
+      return;
+    }
+    res.sendFile(filePath);
+  });
+
+  // Serve a processed file
+  router.get('/processed/:filename', (req: Request, res: Response) => {
+    const filePath = fileService.getFilePath(fileService.getProcessedDir(), req.params.filename);
+    if (!filePath || !fileService.fileExists(fileService.getProcessedDir(), req.params.filename)) {
+      res.status(404).json({ error: 'File not found' });
+      return;
+    }
+    res.sendFile(filePath);
+  });
+
+  // Upload files to raw
+  router.post('/raw/upload', upload.array('files', MAX_FILES), (req: Request, res: Response) => {
+    const files = req.files as Express.Multer.File[];
+    if (!files || files.length === 0) {
+      res.status(400).json({ error: 'No files uploaded' });
+      return;
+    }
+
+    const uploaded = files.map(f => ({
+      name: f.filename,
+      size: f.size,
+      originalName: f.originalname,
+    }));
+
+    res.status(201).json({ uploaded, count: uploaded.length });
+  });
+
+  // Delete a raw file
+  router.delete('/raw/:filename', (req: Request, res: Response) => {
+    const deleted = fileService.deleteFile(fileService.getRawDir(), req.params.filename);
+    if (deleted) {
+      res.status(204).send();
+    } else {
+      res.status(404).json({ error: 'File not found' });
+    }
+  });
+
+  // Read a log file
+  router.get('/logs/:logname', (req: Request, res: Response) => {
+    const validLogs = ['image-error.log', 'comp-error.log'];
+    if (!validLogs.includes(req.params.logname)) {
+      res.status(400).json({ error: `Invalid log name. Valid: ${validLogs.join(', ')}` });
+      return;
+    }
+    const entries = fileService.readLog(req.params.logname);
+    res.json(entries);
+  });
+
+  // Clear a log file
+  router.delete('/logs/:logname', (req: Request, res: Response) => {
+    const validLogs = ['image-error.log', 'comp-error.log'];
+    if (!validLogs.includes(req.params.logname)) {
+      res.status(400).json({ error: `Invalid log name. Valid: ${validLogs.join(', ')}` });
+      return;
+    }
+    fileService.clearLog(req.params.logname);
+    res.status(204).send();
+  });
+
+  return router;
+}
