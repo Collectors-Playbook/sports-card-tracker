@@ -3,7 +3,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--gradient-brand);
   padding: 20px;
 }
 
@@ -64,8 +64,8 @@
 
 .form-group input:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: var(--brand-gold);
+  box-shadow: 0 0 0 3px rgba(245, 166, 35, 0.15);
 }
 
 .form-group input:disabled {
@@ -91,8 +91,8 @@
 }
 
 .auth-submit {
-  background: #667eea;
-  color: white;
+  background: var(--brand-gold);
+  color: var(--brand-navy);
   border: none;
   padding: 14px 20px;
   border-radius: 8px;
@@ -104,12 +104,13 @@
 }
 
 .auth-submit:hover:not(:disabled) {
-  background: #5a6fd8;
+  background: var(--brand-gold-hover);
   transform: translateY(-1px);
 }
 
 .auth-submit:disabled {
   background: #9ca3af;
+  color: white;
   cursor: not-allowed;
   transform: none;
 }
@@ -124,8 +125,8 @@
 .spinner {
   width: 16px;
   height: 16px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top: 2px solid white;
+  border: 2px solid rgba(15, 27, 45, 0.3);
+  border-top: 2px solid var(--brand-navy);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -151,7 +152,7 @@
 .toggle-link {
   background: none;
   border: none;
-  color: #667eea;
+  color: var(--brand-gold);
   cursor: pointer;
   font-weight: 600;
   text-decoration: underline;
@@ -160,7 +161,7 @@
 }
 
 .toggle-link:hover {
-  color: #5a6fd8;
+  color: var(--brand-gold-hover);
 }
 
 /* Mobile responsive */
@@ -168,15 +169,15 @@
   .auth-container {
     padding: 10px;
   }
-  
+
   .auth-card {
     padding: 30px 20px;
   }
-  
+
   .auth-header h1 {
     font-size: 24px;
   }
-  
+
   .auth-header h2 {
     font-size: 18px;
   }
@@ -187,20 +188,21 @@
   .auth-card {
     border: 2px solid #000;
   }
-  
+
   .form-group input {
     border-color: #000;
   }
-  
+
   .form-group input:focus {
     border-color: #0066cc;
     box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.3);
   }
-  
+
   .auth-submit {
     background: #000;
+    color: white;
   }
-  
+
   .auth-submit:hover:not(:disabled) {
     background: #333;
   }
@@ -213,7 +215,7 @@
     transition: none;
     animation: none;
   }
-  
+
   .auth-submit:hover:not(:disabled) {
     transform: none;
   }
