@@ -8,6 +8,7 @@ import CompService from '../../services/compService';
 import OCRService from '../../services/ocrService';
 import CardParserService from '../../services/cardParserService';
 import ImageProcessingService from '../../services/imageProcessingService';
+import EbayExportService from '../../services/ebayExportService';
 import { requestLogger } from '../../middleware/requestLogger';
 import { errorHandler } from '../../middleware/errorHandler';
 import { createHealthRoutes } from '../../routes/health';
@@ -18,6 +19,7 @@ import { createEventRoutes } from '../../routes/events';
 import { createAuthRoutes } from '../../routes/auth';
 import { createCompRoutes } from '../../routes/comps';
 import { createImageProcessingRoutes } from '../../routes/imageProcessing';
+import { createEbayRoutes } from '../../routes/ebay';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
@@ -30,6 +32,7 @@ export interface TestContext {
   jobService: JobService;
   compService: CompService;
   imageProcessingService: ImageProcessingService;
+  ebayExportService: EbayExportService;
   ocrService: OCRService;
   cardParserService: CardParserService;
   tempDir: string;
@@ -56,6 +59,7 @@ export async function createTestApp(): Promise<TestContext> {
   const ocrService = new OCRService();
   const cardParserService = new CardParserService();
   const imageProcessingService = new ImageProcessingService(fileService, db, ocrService, cardParserService);
+  const ebayExportService = new EbayExportService(db, fileService);
 
   const app = express();
   app.use(cors());
@@ -70,10 +74,11 @@ export async function createTestApp(): Promise<TestContext> {
   app.use('/api/auth', createAuthRoutes(db));
   app.use('/api/comps', createCompRoutes(db, compService));
   app.use('/api/image-processing', createImageProcessingRoutes(db, imageProcessingService, fileService));
+  app.use('/api/ebay', createEbayRoutes(db, ebayExportService));
 
   app.use(errorHandler);
 
-  return { app, db, fileService, eventService, jobService, compService, imageProcessingService, ocrService, cardParserService, tempDir };
+  return { app, db, fileService, eventService, jobService, compService, imageProcessingService, ebayExportService, ocrService, cardParserService, tempDir };
 }
 
 export async function cleanupTestContext(ctx: TestContext): Promise<void> {
