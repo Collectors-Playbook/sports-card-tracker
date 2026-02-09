@@ -31,6 +31,7 @@ export const enhancedToBasicCard = (enhancedCard: Partial<EnhancedCard>): Card =
     cardNumber: enhancedCard.cardNumber || '',
     parallel: enhancedCard.parallel,
     condition: enhancedCard.condition || 'RAW',
+    collectionType: enhancedCard.collectionType || 'Inventory',
     gradingCompany: enhancedCard.gradingCompany,
     
     // Financial

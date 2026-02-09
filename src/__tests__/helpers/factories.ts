@@ -22,6 +22,7 @@ export const createCard = (overrides: Partial<Card> = {}): Card => ({
   notes: '',
   createdAt: new Date('2023-06-15'),
   updatedAt: new Date('2023-06-15'),
+  collectionType: 'Inventory',
   ...overrides,
 });
 

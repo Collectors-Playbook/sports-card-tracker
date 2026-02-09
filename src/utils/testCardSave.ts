@@ -32,6 +32,7 @@ export async function testCardSave() {
     notes: 'This is a test card created at ' + new Date().toISOString(),
     userId: user.id,
     images: [],
+    collectionType: 'Inventory' as const,
     createdAt: new Date(),
     updatedAt: new Date()
   };
