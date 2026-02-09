@@ -308,6 +308,16 @@ class Database {
     return updated;
   }
 
+  public async updateUserPassword(id: string, newPasswordHash: string): Promise<boolean> {
+    await this.ready;
+    const updatedAt = new Date().toISOString();
+    const result = await this.runAsync(
+      `UPDATE users SET passwordHash = ?, updatedAt = ? WHERE id = ?`,
+      [newPasswordHash, updatedAt, id]
+    );
+    return (result.changes ?? 0) > 0;
+  }
+
   public async deleteUser(id: string): Promise<boolean> {
     await this.ready;
     const result = await this.runAsync('DELETE FROM users WHERE id = ?', [id]);

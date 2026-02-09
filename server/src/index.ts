@@ -13,6 +13,9 @@ import { createCardRoutes } from './routes/cards';
 import { createFileRoutes } from './routes/files';
 import { createJobRoutes } from './routes/jobs';
 import { createEventRoutes } from './routes/events';
+import { createAuthRoutes } from './routes/auth';
+import { createCompRoutes } from './routes/comps';
+import CompService from './services/compService';
 
 dotenv.config();
 
@@ -23,6 +26,7 @@ const db = new Database(config.dbPath);
 const fileService = new FileService(config.rawDir, config.processedDir, config.dataDir);
 const eventService = new EventService();
 const jobService = new JobService(db, eventService);
+const compService = new CompService(fileService);
 
 // Create Express app
 const app = express();
@@ -42,6 +46,8 @@ app.use('/api/cards', createCardRoutes(db));
 app.use('/api/files', createFileRoutes(fileService));
 app.use('/api/jobs', createJobRoutes(db));
 app.use('/api/events', createEventRoutes(eventService));
+app.use('/api/auth', createAuthRoutes(db));
+app.use('/api/comps', createCompRoutes(db, compService));
 
 // Error handling
 app.use(errorHandler);
@@ -49,6 +55,30 @@ app.use(errorHandler);
 // 404 handler
 app.use('*', (_req, res) => {
   res.status(404).json({ error: 'Route not found' });
+});
+
+// Register job handlers
+jobService.registerHandler('comp-generation', async (job, updateProgress) => {
+  const cardIds = (job.payload.cardIds as string[]) || [];
+  const results: Record<string, unknown>[] = [];
+
+  for (let i = 0; i < cardIds.length; i++) {
+    const card = await db.getCardById(cardIds[i]);
+    if (card) {
+      const report = await compService.generateAndWriteComps({
+        cardId: card.id,
+        player: card.player,
+        year: card.year,
+        brand: card.brand,
+        cardNumber: card.cardNumber,
+        condition: card.condition,
+      });
+      results.push({ cardId: card.id, generatedAt: report.generatedAt });
+    }
+    await updateProgress(((i + 1) / cardIds.length) * 100, i + 1);
+  }
+
+  return { processed: results.length, results };
 });
 
 // Start server (only when run directly, not when imported for testing)
@@ -91,4 +121,4 @@ if (require.main === module) {
   })();
 }
 
-export { app, db, fileService, eventService, jobService };
+export { app, db, fileService, eventService, jobService, compService };
