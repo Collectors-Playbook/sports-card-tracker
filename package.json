@@ -38,10 +38,40 @@
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
+    "test:coverage": "react-scripts test --watchAll=false --coverage",
+    "test:ci": "react-scripts test --watchAll=false --coverage --ci",
+    "test:e2e": "npx playwright test",
     "server": "cd server && PORT=8000 npm run dev",
     "dev": "concurrently \"npm run server\" \"npm start\"",
     "build:server": "cd server && npm run build",
     "start:prod": "concurrently \"cd server && npm start\" \"serve -s build\""
+  },
+  "jest": {
+    "coverageThreshold": {
+      "global": {
+        "branches": 40,
+        "functions": 50,
+        "lines": 45,
+        "statements": 45
+      }
+    },
+    "collectCoverageFrom": [
+      "src/services/**/*.{ts,tsx}",
+      "src/utils/**/*.{ts,tsx}",
+      "src/db/**/*.{ts,tsx}",
+      "src/context/**/*.{ts,tsx}",
+      "!src/utils/debug*.ts",
+      "!src/utils/test*.ts",
+      "!src/utils/sampleData.ts",
+      "!src/**/*.d.ts"
+    ],
+    "transformIgnorePatterns": [
+      "node_modules/(?!dexie)"
+    ],
+    "testMatch": [
+      "<rootDir>/src/**/__tests__/**/*.test.{js,jsx,ts,tsx}",
+      "<rootDir>/src/**/*.{spec,test}.{js,jsx,ts,tsx}"
+    ]
   },
   "eslintConfig": {
     "extends": [
@@ -62,9 +92,11 @@
     ]
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@types/jspdf": "^1.3.3",
     "@types/lodash": "^4.17.17",
     "@types/tesseract.js": "^0.0.2",
-    "concurrently": "^9.1.2"
+    "concurrently": "^9.1.2",
+    "fake-indexeddb": "^6.2.5"
   }
 }
