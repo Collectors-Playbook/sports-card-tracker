@@ -20,6 +20,9 @@ import CompService from './services/compService';
 import OCRService from './services/ocrService';
 import CardParserService from './services/cardParserService';
 import ImageProcessingService from './services/imageProcessingService';
+import EbayExportService from './services/ebayExportService';
+import { createEbayRoutes } from './routes/ebay';
+import { EbayExportOptions } from './types';
 
 dotenv.config();
 
@@ -34,6 +37,7 @@ const compService = new CompService(fileService);
 const ocrService = new OCRService();
 const cardParserService = new CardParserService();
 const imageProcessingService = new ImageProcessingService(fileService, db, ocrService, cardParserService);
+const ebayExportService = new EbayExportService(db, fileService);
 
 // Create Express app
 const app = express();
@@ -56,6 +60,7 @@ app.use('/api/events', createEventRoutes(eventService));
 app.use('/api/auth', createAuthRoutes(db));
 app.use('/api/comps', createCompRoutes(db, compService));
 app.use('/api/image-processing', createImageProcessingRoutes(db, imageProcessingService, fileService));
+app.use('/api/ebay', createEbayRoutes(db, ebayExportService));
 
 // Error handling
 app.use(errorHandler);
@@ -87,6 +92,13 @@ jobService.registerHandler('comp-generation', async (job, updateProgress) => {
   }
 
   return { processed: results.length, results };
+});
+
+// Register ebay-csv job handler
+jobService.registerHandler('ebay-csv', async (job, updateProgress) => {
+  const payload = job.payload as unknown as EbayExportOptions;
+  const result = await ebayExportService.generateCsv(payload, updateProgress);
+  return result as unknown as Record<string, unknown>;
 });
 
 // Register image-processing job handler
@@ -143,4 +155,4 @@ if (require.main === module) {
   })();
 }
 
-export { app, db, fileService, eventService, jobService, compService, ocrService, cardParserService, imageProcessingService };
+export { app, db, fileService, eventService, jobService, compService, ocrService, cardParserService, imageProcessingService, ebayExportService };
