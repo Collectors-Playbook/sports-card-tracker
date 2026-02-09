@@ -43,6 +43,17 @@ class SportsCardDatabase extends Dexie {
         }
       });
     });
+
+    // Version 4 - Add collectionType (PC vs Inventory)
+    this.version(4).stores({
+      cards: 'id, userId, collectionId, collectionType, player, year, category, createdAt, currentValue, [year+player], [userId+year], [userId+category], [userId+collectionId], [userId+collectionType]'
+    }).upgrade(trans => {
+      return trans.table('cards').toCollection().modify(card => {
+        if (!card.collectionType) {
+          card.collectionType = 'Inventory';
+        }
+      });
+    });
   }
 }
 
@@ -193,6 +204,7 @@ export const cardDatabase = {
         id: card.id || `card-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
         userId: card.userId || userId, // Ensure userId is set
         collectionId: collectionId, // Ensure collectionId is set
+        collectionType: card.collectionType || 'Inventory', // Default to Inventory
         createdAt: card.createdAt || now,
         updatedAt: now
       };
