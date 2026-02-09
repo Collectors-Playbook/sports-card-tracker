@@ -154,15 +154,33 @@ This roadmap organizes all planned work into sequential phases based on dependen
 
 **Dependencies**: Phase 1A (backend for filesystem operations)
 
+### 2A: PC vs Inventory Split -- COMPLETE
+
+| Issue | Feature | Priority | Effort | Status |
+|-------|---------|----------|--------|--------|
+| [#20](https://github.com/Collectors-Playbook/sports-card-tracker/issues/20) | PC (Personal Collection) vs Inventory split | High | Small | Done ([PR #38](https://github.com/Collectors-Playbook/sports-card-tracker/pull/38)) |
+
+**Deliverables**:
+- [x] `collectionType: 'PC' | 'Inventory'` field on Card interface (frontend + backend)
+- [x] Dexie v4 migration with `collectionType` index; existing cards default to `'Inventory'`
+- [x] SQLite `collectionType TEXT NOT NULL DEFAULT 'Inventory'` column with API filter support
+- [x] Dashboard toggle tabs: All / Inventory / Personal Collection with filtered stats
+- [x] CardList dropdown filter for collectionType
+- [x] CardForm, EnhancedCardForm, and PhotoCardForm with Type selector (default: Inventory)
+- [x] PC cards excluded from all eBay exports (quick, instant, bulk) and listing recommendations
+- [x] PC exclusion note shown in eBay Listings UI when PC cards exist
+- [x] `getPortfolioStats()` accepts optional `collectionType` parameter for filtered stats
+- [x] 355 frontend tests + 194 backend tests passing, zero type errors
+
+### 2B: Remaining Inventory Features
+
 | Issue | Feature | Priority | Effort |
 |-------|---------|----------|--------|
-| [#20](https://github.com/Collectors-Playbook/sports-card-tracker/issues/20) | PC (Personal Collection) vs Inventory split | High | Small |
 | [#4](https://github.com/Collectors-Playbook/sports-card-tracker/issues/4) | Grading submission tracker | High | Medium |
 | [#5](https://github.com/Collectors-Playbook/sports-card-tracker/issues/5) | Physical storage location mapping | Medium | Medium |
 | [#6](https://github.com/Collectors-Playbook/sports-card-tracker/issues/6) | QR code / barcode label printing | Low | Medium |
 
 **Deliverables**:
-- PC vs. Inventory tagging with separate dashboards; PC excluded from eBay exports
 - Grading submission lifecycle tracking (Submitted -> Complete) with cost tracking
 - Hierarchical storage locations (Room -> Shelf -> Box -> Row -> Slot)
 - Card-to-location search and bulk assignment
@@ -362,7 +380,7 @@ Brand Phase 1 ── Brand Phase 2  (parallel track, no feature dependencies)
 | **M0: Quality Gate** | Phase 0 | **COMPLETE** - 355 unit/integration tests, 15 E2E tests, CI pipeline running |
 | **M1: Core Pipeline** | Phase 1 | Drop photos in folder -> get comps -> get eBay CSV. **Phase 1A complete**: backend service with auth, comp proxy, job queue, 194 server tests. **Phase 1B complete**: Tesseract.js OCR, card parsing, duplicate detection, front/back pairing, frontend auth wired to backend. |
 | **Brand** | Brand Phases | **Phase 1 complete**: Collectors Playbook brand identity (navy/gold palette, Inter font, dark header, gold nav, multi-column footer, marketplace card grid). Phase 2 (dashboard, reports, forms) planned. |
-| **M2: Full Inventory** | Phase 2 | Track grading submissions, find cards physically, tag PC vs. inventory |
+| **M2: Full Inventory** | Phase 2 | Track grading submissions, find cards physically, tag PC vs. inventory. **Phase 2A complete**: PC vs Inventory split with filtered dashboard, card list filter, eBay export exclusion. |
 | **M3: True Profitability** | Phase 3 | Know actual profit per card after all fees. Tax-ready reports. |
 | **M4: Sell Smarter** | Phase 4 | See what's selling, what's not, auto-relist, track sold items |
 | **M5: Pro Images** | Phase 5 | Auto-cropped, watermarked, eBay-ready photos with condition estimates |

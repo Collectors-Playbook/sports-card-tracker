@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.0] - 2026-02-09
+
+### Added
+- PC (Personal Collection) vs Inventory collection type split ([#20](https://github.com/Collectors-Playbook/sports-card-tracker/issues/20), [PR #38](https://github.com/Collectors-Playbook/sports-card-tracker/pull/38))
+- `collectionType: 'PC' | 'Inventory'` field on Card interface with `CollectionType` type alias and `COLLECTION_TYPES` constant ([PR #38](https://github.com/Collectors-Playbook/sports-card-tracker/pull/38))
+- Dexie v4 migration adding `collectionType` index and defaulting existing cards to `'Inventory'` ([PR #38](https://github.com/Collectors-Playbook/sports-card-tracker/pull/38))
+- SQLite `collectionType TEXT NOT NULL DEFAULT 'Inventory'` column with `collectionType` query param filter on GET `/cards` ([PR #38](https://github.com/Collectors-Playbook/sports-card-tracker/pull/38))
+- Dashboard toggle tabs: All / Inventory / Personal Collection with filtered stats ([PR #38](https://github.com/Collectors-Playbook/sports-card-tracker/pull/38))
+- CardList dropdown filter for collection type ([PR #38](https://github.com/Collectors-Playbook/sports-card-tracker/pull/38))
+- Type selector (Inventory / Personal Collection) on CardForm, EnhancedCardForm, and PhotoCardForm ([PR #38](https://github.com/Collectors-Playbook/sports-card-tracker/pull/38))
+- PC exclusion note in eBay Listings UI when PC cards exist in collection ([PR #38](https://github.com/Collectors-Playbook/sports-card-tracker/pull/38))
+
+### Changed
+- `getPortfolioStats()` now accepts optional `collectionType` parameter for filtered stats ([PR #38](https://github.com/Collectors-Playbook/sports-card-tracker/pull/38))
+- All eBay export functions (quick, instant, bulk) and listing recommendations now exclude PC cards ([PR #38](https://github.com/Collectors-Playbook/sports-card-tracker/pull/38))
+
+---
+
 ## [0.5.0] - 2026-02-09
 
 ### Added
