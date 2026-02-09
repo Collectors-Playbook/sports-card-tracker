@@ -15,7 +15,11 @@ import { createJobRoutes } from './routes/jobs';
 import { createEventRoutes } from './routes/events';
 import { createAuthRoutes } from './routes/auth';
 import { createCompRoutes } from './routes/comps';
+import { createImageProcessingRoutes } from './routes/imageProcessing';
 import CompService from './services/compService';
+import OCRService from './services/ocrService';
+import CardParserService from './services/cardParserService';
+import ImageProcessingService from './services/imageProcessingService';
 
 dotenv.config();
 
@@ -27,6 +31,9 @@ const fileService = new FileService(config.rawDir, config.processedDir, config.d
 const eventService = new EventService();
 const jobService = new JobService(db, eventService);
 const compService = new CompService(fileService);
+const ocrService = new OCRService();
+const cardParserService = new CardParserService();
+const imageProcessingService = new ImageProcessingService(fileService, db, ocrService, cardParserService);
 
 // Create Express app
 const app = express();
@@ -48,6 +55,7 @@ app.use('/api/jobs', createJobRoutes(db));
 app.use('/api/events', createEventRoutes(eventService));
 app.use('/api/auth', createAuthRoutes(db));
 app.use('/api/comps', createCompRoutes(db, compService));
+app.use('/api/image-processing', createImageProcessingRoutes(db, imageProcessingService, fileService));
 
 // Error handling
 app.use(errorHandler);
@@ -79,6 +87,20 @@ jobService.registerHandler('comp-generation', async (job, updateProgress) => {
   }
 
   return { processed: results.length, results };
+});
+
+// Register image-processing job handler
+jobService.registerHandler('image-processing', async (job, updateProgress) => {
+  const payload = job.payload as unknown as { filenames: string[]; skipExisting?: boolean; confidenceThreshold?: number };
+  const result = await imageProcessingService.processImages(
+    {
+      filenames: payload.filenames || [],
+      skipExisting: payload.skipExisting,
+      confidenceThreshold: payload.confidenceThreshold,
+    },
+    updateProgress
+  );
+  return result as unknown as Record<string, unknown>;
 });
 
 // Start server (only when run directly, not when imported for testing)
@@ -121,4 +143,4 @@ if (require.main === module) {
   })();
 }
 
-export { app, db, fileService, eventService, jobService, compService };
+export { app, db, fileService, eventService, jobService, compService, ocrService, cardParserService, imageProcessingService };
