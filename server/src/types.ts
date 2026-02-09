@@ -184,3 +184,60 @@ export interface CompAdapter {
   source: CompSource;
   fetchComps(request: CompRequest): Promise<CompResult>;
 }
+
+// ─── Image Processing ───────────────────────────────────────────────────────
+
+export interface ImageProcessingPayload {
+  filenames: string[];
+  skipExisting?: boolean;
+  confidenceThreshold?: number;
+}
+
+export interface ImageProcessingResult {
+  totalFiles: number;
+  processed: number;
+  skipped: number;
+  duplicates: number;
+  failed: number;
+  results: ImageProcessingItemResult[];
+}
+
+export interface ImageProcessingItemResult {
+  filename: string;
+  status: 'processed' | 'skipped' | 'duplicate' | 'failed';
+  processedFilename?: string;
+  cardId?: string;
+  confidence?: number;
+  error?: string;
+}
+
+export interface ExtractedCardData {
+  player?: string;
+  year?: string;
+  brand?: string;
+  setName?: string;
+  cardNumber?: string;
+  team?: string;
+  category?: string;
+  parallel?: string;
+  serialNumber?: string;
+  features?: CardFeatures;
+  confidence?: DetectionConfidence;
+  rawText?: string;
+}
+
+export interface CardFeatures {
+  isRookie: boolean;
+  isAutograph: boolean;
+  isRelic: boolean;
+  isNumbered: boolean;
+  isGraded: boolean;
+  isParallel: boolean;
+}
+
+export interface DetectionConfidence {
+  score: number;
+  level: 'high' | 'medium' | 'low';
+  detectedFields: number;
+  missingFields?: string[];
+}

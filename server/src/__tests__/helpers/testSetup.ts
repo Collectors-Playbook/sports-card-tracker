@@ -5,6 +5,9 @@ import FileService from '../../services/fileService';
 import EventService from '../../services/eventService';
 import JobService from '../../services/jobService';
 import CompService from '../../services/compService';
+import OCRService from '../../services/ocrService';
+import CardParserService from '../../services/cardParserService';
+import ImageProcessingService from '../../services/imageProcessingService';
 import { requestLogger } from '../../middleware/requestLogger';
 import { errorHandler } from '../../middleware/errorHandler';
 import { createHealthRoutes } from '../../routes/health';
@@ -14,6 +17,7 @@ import { createJobRoutes } from '../../routes/jobs';
 import { createEventRoutes } from '../../routes/events';
 import { createAuthRoutes } from '../../routes/auth';
 import { createCompRoutes } from '../../routes/comps';
+import { createImageProcessingRoutes } from '../../routes/imageProcessing';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
@@ -25,6 +29,9 @@ export interface TestContext {
   eventService: EventService;
   jobService: JobService;
   compService: CompService;
+  imageProcessingService: ImageProcessingService;
+  ocrService: OCRService;
+  cardParserService: CardParserService;
   tempDir: string;
 }
 
@@ -46,6 +53,9 @@ export async function createTestApp(): Promise<TestContext> {
   const eventService = new EventService();
   const jobService = new JobService(db, eventService);
   const compService = new CompService(fileService);
+  const ocrService = new OCRService();
+  const cardParserService = new CardParserService();
+  const imageProcessingService = new ImageProcessingService(fileService, db, ocrService, cardParserService);
 
   const app = express();
   app.use(cors());
@@ -59,10 +69,11 @@ export async function createTestApp(): Promise<TestContext> {
   app.use('/api/events', createEventRoutes(eventService));
   app.use('/api/auth', createAuthRoutes(db));
   app.use('/api/comps', createCompRoutes(db, compService));
+  app.use('/api/image-processing', createImageProcessingRoutes(db, imageProcessingService, fileService));
 
   app.use(errorHandler);
 
-  return { app, db, fileService, eventService, jobService, compService, tempDir };
+  return { app, db, fileService, eventService, jobService, compService, imageProcessingService, ocrService, cardParserService, tempDir };
 }
 
 export async function cleanupTestContext(ctx: TestContext): Promise<void> {

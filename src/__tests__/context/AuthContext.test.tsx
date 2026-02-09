@@ -5,28 +5,18 @@ import { AuthProvider, useAuth } from '../../context/AuthContext';
 
 // Mock dependencies
 // NOTE: CRA sets resetMocks: true, which resets jest.fn() implementations after each test.
-// We use __esModule + getter pattern so the mock functions are re-created on each access,
-// or we set up implementations in beforeEach.
-const mockUsers = new Map<string, any>();
-const resetMockUsers = () => {
-  mockUsers.clear();
-  mockUsers.set('admin-001', {
-    id: 'admin-001', username: 'admin', email: 'admin@sportscard.local',
-    role: 'admin', isActive: true, password: 'admin123',
-    createdAt: new Date(), updatedAt: new Date(),
-  });
-};
-
-const mockAuthenticateUser = jest.fn();
-const mockGetAllUsers = jest.fn();
-const mockCreateUser = jest.fn();
+// We use wrapper functions in mock factories that delegate to jest.fn() variables,
+// and set up .mockImplementation() in beforeEach.
+const mockLogin = jest.fn();
+const mockRegister = jest.fn();
+const mockGetMe = jest.fn();
 const mockInitializeUserCollections = jest.fn();
 
-jest.mock('../../services/userService', () => ({
-  userService: {
-    authenticateUser: (...args: any[]) => mockAuthenticateUser(...args),
-    getAllUsers: (...args: any[]) => mockGetAllUsers(...args),
-    createUser: (...args: any[]) => mockCreateUser(...args),
+jest.mock('../../services/api', () => ({
+  apiService: {
+    login: (...args: any[]) => mockLogin(...args),
+    register: (...args: any[]) => mockRegister(...args),
+    getMe: (...args: any[]) => mockGetMe(...args),
   },
 }));
 
@@ -35,6 +25,10 @@ jest.mock('../../db/collectionsDatabase', () => ({
     initializeUserCollections: (...args: any[]) => mockInitializeUserCollections(...args),
   },
 }));
+
+const adminUser = {
+  id: 'admin-001', username: 'admin', email: 'admin@sportscard.local', role: 'admin' as const,
+};
 
 // Test helper component that exposes auth context
 const TestConsumer: React.FC = () => {
@@ -46,7 +40,7 @@ const TestConsumer: React.FC = () => {
       <div data-testid="error">{state.error || 'none'}</div>
       <button data-testid="login" onClick={() => login('admin@sportscard.local', 'admin123')}>Login</button>
       <button data-testid="login-bad" onClick={() => login('admin@sportscard.local', 'wrong').catch(() => {})}>Bad Login</button>
-      <button data-testid="register" onClick={() => register('newuser', 'new@test.com', 'pass').catch(() => {})}>Register</button>
+      <button data-testid="register" onClick={() => register('newuser', 'new@test.com', 'pass123').catch(() => {})}>Register</button>
       <button data-testid="logout" onClick={logout}>Logout</button>
       <button data-testid="clear-error" onClick={clearError}>Clear Error</button>
     </div>
@@ -63,23 +57,26 @@ const renderAuth = () =>
 describe('AuthContext', () => {
   beforeEach(() => {
     localStorage.clear();
-    resetMockUsers();
 
-    mockAuthenticateUser.mockImplementation((email: string, password: string) => {
-      const user = Array.from(mockUsers.values()).find(
-        (u: any) => u.email === email && u.password === password && u.isActive
-      );
-      return user ? { ...user, password: undefined } : null;
+    mockLogin.mockImplementation(async (email: string, password: string) => {
+      if (email === 'admin@sportscard.local' && password === 'admin123') {
+        return { user: adminUser, token: 'jwt-token-123' };
+      }
+      throw new Error('Invalid email or password');
     });
 
-    mockGetAllUsers.mockImplementation(() =>
-      Array.from(mockUsers.values()).map((u: any) => ({ ...u, password: undefined }))
-    );
+    mockRegister.mockImplementation(async (username: string, email: string, _password: string) => {
+      if (email === 'existing@test.com') {
+        throw new Error('Email already in use');
+      }
+      return {
+        user: { id: `user-${Date.now()}`, username, email, role: 'user' },
+        token: 'jwt-token-new',
+      };
+    });
 
-    mockCreateUser.mockImplementation((data: any) => {
-      const newUser = { ...data, id: `user-${Date.now()}`, createdAt: new Date(), updatedAt: new Date() };
-      mockUsers.set(newUser.id, newUser);
-      return { ...newUser, password: undefined };
+    mockGetMe.mockImplementation(async () => {
+      return adminUser;
     });
 
     mockInitializeUserCollections.mockResolvedValue(undefined);
@@ -92,11 +89,22 @@ describe('AuthContext', () => {
       expect(screen.getByTestId('user').textContent).toBe('none');
     });
 
-    it('restores user from localStorage on mount', () => {
-      localStorage.setItem('user', JSON.stringify({ id: 'u1', email: 'stored@test.com', username: 'stored', role: 'user' }));
-      localStorage.setItem('token', 'some-token');
+    it('restores user from token validation on mount', async () => {
+      localStorage.setItem('token', 'valid-token');
       renderAuth();
-      expect(screen.getByTestId('user').textContent).toBe('stored@test.com');
+      await waitFor(() => {
+        expect(screen.getByTestId('user').textContent).toBe('admin@sportscard.local');
+      });
+      expect(mockGetMe).toHaveBeenCalled();
+    });
+
+    it('logs out when stored token is invalid', async () => {
+      localStorage.setItem('token', 'expired-token');
+      mockGetMe.mockRejectedValueOnce(new Error('Unauthorized'));
+      renderAuth();
+      await waitFor(() => {
+        expect(localStorage.getItem('token')).toBeNull();
+      });
     });
   });
 
@@ -118,7 +126,7 @@ describe('AuthContext', () => {
         screen.getByTestId('login').click();
       });
       await waitFor(() => {
-        expect(localStorage.getItem('token')).toBeTruthy();
+        expect(localStorage.getItem('token')).toBe('jwt-token-123');
       });
     });
 
@@ -156,13 +164,13 @@ describe('AuthContext', () => {
     });
 
     it('sets error for duplicate email', async () => {
-      mockGetAllUsers.mockReturnValueOnce([{ email: 'new@test.com' }]);
+      mockRegister.mockRejectedValueOnce(new Error('Email already in use'));
       renderAuth();
       await act(async () => {
         screen.getByTestId('register').click();
       });
       await waitFor(() => {
-        expect(screen.getByTestId('error').textContent).toContain('already registered');
+        expect(screen.getByTestId('error').textContent).toContain('already in use');
       });
     });
 

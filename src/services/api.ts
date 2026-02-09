@@ -1,4 +1,4 @@
-import { Card } from '../types';
+import { Card, User } from '../types';
 import { logDebug, logInfo, logError } from '../utils/logger';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
@@ -206,6 +206,24 @@ class ApiService {
       logError('ApiService', `Failed to delete card ${id}`, error as Error);
       throw error;
     }
+  }
+
+  public async login(email: string, password: string): Promise<{ user: User; token: string }> {
+    return this.request<{ user: User; token: string }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+  }
+
+  public async register(username: string, email: string, password: string): Promise<{ user: User; token: string }> {
+    return this.request<{ user: User; token: string }>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ username, email, password }),
+    });
+  }
+
+  public async getMe(): Promise<User> {
+    return this.request<User>('/auth/me');
   }
 
   public async healthCheck(): Promise<{ status: string; message: string }> {
