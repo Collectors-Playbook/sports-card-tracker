@@ -4,26 +4,44 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+interface SeedUser {
+  username: string;
+  email: string;
+  password: string;
+  role: 'admin' | 'user';
+}
+
+const seedUsers: SeedUser[] = [
+  {
+    username: 'guntharp',
+    email: 'fusion94@gmail.com',
+    password: 'ppeieij0',
+    role: 'admin',
+  },
+  {
+    username: 'admin',
+    email: 'admin@sportscard.local',
+    password: 'admin123',
+    role: 'admin',
+  },
+];
+
 async function seed() {
   const config = loadConfig();
   const db = new Database(config.dbPath);
   await db.waitReady();
 
-  const existing = await db.getUserByEmail('fusion94@gmail.com');
-  if (existing) {
-    console.log('Admin user already exists, skipping.');
-    await db.close();
-    return;
+  for (const seedUser of seedUsers) {
+    const existing = await db.getUserByEmail(seedUser.email);
+    if (existing) {
+      console.log(`User ${seedUser.email} already exists, skipping.`);
+      continue;
+    }
+
+    const user = await db.createUser(seedUser);
+    console.log(`User created: ${user.username} (${user.email}) [${user.id}]`);
   }
 
-  const user = await db.createUser({
-    username: 'guntharp',
-    email: 'fusion94@gmail.com',
-    password: 'ppeieij0',
-    role: 'admin',
-  });
-
-  console.log(`Admin user created: ${user.username} (${user.email}) [${user.id}]`);
   await db.close();
 }
 
