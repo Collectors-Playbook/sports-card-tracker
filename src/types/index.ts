@@ -6,10 +6,18 @@ export interface User {
   profilePhoto?: string | null;
 }
 
+export type CollectionType = 'PC' | 'Inventory';
+
+export const COLLECTION_TYPES: { value: CollectionType; label: string }[] = [
+  { value: 'Inventory', label: 'Inventory (For Sale)' },
+  { value: 'PC', label: 'Personal Collection (Keep)' }
+];
+
 export interface Card {
   id: string;
   userId: string; // User who owns this card
   collectionId?: string; // Collection this card belongs to
+  collectionType: CollectionType; // PC = never sell, Inventory = for sale
   player: string;
   team: string;
   year: number;
@@ -47,6 +55,7 @@ export interface CardFormData {
   currentValue: number;
   notes: string;
   collectionId?: string;
+  collectionType?: string;
 }
 
 export interface PortfolioStats {
@@ -67,6 +76,7 @@ export interface FilterOptions {
   condition?: string;
   minValue?: number;
   maxValue?: number;
+  collectionType?: string;
 }
 
 export interface SortOption {

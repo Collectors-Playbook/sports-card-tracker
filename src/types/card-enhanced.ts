@@ -307,6 +307,7 @@ export interface EnhancedCard {
   id: string;
   userId?: string;
   collectionId?: string;
+  collectionType?: 'PC' | 'Inventory';
   createdAt: Date;
   updatedAt: Date;
   

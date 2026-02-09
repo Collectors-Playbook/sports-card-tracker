@@ -10,7 +10,8 @@ export function createCardRoutes(db: Database): Router {
     try {
       const userId = req.query.userId as string | undefined;
       const collectionId = req.query.collectionId as string | undefined;
-      const cards = await db.getAllCards({ userId, collectionId });
+      const collectionType = req.query.collectionType as string | undefined;
+      const cards = await db.getAllCards({ userId, collectionId, collectionType });
       res.json(cards);
     } catch (error) {
       console.error('Error getting cards:', error);

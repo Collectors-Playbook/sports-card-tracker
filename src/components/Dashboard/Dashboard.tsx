@@ -1,10 +1,14 @@
-import React, { memo, useMemo } from 'react';
+import React, { memo, useMemo, useState } from 'react';
 import { useCards } from '../../context/DexieCardContext';
+import { CollectionType } from '../../types';
 import './Dashboard.css';
+
+type DashboardView = 'all' | 'Inventory' | 'PC';
 
 const Dashboard: React.FC = () => {
   const { state, getPortfolioStats } = useCards();
-  const stats = getPortfolioStats();
+  const [activeView, setActiveView] = useState<DashboardView>('all');
+  const stats = getPortfolioStats(activeView === 'all' ? undefined : activeView as CollectionType);
 
   const formatCurrency = (amount: number) => {
     // For very large numbers, use compact notation
@@ -36,18 +40,23 @@ const Dashboard: React.FC = () => {
     }).format(amount);
   };
 
+  const viewCards = useMemo(() => {
+    if (activeView === 'all') return state.cards;
+    return state.cards.filter(card => card.collectionType === activeView);
+  }, [state.cards, activeView]);
+
   const recentCards = useMemo(() => {
-    return [...state.cards]
+    return [...viewCards]
       .sort((a, b) => {
         const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         return bTime - aTime;
       })
       .slice(0, 5);
-  }, [state.cards]);
+  }, [viewCards]);
 
   const topPerformers = useMemo(() => {
-    return [...state.cards]
+    return [...viewCards]
       .map(card => ({
         ...card,
         profit: card.currentValue - card.purchasePrice,
@@ -55,12 +64,33 @@ const Dashboard: React.FC = () => {
       }))
       .sort((a, b) => b.profitPercent - a.profitPercent)
       .slice(0, 5);
-  }, [state.cards]);
+  }, [viewCards]);
 
   return (
     <div className="dashboard">
       <h1>Portfolio Dashboard</h1>
-      
+
+      <div className="dashboard-view-tabs">
+        <button
+          className={`view-tab ${activeView === 'all' ? 'active' : ''}`}
+          onClick={() => setActiveView('all')}
+        >
+          All
+        </button>
+        <button
+          className={`view-tab ${activeView === 'Inventory' ? 'active' : ''}`}
+          onClick={() => setActiveView('Inventory')}
+        >
+          Inventory
+        </button>
+        <button
+          className={`view-tab ${activeView === 'PC' ? 'active' : ''}`}
+          onClick={() => setActiveView('PC')}
+        >
+          Personal Collection
+        </button>
+      </div>
+
       <div className="stats-section">
         <div className="stats-grid">
           <div className="stat-card">

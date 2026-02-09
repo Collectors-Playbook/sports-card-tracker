@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { useCards } from '../../context/DexieCardContext';
-import { Card, CardFormData, CONDITIONS, CATEGORIES, GRADING_COMPANIES } from '../../types';
+import { Card, CardFormData, CONDITIONS, CATEGORIES, GRADING_COMPANIES, COLLECTION_TYPES } from '../../types';
 import ImageUpload from '../ImageUpload/ImageUpload';
 import { logDebug, logInfo, logWarn, logError } from '../../utils/logger';
 import './CardForm.css';
@@ -45,7 +45,8 @@ const CardForm: React.FC<CardFormProps> = ({ card, onSuccess, onCancel }) => {
       sellDate: '',
       currentValue: 0,
       notes: '',
-      collectionId: ''
+      collectionId: '',
+      collectionType: 'Inventory'
     }
   });
 
@@ -100,7 +101,8 @@ const CardForm: React.FC<CardFormProps> = ({ card, onSuccess, onCancel }) => {
           sellDate: sellDate,
           currentValue: cardData.currentValue || 0,
           notes: cardData.notes || '',
-          collectionId: cardData.collectionId || ''
+          collectionId: cardData.collectionId || '',
+          collectionType: cardData.collectionType || 'Inventory'
         };
         
         reset(formData);
@@ -125,7 +127,8 @@ const CardForm: React.FC<CardFormProps> = ({ card, onSuccess, onCancel }) => {
           sellDate: '',
           currentValue: 0,
           notes: '',
-          collectionId: ''
+          collectionId: '',
+          collectionType: 'Inventory'
         });
         setImages([]);
       }
@@ -146,7 +149,8 @@ const CardForm: React.FC<CardFormProps> = ({ card, onSuccess, onCancel }) => {
         sellDate: '',
         currentValue: 0,
         notes: '',
-        collectionId: ''
+        collectionId: '',
+        collectionType: 'Inventory'
       });
       setImages([]);
     }
@@ -209,6 +213,7 @@ const CardForm: React.FC<CardFormProps> = ({ card, onSuccess, onCancel }) => {
         id: card?.id || `card-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         userId: card?.userId || '', // Will be set by the database
         collectionId: data.collectionId || undefined, // Will use default if not specified
+        collectionType: (data.collectionType as 'PC' | 'Inventory') || 'Inventory',
         player: data.player.trim(),
         team: data.team.trim(),
         year: year,
@@ -370,6 +375,18 @@ const CardForm: React.FC<CardFormProps> = ({ card, onSuccess, onCancel }) => {
                   <option key={collection.id} value={collection.id}>
                     {collection.icon} {collection.name} {collection.isDefault ? '(Default)' : ''}
                   </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="collectionType">Type</label>
+              <select
+                id="collectionType"
+                {...register('collectionType')}
+              >
+                {COLLECTION_TYPES.map(ct => (
+                  <option key={ct.value} value={ct.value}>{ct.label}</option>
                 ))}
               </select>
             </div>

@@ -3,8 +3,8 @@ import { generateEbayFileExchange, EbayExportOptions } from './ebayExport';
 
 // Quick export all unsold cards with optimized settings
 export const quickExportAllUnsoldCards = (cards: Card[], userEmail?: string) => {
-  // Filter only unsold cards
-  const unsoldCards = cards.filter(card => !card.sellDate);
+  // Filter only unsold, non-PC cards
+  const unsoldCards = cards.filter(card => !card.sellDate && card.collectionType !== 'PC');
   
   if (unsoldCards.length === 0) {
     alert('No unsold cards to export!');
@@ -64,7 +64,7 @@ export const quickExportAllUnsoldCards = (cards: Card[], userEmail?: string) => 
 
 // Generate a detailed summary report
 export const generateExportSummary = (cards: Card[]) => {
-  const unsoldCards = cards.filter(card => !card.sellDate);
+  const unsoldCards = cards.filter(card => !card.sellDate && card.collectionType !== 'PC');
   
   const summary = {
     totalUnsoldCards: unsoldCards.length,

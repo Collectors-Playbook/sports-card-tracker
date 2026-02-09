@@ -32,6 +32,7 @@ describe('simpleDatabase', () => {
     notes: 'Test card',
     createdAt: new Date('2023-06-15'),
     updatedAt: new Date('2023-06-15'),
+    collectionType: 'Inventory',
   };
 
   beforeEach(async () => {

@@ -186,6 +186,7 @@ const PhotoCardForm: React.FC<PhotoCardFormProps> = ({ onSuccess }) => {
       notes: editedData.notes || '',
       images: frontImage ? (backImage ? [frontImage, backImage] : [frontImage]) : [],
       gradingCompany: editedData.gradingCompany,
+      collectionType: 'Inventory',
       createdAt: new Date(),
       updatedAt: new Date()
     };

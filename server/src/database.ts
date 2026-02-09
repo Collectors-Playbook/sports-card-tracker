@@ -74,6 +74,7 @@ class Database {
         id TEXT PRIMARY KEY,
         userId TEXT NOT NULL DEFAULT '',
         collectionId TEXT,
+        collectionType TEXT NOT NULL DEFAULT 'Inventory',
         player TEXT NOT NULL,
         team TEXT NOT NULL,
         year INTEGER NOT NULL,
@@ -118,7 +119,7 @@ class Database {
 
   // ─── Cards ───────────────────────────────────────────────────────────────────
 
-  public async getAllCards(filters?: { userId?: string; collectionId?: string }): Promise<Card[]> {
+  public async getAllCards(filters?: { userId?: string; collectionId?: string; collectionType?: string }): Promise<Card[]> {
     await this.ready;
     let sql = 'SELECT * FROM cards';
     const params: unknown[] = [];
@@ -131,6 +132,10 @@ class Database {
     if (filters?.collectionId) {
       conditions.push('collectionId = ?');
       params.push(filters.collectionId);
+    }
+    if (filters?.collectionType) {
+      conditions.push('collectionType = ?');
+      params.push(filters.collectionType);
     }
     if (conditions.length > 0) {
       sql += ' WHERE ' + conditions.join(' AND ');
@@ -163,6 +168,7 @@ class Database {
       id,
       userId: cardInput.userId || '',
       collectionId: cardInput.collectionId,
+      collectionType: cardInput.collectionType || 'Inventory',
       player: cardInput.player,
       team: cardInput.team,
       year: cardInput.year,
@@ -185,12 +191,13 @@ class Database {
 
     await this.runAsync(
       `INSERT INTO cards (
-        id, userId, collectionId, player, team, year, brand, category, cardNumber,
+        id, userId, collectionId, collectionType, player, team, year, brand, category, cardNumber,
         parallel, condition, gradingCompany, purchasePrice, purchaseDate,
         sellPrice, sellDate, currentValue, images, notes, createdAt, updatedAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        card.id, card.userId, card.collectionId || null, card.player, card.team,
+        card.id, card.userId, card.collectionId || null, card.collectionType,
+        card.player, card.team,
         card.year, card.brand, card.category, card.cardNumber, card.parallel || null,
         card.condition, card.gradingCompany || null, card.purchasePrice, card.purchaseDate,
         card.sellPrice || null, card.sellDate || null, card.currentValue,
@@ -210,13 +217,14 @@ class Database {
 
     await this.runAsync(
       `UPDATE cards SET
-        userId = ?, collectionId = ?, player = ?, team = ?, year = ?, brand = ?,
+        userId = ?, collectionId = ?, collectionType = ?, player = ?, team = ?, year = ?, brand = ?,
         category = ?, cardNumber = ?, parallel = ?, condition = ?, gradingCompany = ?,
         purchasePrice = ?, purchaseDate = ?, sellPrice = ?, sellDate = ?,
         currentValue = ?, images = ?, notes = ?, updatedAt = ?
       WHERE id = ?`,
       [
         cardInput.userId || existing.userId, cardInput.collectionId || null,
+        cardInput.collectionType || existing.collectionType,
         cardInput.player, cardInput.team, cardInput.year, cardInput.brand,
         cardInput.category, cardInput.cardNumber, cardInput.parallel || null,
         cardInput.condition, cardInput.gradingCompany || null, cardInput.purchasePrice,
@@ -231,6 +239,7 @@ class Database {
       ...cardInput,
       id,
       userId: cardInput.userId || existing.userId,
+      collectionType: cardInput.collectionType || existing.collectionType,
       images: cardInput.images || [],
       notes: cardInput.notes || '',
       createdAt: existing.createdAt,

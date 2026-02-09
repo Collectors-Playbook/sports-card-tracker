@@ -1,5 +1,5 @@
 import React, { createContext, useContext, ReactNode, useEffect, useState, useCallback, useMemo } from 'react';
-import { Card, PortfolioStats } from '../types';
+import { Card, PortfolioStats, CollectionType } from '../types';
 import { cardDatabase } from '../db/simpleDatabase';
 import { createAutoBackup } from '../utils/backupRestore';
 
@@ -17,7 +17,7 @@ interface CardContextType {
   setCards: (cards: Card[]) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
-  getPortfolioStats: () => PortfolioStats;
+  getPortfolioStats: (collectionType?: CollectionType) => PortfolioStats;
   clearAllCards: () => void;
 }
 
@@ -192,26 +192,18 @@ export const CardProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setState(prev => ({ ...prev, error }));
   }, []);
 
-  const getPortfolioStats = useCallback((): PortfolioStats => {
-    const cards = state.cards;
+  const getPortfolioStats = useCallback((collectionType?: CollectionType): PortfolioStats => {
+    const cards = collectionType
+      ? state.cards.filter(card => card.collectionType === collectionType)
+      : state.cards;
     const totalCards = cards.length;
     const totalCostBasis = cards.reduce((sum, card) => sum + card.purchasePrice, 0);
     const totalCurrentValue = cards.reduce((sum, card) => sum + card.currentValue, 0);
     const totalProfit = totalCurrentValue - totalCostBasis;
-    
+
     const soldCards = cards.filter(card => card.sellDate && card.sellPrice);
     const totalSold = soldCards.length;
     const totalSoldValue = soldCards.reduce((sum, card) => sum + (card.sellPrice || 0), 0);
-
-    // Debug logging
-    console.log('getPortfolioStats calculation:', {
-      cardsLength: cards.length,
-      totalCards,
-      totalCostBasis,
-      totalCurrentValue,
-      totalProfit,
-      firstCardSample: cards.length > 0 ? cards[0] : null
-    });
 
     return {
       totalCards,
