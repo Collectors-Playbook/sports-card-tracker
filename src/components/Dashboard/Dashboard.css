@@ -10,6 +10,35 @@
   font-size: 2.5rem;
 }
 
+.dashboard-view-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.view-tab {
+  padding: 8px 20px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: white;
+  color: #666;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.view-tab:hover {
+  border-color: #007bff;
+  color: #007bff;
+}
+
+.view-tab.active {
+  background: #007bff;
+  border-color: #007bff;
+  color: white;
+}
+
 .stats-section {
   width: 100%;
   margin-bottom: 40px;

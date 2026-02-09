@@ -1,6 +1,6 @@
 import React, { useState, useMemo, memo, useCallback } from 'react';
 import { useCards } from '../../context/DexieCardContext';
-import { Card, FilterOptions, SortOption } from '../../types';
+import { Card, FilterOptions, SortOption, COLLECTION_TYPES } from '../../types';
 import { BulkEbayExport } from '../EbayListing/BulkEbayExport';
 import LoadingSkeleton from '../LoadingSkeleton/LoadingSkeleton';
 import MoveCardsModal from '../MoveCardsModal/MoveCardsModal';
@@ -44,32 +44,34 @@ const CardList: React.FC<CardListProps> = ({ onCardSelect, onEditCard, selectedC
         return false;
       }
 
-      const matchesSearch = searchTerm === '' || 
+      const matchesCollectionType = !filters.collectionType || card.collectionType === filters.collectionType;
+
+      const matchesSearch = searchTerm === '' ||
         card.player.toLowerCase().includes(searchTerm.toLowerCase()) ||
         card.team.toLowerCase().includes(searchTerm.toLowerCase()) ||
         card.brand.toLowerCase().includes(searchTerm.toLowerCase()) ||
         card.category.toLowerCase().includes(searchTerm.toLowerCase());
 
-      const matchesPlayer = !filters.player || 
+      const matchesPlayer = !filters.player ||
         card.player.toLowerCase().includes(filters.player.toLowerCase());
-      
-      const matchesTeam = !filters.team || 
+
+      const matchesTeam = !filters.team ||
         card.team.toLowerCase().includes(filters.team.toLowerCase());
-      
+
       const matchesYear = !filters.year || card.year === filters.year;
-      
-      const matchesBrand = !filters.brand || 
+
+      const matchesBrand = !filters.brand ||
         card.brand.toLowerCase().includes(filters.brand.toLowerCase());
-      
+
       const matchesCategory = !filters.category || card.category === filters.category;
-      
+
       const matchesCondition = !filters.condition || card.condition === filters.condition;
-      
+
       const matchesMinValue = !filters.minValue || card.currentValue >= filters.minValue;
-      
+
       const matchesMaxValue = !filters.maxValue || card.currentValue <= filters.maxValue;
 
-      return matchesSearch && matchesPlayer && matchesTeam && matchesYear && 
+      return matchesCollectionType && matchesSearch && matchesPlayer && matchesTeam && matchesYear &&
              matchesBrand && matchesCategory && matchesCondition && matchesMinValue && matchesMaxValue;
     });
 
@@ -257,6 +259,17 @@ const CardList: React.FC<CardListProps> = ({ onCardSelect, onEditCard, selectedC
             <option value="">All Conditions</option>
             {uniqueValues.conditions.map(condition => (
               <option key={condition} value={condition}>{condition}</option>
+            ))}
+          </select>
+
+          <select
+            value={filters.collectionType || ''}
+            onChange={(e) => setFilters({...filters, collectionType: e.target.value || undefined})}
+            className="filter-select"
+          >
+            <option value="">All Cards</option>
+            {COLLECTION_TYPES.map(ct => (
+              <option key={ct.value} value={ct.value}>{ct.label}</option>
             ))}
           </select>
 

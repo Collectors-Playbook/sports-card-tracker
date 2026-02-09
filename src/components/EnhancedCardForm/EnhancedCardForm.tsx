@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { EnhancedCard, PRINTING_TECHNOLOGIES, CARD_ERAS, PURCHASE_VENUES, STORAGE_METHODS, COLLECTION_CATEGORIES } from '../../types/card-enhanced';
-import { CATEGORIES, CONDITIONS, GRADING_COMPANIES } from '../../types';
+import { CATEGORIES, CONDITIONS, GRADING_COMPANIES, COLLECTION_TYPES } from '../../types';
 import './EnhancedCardForm.css';
 
 interface Props {
@@ -14,6 +14,7 @@ const EnhancedCardForm: React.FC<Props> = ({ card, onSave, onCancel }) => {
   const [collections, setCollections] = useState<any[]>([]);
   const [formData, setFormData] = useState<Partial<EnhancedCard>>({
     ...card,
+    collectionType: card?.collectionType || 'Inventory',
     notes: card?.notes || '', // Ensure notes field is initialized
     identification: card?.identification || undefined,
     playerMetadata: card?.playerMetadata || { isRookie: false },
@@ -184,6 +185,18 @@ const EnhancedCardForm: React.FC<Props> = ({ card, onSave, onCancel }) => {
           </div>
         )}
         
+        <div className="form-group">
+          <label>Type</label>
+          <select
+            value={formData.collectionType || 'Inventory'}
+            onChange={(e) => handleBasicChange('collectionType', e.target.value)}
+          >
+            {COLLECTION_TYPES.map(ct => (
+              <option key={ct.value} value={ct.value}>{ct.label}</option>
+            ))}
+          </select>
+        </div>
+
         <div className="form-group full-width">
           <label>Notes</label>
           <textarea
