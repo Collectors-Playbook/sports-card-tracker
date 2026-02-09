@@ -33,19 +33,23 @@ This roadmap organizes all planned work into sequential phases based on dependen
 
 **Dependencies**: None (this is the foundation everything else builds on)
 
-### 1A: Backend Service
+### 1A: Backend Service -- COMPLETE
 
-| Issue | Feature | Priority | Effort |
-|-------|---------|----------|--------|
-| [#29](https://github.com/Collectors-Playbook/sports-card-tracker/issues/29) | Node.js backend service | Critical | Large |
+| Issue | Feature | Priority | Effort | Status |
+|-------|---------|----------|--------|--------|
+| [#29](https://github.com/Collectors-Playbook/sports-card-tracker/issues/29) | Node.js backend service | Critical | Large | Done ([PR #32](https://github.com/Collectors-Playbook/sports-card-tracker/pull/32), [PR #33](https://github.com/Collectors-Playbook/sports-card-tracker/pull/33)) |
 
 **Deliverables**:
-- Express server with TypeScript running alongside React frontend
-- Filesystem read/write routes for `raw/`, `processed/`, and log files
-- API proxy layer for external service calls
-- Background job queue for batch processing
-- WebSocket/SSE for real-time pipeline status updates to frontend
-- Environment configuration for local and GCP VM deployment
+- [x] Express server with TypeScript running alongside React frontend
+- [x] SQLite database with Card, User, Collection, and Job models
+- [x] Filesystem read/write routes for `raw/`, `processed/`, and log files
+- [x] API proxy layer with comp adapter stubs (SportsCardsPro, eBay, CardLadder, MarketMovers)
+- [x] Background job queue with SSE for real-time pipeline status updates to frontend
+- [x] Auth routes: register, login, me, profile with JWT and bcrypt
+- [x] Comp routes: generate, generate-and-save, get by cardId
+- [x] Environment configuration for local and GCP VM deployment
+- [x] Request logging and error handling middleware
+- [x] 120 backend tests across 12 suites (93 core + 27 auth/comp)
 
 ### 1B: Image Processing Pipeline
 
@@ -307,7 +311,7 @@ Phase 1A: Backend Service ──────────────────
 | Milestone | Phases | What Users Can Do |
 |-----------|--------|-------------------|
 | **M0: Quality Gate** | Phase 0 | **COMPLETE** - 354 unit/integration tests, 15 E2E tests, CI pipeline running |
-| **M1: Core Pipeline** | Phase 1 | Drop photos in folder -> get comps -> get eBay CSV. The primary PRD workflow works end-to-end. |
+| **M1: Core Pipeline** | Phase 1 | Drop photos in folder -> get comps -> get eBay CSV. **Phase 1A complete**: backend service with auth, comp proxy, job queue, 120 tests. |
 | **M2: Full Inventory** | Phase 2 | Track grading submissions, find cards physically, tag PC vs. inventory |
 | **M3: True Profitability** | Phase 3 | Know actual profit per card after all fees. Tax-ready reports. |
 | **M4: Sell Smarter** | Phase 4 | See what's selling, what's not, auto-relist, track sold items |
@@ -318,4 +322,4 @@ Phase 1A: Backend Service ──────────────────
 
 ---
 
-*Last updated: 2026-02-08*
+*Last updated: 2026-02-09*
