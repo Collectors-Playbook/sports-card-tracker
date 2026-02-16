@@ -2,11 +2,26 @@
 
 A comprehensive web application for managing and tracking sports card collections. Built with React, TypeScript, and modern web technologies, featuring advanced analytics, professional reporting, and eBay integration.
 
+![Tests](https://github.com/Collectors-Playbook/sports-card-tracker/actions/workflows/test.yml/badge.svg)
+[![codecov](https://codecov.io/gh/Collectors-Playbook/sports-card-tracker/branch/main/graph/badge.svg)](https://codecov.io/gh/Collectors-Playbook/sports-card-tracker)
+![GitHub last commit](https://img.shields.io/github/last-commit/Collectors-Playbook/sports-card-tracker)
+![GitHub issues](https://img.shields.io/github/issues/Collectors-Playbook/sports-card-tracker)
+![GitHub pull requests](https://img.shields.io/github/issues-pr/Collectors-Playbook/sports-card-tracker)
+![GitHub stars](https://img.shields.io/github/stars/Collectors-Playbook/sports-card-tracker)
+![GitHub forks](https://img.shields.io/github/forks/Collectors-Playbook/sports-card-tracker)
+![GitHub repo size](https://img.shields.io/github/repo-size/Collectors-Playbook/sports-card-tracker)
+![License](https://img.shields.io/github/license/Collectors-Playbook/sports-card-tracker)
+![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)
+
 ![Version](https://img.shields.io/badge/version-2.5.0-blue.svg)
 ![Node](https://img.shields.io/badge/node-%3E%3D16.0.0-green.svg)
 ![React](https://img.shields.io/badge/react-18.x-blue.svg)
 ![TypeScript](https://img.shields.io/badge/typescript-5.x-blue.svg)
-![License](https://img.shields.io/badge/license-MIT-green.svg)
+![Dexie.js](https://img.shields.io/badge/Dexie.js-IndexedDB-blue.svg)
+![Recharts](https://img.shields.io/badge/recharts-data%20viz-orange.svg)
+![Jest](https://img.shields.io/badge/tested%20with-jest-99424f.svg)
+![Playwright](https://img.shields.io/badge/e2e-playwright-2EAD33.svg)
+![ESLint](https://img.shields.io/badge/code%20style-eslint-4B32C3.svg)
 
 ## 📋 Table of Contents
 
