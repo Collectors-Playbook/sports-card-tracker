@@ -13,7 +13,7 @@ A comprehensive web application for managing and tracking sports card collection
 ![License](https://img.shields.io/github/license/Collectors-Playbook/sports-card-tracker)
 ![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)
 
-![Version](https://img.shields.io/badge/version-2.5.0-blue.svg)
+![Version](https://img.shields.io/badge/version-0.7.0-blue.svg)
 ![Node](https://img.shields.io/badge/node-%3E%3D16.0.0-green.svg)
 ![React](https://img.shields.io/badge/react-18.x-blue.svg)
 ![TypeScript](https://img.shields.io/badge/typescript-5.x-blue.svg)
@@ -413,6 +413,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 Made with ❤️ by collectors, for collectors
 
-**Version**: 2.5.0 | **Last Updated**: January 2025
+**Version**: 0.7.0 | **Last Updated**: February 2026
 
 </div>
