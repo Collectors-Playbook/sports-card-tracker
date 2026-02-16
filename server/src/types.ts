@@ -58,6 +58,7 @@ export interface User {
   passwordHash: string;
   role: 'admin' | 'user';
   isActive: boolean;
+  profilePhoto: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -52,10 +52,16 @@ class Database {
         passwordHash TEXT NOT NULL,
         role TEXT NOT NULL DEFAULT 'user',
         isActive INTEGER NOT NULL DEFAULT 1,
+        profilePhoto TEXT DEFAULT NULL,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL
       )
     `);
+
+    // Migration: add profilePhoto column if missing (existing databases)
+    await this.runAsync(`
+      ALTER TABLE users ADD COLUMN profilePhoto TEXT DEFAULT NULL
+    `).catch(() => { /* column already exists */ });
 
     await this.runAsync(`
       CREATE TABLE IF NOT EXISTS collections (
@@ -288,20 +294,21 @@ class Database {
       passwordHash,
       role: input.role || 'user',
       isActive: true,
+      profilePhoto: null,
       createdAt: now,
       updatedAt: now,
     };
 
     await this.runAsync(
-      `INSERT INTO users (id, username, email, passwordHash, role, isActive, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [user.id, user.username, user.email, user.passwordHash, user.role, 1, user.createdAt, user.updatedAt]
+      `INSERT INTO users (id, username, email, passwordHash, role, isActive, profilePhoto, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [user.id, user.username, user.email, user.passwordHash, user.role, 1, null, user.createdAt, user.updatedAt]
     );
 
     return user;
   }
 
-  public async updateUser(id: string, updates: Partial<Pick<User, 'username' | 'email' | 'role' | 'isActive'>>): Promise<User | undefined> {
+  public async updateUser(id: string, updates: Partial<Pick<User, 'username' | 'email' | 'role' | 'isActive' | 'profilePhoto'>>): Promise<User | undefined> {
     await this.ready;
     const existing = await this.getUserById(id);
     if (!existing) return undefined;
@@ -310,8 +317,8 @@ class Database {
     const updated: User = { ...existing, ...updates, updatedAt };
 
     await this.runAsync(
-      `UPDATE users SET username = ?, email = ?, role = ?, isActive = ?, updatedAt = ? WHERE id = ?`,
-      [updated.username, updated.email, updated.role, updated.isActive ? 1 : 0, updatedAt, id]
+      `UPDATE users SET username = ?, email = ?, role = ?, isActive = ?, profilePhoto = ?, updatedAt = ? WHERE id = ?`,
+      [updated.username, updated.email, updated.role, updated.isActive ? 1 : 0, updated.profilePhoto, updatedAt, id]
     );
 
     return updated;

@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { userService } from '../../services/userService';
+import { apiService } from '../../services/api';
 import './UserProfile.css';
 
 const UserProfile: React.FC = () => {
@@ -73,9 +73,18 @@ const UserProfile: React.FC = () => {
         return;
       }
 
-      const updateData: any = {
+      if (!authState.user) {
+        throw new Error('User not found');
+      }
+
+      const updateData: {
+        email?: string;
+        currentPassword?: string;
+        newPassword?: string;
+        profilePhoto?: string | null;
+      } = {
         email: formData.email,
-        profilePhoto: previewPhoto || profilePhoto,
+        profilePhoto: previewPhoto !== null ? previewPhoto : profilePhoto,
       };
 
       // Only include password fields if user is changing password
@@ -89,42 +98,15 @@ const UserProfile: React.FC = () => {
         updateData.newPassword = formData.newPassword;
       }
 
-      // Use local userService for updates
-      if (!authState.user) {
-        throw new Error('User not found');
-      }
-
-      // Verify current password if changing password
-      if (formData.newPassword) {
-        const authenticated = userService.authenticateUser(
-          authState.user.email,
-          formData.currentPassword
-        );
-        if (!authenticated) {
-          throw new Error('Current password is incorrect');
-        }
-        
-        // Update password
-        userService.resetUserPassword(authState.user.id, formData.newPassword);
-      }
-
-      // Update user profile
-      const updatedUser = userService.updateUser(authState.user.id, {
-        email: formData.email,
-        profilePhoto: previewPhoto || profilePhoto
-      });
-
-      if (!updatedUser) {
-        throw new Error('Failed to update profile');
-      }
+      // Update profile via backend API
+      const updatedUser = await apiService.updateProfile(updateData);
 
       // Update auth context with new user data
-      const newUserData = {
+      updateUser({
         ...authState.user,
-        email: formData.email,
-        profilePhoto: previewPhoto || profilePhoto
-      };
-      updateUser(newUserData);
+        email: updatedUser.email,
+        profilePhoto: updatedUser.profilePhoto,
+      });
       
       // Update profile photo state
       if (previewPhoto) {

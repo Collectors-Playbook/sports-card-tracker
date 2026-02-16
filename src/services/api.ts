@@ -226,6 +226,18 @@ class ApiService {
     return this.request<User>('/auth/me');
   }
 
+  public async updateProfile(data: {
+    email?: string;
+    currentPassword?: string;
+    newPassword?: string;
+    profilePhoto?: string | null;
+  }): Promise<User> {
+    return this.request<User>('/auth/profile', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
   // ─── eBay Export ──────────────────────────────────────────────────────────
 
   public async generateEbayCsv(options: {

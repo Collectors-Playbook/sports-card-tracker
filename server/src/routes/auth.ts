@@ -104,7 +104,7 @@ export function createAuthRoutes(db: Database): Router {
   router.put('/profile', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const userId = req.user!.userId;
-      const { username, email, currentPassword, newPassword } = req.body;
+      const { username, email, currentPassword, newPassword, profilePhoto } = req.body;
 
       const existing = await db.getUserById(userId);
       if (!existing) {
@@ -149,10 +149,11 @@ export function createAuthRoutes(db: Database): Router {
         await db.updateUserPassword(userId, newHash);
       }
 
-      // Update username/email
-      const updates: Partial<Pick<User, 'username' | 'email'>> = {};
+      // Update username/email/profilePhoto
+      const updates: Partial<Pick<User, 'username' | 'email' | 'profilePhoto'>> = {};
       if (username) updates.username = username;
       if (email) updates.email = email;
+      if (profilePhoto !== undefined) updates.profilePhoto = profilePhoto;
 
       const updated = await db.updateUser(userId, updates);
       if (!updated) {

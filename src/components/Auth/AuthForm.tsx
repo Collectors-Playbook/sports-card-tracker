@@ -65,6 +65,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ mode, onToggleMode }) => {
     <div className="auth-container">
       <div className="auth-card">
         <div className="auth-header">
+          <img src="/logo.png" alt="Collectors Playbook" className="auth-logo" />
           <h1>Collectors Playbook</h1>
           <h2>{mode === 'login' ? 'Sign In' : 'Create Account'}</h2>
         </div>
