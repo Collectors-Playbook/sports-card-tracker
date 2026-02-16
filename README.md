@@ -96,115 +96,43 @@ A comprehensive web application for managing and tracking sports card collection
 - **Import Tools**: Bulk import from CSV files
 - **Data Migration**: Seamless upgrades between versions
 
-## 🆕 What's New (v2.5.0)
+## 🆕 What's New (v0.7.0)
 
-### 🔧 Enhanced Admin Dashboard
+### 🛒 Server-Side eBay CSV Generation
 
-- **Tabular Backup Display**: Comprehensive backup information in table format
-- **Username Display**: Admin dashboard now shows usernames instead of user IDs
-- **Backup Statistics**: Size, date, type, and user information for all backups
-- **User Promotion**: Console utilities for promoting users to admin role
-- **Improved Analytics**: Better user statistics and system information
-
-### 🏠 About Page
-
-- **Application Overview**: Comprehensive information about the app
-- **Feature Highlights**: Visual cards showing key features
-- **Technology Stack**: Display of technologies used
-- **Contact Information**: Easy ways to get in touch
-- **Professional Design**: Clean, modern layout with gradient accents
-
-### 🐛 Bug Fixes & Improvements
-
-- **Storage Migration**: Fixed localStorage quota issues by moving to IndexedDB
-- **Collection Icons**: Improved styling with proper opacity and contrast
-- **Border Styling**: Removed unnecessary blue borders from card display
-- **Platform Detection**: Fixed deprecated navigator.platform usage
-- **Build Process**: Improved production build configuration
+- **Backend Export Service**: Full server-side eBay File Exchange CSV generation with title/description generation, category/condition mapping, and CSV escaping
+- **eBay Template**: `eBay-draft-listing-template.csv` with 24-column eBay File Exchange headers
+- **Export API Routes**: Sync and async generation, download, template retrieval, and status endpoints
+- **UI Toggle**: "Generate on server" option in BulkEbayExport with loading state, keeping all client-side export paths unchanged
+- **PC Card Exclusion**: Personal Collection cards excluded at the server-side export layer
+- **API Sync**: Cards from the backend API now sync into Dexie on load via `useApi` hook
+- **Test Coverage**: 21 new backend tests (12 service unit + 9 route integration), bringing total to 217 server tests across 18 suites
 
 ## 📚 Previous Updates
 
-### v2.4.0
+### v0.6.0 - PC vs Inventory Split
 
-### 🛒 Professional eBay Listing Generator
+- **Collection Type Tagging**: Cards tagged as Personal Collection (PC) or Inventory
+- **Dashboard Filtering**: Toggle tabs for All / Inventory / Personal Collection with filtered stats
+- **CardList Filter**: Dropdown filter for collection type
+- **Form Integration**: Type selector on Classic, Enhanced, and Photo card forms
+- **eBay Exclusion**: PC cards excluded from all eBay exports and listing recommendations
+- **Backend Support**: `collectionType` query param filter on GET `/cards`
 
-- **Individual Listings**: One-click eBay listing creation for any card
-- **Bulk Export**: Select multiple cards and export to CSV
-- **Smart Titles**: Optimized 80-character titles with key features
-- **HTML Templates**: Professional, mobile-responsive descriptions
-- **Automatic Categorization**: Correct eBay category and condition mapping
-- **Item Specifics**: All fields populated automatically
-- **Multiple Export Formats**: HTML, CSV, and JSON
+### v0.5.0 - Collectors Playbook Brand Redesign
 
-### 🏭 Manufacturer Licensing & Accurate Detection
+- Brand redesign and UI refresh
 
-- Comprehensive manufacturer database with real licensing data
-- Sport-specific brand validation (e.g., Topps for MLB, Panini for NBA/NFL)
-- Historical accuracy for vintage cards
-- Year-based manufacturer selection
-- Automatic correction of invalid manufacturer-sport combinations
+### v0.4.0 - Image Processing Pipeline
 
-### 🎯 Enhanced Player & Card Detection
-
-- 100+ real players across all major sports
-- Accurate team-player relationships
-- Position-specific detection
-- Rookie card identification
-- Nickname recognition (e.g., "The Kid" → Ken Griffey Jr.)
-
-### 📸 Photo-Based Card Entry
-
-- Upload card photos for automatic data extraction
-- AI-powered OCR with confidence scoring
-- Front and back image support
-- Review and edit extracted data before saving
-- Tips for best photo capture results
-
-### 🎯 Executive Dashboard
-
-- Portfolio health score visualization
-- Strategic insights with AI recommendations
-- Advanced risk metrics and analysis
-- Category performance matrix
-- Investment opportunity identification
-
-### 📋 Enhanced Reporting
-
-- **Beautiful Tax Reports**: Green-themed design with tax optimization strategies
-- **Professional Insurance Reports**: Gradient designs with comprehensive documentation
-- **Market Analysis Reports**: Detailed insights and comparisons
-- **Inventory Reports**: Complete collection breakdown
-- **Comparison Reports**: Portfolio vs market performance
-
-### 📚 Comprehensive Documentation
-
-- Complete user guides and tutorials
-- API reference documentation
-- Troubleshooting and FAQ sections
-- Contributing guidelines
-- Screenshot placeholders for all features
-
-### 🛠️ Technical Improvements
-
-- Enhanced TypeScript types
-- Improved error handling
-- Performance optimizations
-- Better accessibility support
-- Cleaner code architecture
-
-### v2.3.0
-
-- Executive Dashboard with portfolio health metrics
-- Enhanced Tax and Insurance Reports with modern UI
-- Market Analysis and Comparison Reports
-- Comprehensive documentation structure
-
-### v2.2.0
-
-- Multi-user authentication system
-- Collections feature for card organization
-- Enhanced card forms with 100+ fields
 - Photo-based card entry with OCR
+- Card detection and text extraction services
+- Front and back image support
+
+### v0.3.0 - Auth Routes & Comp Proxy Layer
+
+- Authentication routes and user management
+- Comp proxy layer for price data
 
 ## 🚀 Getting Started
 
