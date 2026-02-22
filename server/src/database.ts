@@ -63,21 +63,6 @@ class Database {
       ALTER TABLE users ADD COLUMN profilePhoto TEXT DEFAULT NULL
     `).catch(() => { /* column already exists */ });
 
-    // Migration: add new card fields for vision-extracted data
-    const cardMigrations = [
-      'ALTER TABLE cards ADD COLUMN setName TEXT',
-      'ALTER TABLE cards ADD COLUMN serialNumber TEXT',
-      'ALTER TABLE cards ADD COLUMN grade TEXT',
-      'ALTER TABLE cards ADD COLUMN isRookie INTEGER DEFAULT 0',
-      'ALTER TABLE cards ADD COLUMN isAutograph INTEGER DEFAULT 0',
-      'ALTER TABLE cards ADD COLUMN isRelic INTEGER DEFAULT 0',
-      'ALTER TABLE cards ADD COLUMN isNumbered INTEGER DEFAULT 0',
-      'ALTER TABLE cards ADD COLUMN isGraded INTEGER DEFAULT 0',
-    ];
-    for (const migration of cardMigrations) {
-      await this.runAsync(migration).catch(() => { /* column already exists */ });
-    }
-
     await this.runAsync(`
       CREATE TABLE IF NOT EXISTS collections (
         id TEXT PRIMARY KEY,
@@ -116,6 +101,21 @@ class Database {
         updatedAt TEXT NOT NULL
       )
     `);
+
+    // Migration: add new card fields for vision-extracted data
+    const cardMigrations = [
+      'ALTER TABLE cards ADD COLUMN setName TEXT',
+      'ALTER TABLE cards ADD COLUMN serialNumber TEXT',
+      'ALTER TABLE cards ADD COLUMN grade TEXT',
+      'ALTER TABLE cards ADD COLUMN isRookie INTEGER DEFAULT 0',
+      'ALTER TABLE cards ADD COLUMN isAutograph INTEGER DEFAULT 0',
+      'ALTER TABLE cards ADD COLUMN isRelic INTEGER DEFAULT 0',
+      'ALTER TABLE cards ADD COLUMN isNumbered INTEGER DEFAULT 0',
+      'ALTER TABLE cards ADD COLUMN isGraded INTEGER DEFAULT 0',
+    ];
+    for (const migration of cardMigrations) {
+      await this.runAsync(migration).catch(() => { /* column already exists */ });
+    }
 
     await this.runAsync(`
       CREATE TABLE IF NOT EXISTS jobs (
