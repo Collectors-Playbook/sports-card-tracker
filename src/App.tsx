@@ -18,21 +18,15 @@ import Reports from './components/Reports/Reports';
 import EbayListings from './components/EbayListings/EbayListings';
 import { BackupRestore } from './components/BackupRestore/BackupRestore';
 import About from './components/About/About';
+import HoldingPen from './components/HoldingPen/HoldingPen';
+import ProcessedGallery from './components/ProcessedGallery/ProcessedGallery';
 import ErrorBoundary from './components/ErrorBoundary/ErrorBoundary';
-import DebugPanel from './components/DebugPanel/DebugPanel';
-import DevTools from './components/DevTools/DevTools';
 import { Card } from './types';
 import { saveEnhancedCard, mergeCardWithEnhanced } from './utils/enhancedCardIntegration';
 import { logInfo } from './utils/logger';
-import './utils/debugDatabase'; // Import debug utility
-import './utils/debugEnhancedCards'; // Import enhanced cards debug utility
-import './utils/testCollectionMove'; // Import collection move test utility
-import './utils/testCardSave'; // Import test card save utility
-import './utils/debugBackup'; // Import backup debug utility
-import './utils/resetAdmin'; // Import admin reset utility
 import './App.css';
 
-type View = 'dashboard' | 'inventory' | 'add-card' | 'admin' | 'profile' | 'reports' | 'ebay' | 'backup' | 'users' | 'collections' | 'about';
+type View = 'dashboard' | 'inventory' | 'add-card' | 'holding-pen' | 'processed' | 'admin' | 'profile' | 'reports' | 'ebay' | 'backup' | 'users' | 'collections' | 'about';
 type FormType = 'classic' | 'enhanced' | 'photo';
 
 const AppContent: React.FC = () => {
@@ -222,6 +216,10 @@ const AppContent: React.FC = () => {
             )}
           </>
         );
+      case 'holding-pen':
+        return <HoldingPen />;
+      case 'processed':
+        return <ProcessedGallery />;
       case 'admin':
         return <AdminDashboard />;
       case 'profile':
@@ -255,8 +253,6 @@ const AppContent: React.FC = () => {
         />
       )}
       
-      <DebugPanel />
-      <DevTools />
     </Layout>
   );
 };

@@ -332,6 +332,7 @@
   background: var(--bg-primary);
   border-bottom: 1px solid var(--border-light);
   position: relative;
+  overflow: visible;
 }
 
 /* Scroll indicator for navigation */
@@ -359,8 +360,8 @@
   display: flex;
   gap: 0;
   justify-content: space-between;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+  overflow-x: visible;
+  overflow-y: visible;
 }
 
 .nav-primary {
@@ -427,6 +428,75 @@
 .nav-icon {
   font-size: 1.1rem;
   flex-shrink: 0;
+}
+
+/* ===== NAV GROUP (Dropdown) ===== */
+.nav-group {
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  align-items: stretch;
+}
+
+.nav-group-trigger {
+  gap: 4px;
+}
+
+.nav-group-arrow {
+  transition: transform 0.2s;
+  margin-left: 2px;
+}
+
+.nav-group.open .nav-group-arrow {
+  transform: rotate(180deg);
+}
+
+.nav-group-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 10;
+  min-width: 160px;
+  padding-top: 4px;
+}
+
+.nav-group-dropdown-inner {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+/* dropdown visibility is controlled by React state, not CSS hover */
+
+.nav-group-item {
+  width: 100%;
+  padding: 12px 20px;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: background 0.2s, color 0.2s;
+  white-space: nowrap;
+}
+
+.nav-group-item:not(:last-child) {
+  border-bottom: 1px solid var(--border-light);
+}
+
+.nav-group-item:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.nav-group-item.active {
+  color: var(--brand-navy);
+  font-weight: 600;
+  background: var(--brand-gold-light);
 }
 
 /* ===== MAIN CONTENT ===== */
@@ -704,6 +774,41 @@
   .nav-item.active {
     color: var(--brand-navy);
     background: var(--brand-gold-light);
+  }
+
+  /* Nav group mobile: stack inline instead of dropdown */
+  .nav-group {
+    width: 100%;
+  }
+
+  .nav-group-trigger {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .nav-group-dropdown {
+    position: static;
+    display: block;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    min-width: 0;
+    margin-top: 0;
+    overflow: visible;
+  }
+
+  .nav-group-item {
+    padding: 16px 20px 16px 40px;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 0.95rem;
+  }
+
+  .nav-group-item:not(:last-child) {
+    border-bottom: 1px solid #f0f0f0;
+  }
+
+  .nav-group-arrow {
+    display: none;
   }
 
   .nav-item.active::after {

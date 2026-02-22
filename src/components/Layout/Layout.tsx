@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useCards } from '../../context/DexieCardContext';
 import { exportCardsAsJSON, exportCardsAsCSV } from '../../utils/exportUtils';
@@ -7,15 +7,28 @@ import './Layout.css';
 
 interface LayoutProps {
   children: React.ReactNode;
-  currentView: 'dashboard' | 'inventory' | 'add-card' | 'admin' | 'profile' | 'reports' | 'ebay' | 'backup' | 'users' | 'collections' | 'about';
-  onViewChange: (view: 'dashboard' | 'inventory' | 'add-card' | 'admin' | 'profile' | 'reports' | 'ebay' | 'backup' | 'users' | 'collections' | 'about') => void;
+  currentView: 'dashboard' | 'inventory' | 'add-card' | 'holding-pen' | 'processed' | 'admin' | 'profile' | 'reports' | 'ebay' | 'backup' | 'users' | 'collections' | 'about';
+  onViewChange: (view: 'dashboard' | 'inventory' | 'add-card' | 'holding-pen' | 'processed' | 'admin' | 'profile' | 'reports' | 'ebay' | 'backup' | 'users' | 'collections' | 'about') => void;
 }
 
 const Layout: React.FC<LayoutProps> = ({ children, currentView, onViewChange }) => {
   const { state: authState, logout } = useAuth();
   const { state, getPortfolioStats } = useCards();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isIngestionOpen, setIsIngestionOpen] = useState(false);
+  const ingestionRef = useRef<HTMLDivElement>(null);
   const [showStats, setShowStats] = useState(true);
+
+  useEffect(() => {
+    if (!isIngestionOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (ingestionRef.current && !ingestionRef.current.contains(e.target as Node)) {
+        setIsIngestionOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isIngestionOpen]);
   const stats = getPortfolioStats();
   
   // Debug logging for stats
@@ -210,6 +223,44 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, onViewChange }) 
             Add Card
           </button>
           
+          <div ref={ingestionRef} className={`nav-group ${isIngestionOpen ? 'open' : ''} ${currentView === 'holding-pen' || currentView === 'processed' ? 'active' : ''}`}>
+            <button
+              className={`nav-item nav-group-trigger ${currentView === 'holding-pen' || currentView === 'processed' ? 'active' : ''}`}
+              onClick={() => setIsIngestionOpen(!isIngestionOpen)}
+            >
+              Ingestion
+              <svg className="nav-group-arrow" width="10" height="6" viewBox="0 0 10 6" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M1 1l4 4 4-4" />
+              </svg>
+            </button>
+            {isIngestionOpen && (
+              <div className="nav-group-dropdown">
+                <div className="nav-group-dropdown-inner">
+                  <button
+                    className={`nav-group-item ${currentView === 'holding-pen' ? 'active' : ''}`}
+                    onClick={() => {
+                      onViewChange('holding-pen');
+                      setIsIngestionOpen(false);
+                      setIsMobileMenuOpen(false);
+                    }}
+                  >
+                    Holding Pen
+                  </button>
+                  <button
+                    className={`nav-group-item ${currentView === 'processed' ? 'active' : ''}`}
+                    onClick={() => {
+                      onViewChange('processed');
+                      setIsIngestionOpen(false);
+                      setIsMobileMenuOpen(false);
+                    }}
+                  >
+                    Processed
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           <button
             className={`nav-item ${currentView === 'reports' ? 'active' : ''}`}
             onClick={() => {

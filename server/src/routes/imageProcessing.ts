@@ -53,6 +53,46 @@ export function createImageProcessingRoutes(
     }
   });
 
+  // POST /api/image-processing/identify -- vision only, no commit
+  router.post('/identify', async (req: Request, res: Response) => {
+    try {
+      const { filename, backFile } = req.body;
+
+      if (!filename || typeof filename !== 'string') {
+        res.status(400).json({ error: 'filename is required' });
+        return;
+      }
+
+      const data = await imageProcessingService.identifyOnly(filename, backFile);
+      res.json(data);
+    } catch (error) {
+      console.error('Error identifying card:', error);
+      res.status(500).json({ error: 'Failed to identify card' });
+    }
+  });
+
+  // POST /api/image-processing/confirm -- commit user-reviewed card data
+  router.post('/confirm', async (req: Request, res: Response) => {
+    try {
+      const { filename, backFile, cardData } = req.body;
+
+      if (!filename || typeof filename !== 'string') {
+        res.status(400).json({ error: 'filename is required' });
+        return;
+      }
+      if (!cardData || typeof cardData !== 'object') {
+        res.status(400).json({ error: 'cardData is required' });
+        return;
+      }
+
+      const result = await imageProcessingService.confirmCard(filename, cardData, backFile);
+      res.json(result);
+    } catch (error) {
+      console.error('Error confirming card:', error);
+      res.status(500).json({ error: 'Failed to confirm card' });
+    }
+  });
+
   // GET /api/image-processing/status
   router.get('/status', (_req: Request, res: Response) => {
     try {

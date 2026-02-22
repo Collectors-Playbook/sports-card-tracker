@@ -63,6 +63,21 @@ class Database {
       ALTER TABLE users ADD COLUMN profilePhoto TEXT DEFAULT NULL
     `).catch(() => { /* column already exists */ });
 
+    // Migration: add new card fields for vision-extracted data
+    const cardMigrations = [
+      'ALTER TABLE cards ADD COLUMN setName TEXT',
+      'ALTER TABLE cards ADD COLUMN serialNumber TEXT',
+      'ALTER TABLE cards ADD COLUMN grade TEXT',
+      'ALTER TABLE cards ADD COLUMN isRookie INTEGER DEFAULT 0',
+      'ALTER TABLE cards ADD COLUMN isAutograph INTEGER DEFAULT 0',
+      'ALTER TABLE cards ADD COLUMN isRelic INTEGER DEFAULT 0',
+      'ALTER TABLE cards ADD COLUMN isNumbered INTEGER DEFAULT 0',
+      'ALTER TABLE cards ADD COLUMN isGraded INTEGER DEFAULT 0',
+    ];
+    for (const migration of cardMigrations) {
+      await this.runAsync(migration).catch(() => { /* column already exists */ });
+    }
+
     await this.runAsync(`
       CREATE TABLE IF NOT EXISTS collections (
         id TEXT PRIMARY KEY,
@@ -149,10 +164,7 @@ class Database {
     sql += ' ORDER BY createdAt DESC';
 
     const rows = await this.allAsync<Record<string, unknown>>(sql, params);
-    return rows.map(row => ({
-      ...row,
-      images: JSON.parse((row.images as string) || '[]'),
-    })) as Card[];
+    return rows.map(row => this.mapCardRow(row));
   }
 
   public async getCardById(id: string): Promise<Card | undefined> {
@@ -162,7 +174,7 @@ class Database {
       [id]
     );
     if (!row) return undefined;
-    return { ...row, images: JSON.parse((row.images as string) || '[]') } as Card;
+    return this.mapCardRow(row);
   }
 
   public async createCard(cardInput: CardInput): Promise<Card> {
@@ -184,6 +196,14 @@ class Database {
       parallel: cardInput.parallel,
       condition: cardInput.condition,
       gradingCompany: cardInput.gradingCompany,
+      setName: cardInput.setName,
+      serialNumber: cardInput.serialNumber,
+      grade: cardInput.grade,
+      isRookie: cardInput.isRookie,
+      isAutograph: cardInput.isAutograph,
+      isRelic: cardInput.isRelic,
+      isNumbered: cardInput.isNumbered,
+      isGraded: cardInput.isGraded,
       purchasePrice: cardInput.purchasePrice,
       purchaseDate: cardInput.purchaseDate,
       sellPrice: cardInput.sellPrice,
@@ -198,14 +218,20 @@ class Database {
     await this.runAsync(
       `INSERT INTO cards (
         id, userId, collectionId, collectionType, player, team, year, brand, category, cardNumber,
-        parallel, condition, gradingCompany, purchasePrice, purchaseDate,
+        parallel, condition, gradingCompany, setName, serialNumber, grade,
+        isRookie, isAutograph, isRelic, isNumbered, isGraded,
+        purchasePrice, purchaseDate,
         sellPrice, sellDate, currentValue, images, notes, createdAt, updatedAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         card.id, card.userId, card.collectionId || null, card.collectionType,
         card.player, card.team,
         card.year, card.brand, card.category, card.cardNumber, card.parallel || null,
-        card.condition, card.gradingCompany || null, card.purchasePrice, card.purchaseDate,
+        card.condition, card.gradingCompany || null,
+        card.setName || null, card.serialNumber || null, card.grade || null,
+        card.isRookie ? 1 : 0, card.isAutograph ? 1 : 0, card.isRelic ? 1 : 0,
+        card.isNumbered ? 1 : 0, card.isGraded ? 1 : 0,
+        card.purchasePrice, card.purchaseDate,
         card.sellPrice || null, card.sellDate || null, card.currentValue,
         JSON.stringify(card.images), card.notes, card.createdAt, card.updatedAt,
       ]
@@ -225,6 +251,8 @@ class Database {
       `UPDATE cards SET
         userId = ?, collectionId = ?, collectionType = ?, player = ?, team = ?, year = ?, brand = ?,
         category = ?, cardNumber = ?, parallel = ?, condition = ?, gradingCompany = ?,
+        setName = ?, serialNumber = ?, grade = ?,
+        isRookie = ?, isAutograph = ?, isRelic = ?, isNumbered = ?, isGraded = ?,
         purchasePrice = ?, purchaseDate = ?, sellPrice = ?, sellDate = ?,
         currentValue = ?, images = ?, notes = ?, updatedAt = ?
       WHERE id = ?`,
@@ -233,7 +261,11 @@ class Database {
         cardInput.collectionType || existing.collectionType,
         cardInput.player, cardInput.team, cardInput.year, cardInput.brand,
         cardInput.category, cardInput.cardNumber, cardInput.parallel || null,
-        cardInput.condition, cardInput.gradingCompany || null, cardInput.purchasePrice,
+        cardInput.condition, cardInput.gradingCompany || null,
+        cardInput.setName || null, cardInput.serialNumber || null, cardInput.grade || null,
+        cardInput.isRookie ? 1 : 0, cardInput.isAutograph ? 1 : 0, cardInput.isRelic ? 1 : 0,
+        cardInput.isNumbered ? 1 : 0, cardInput.isGraded ? 1 : 0,
+        cardInput.purchasePrice,
         cardInput.purchaseDate, cardInput.sellPrice || null, cardInput.sellDate || null,
         cardInput.currentValue, JSON.stringify(cardInput.images || []),
         cardInput.notes || '', updatedAt, id,
@@ -251,6 +283,29 @@ class Database {
       createdAt: existing.createdAt,
       updatedAt,
     };
+  }
+
+  public async getCardByImage(imageFilename: string): Promise<Card | undefined> {
+    await this.ready;
+    const rows = await this.allAsync<Record<string, unknown>>(
+      'SELECT * FROM cards WHERE images LIKE ?',
+      [`%${imageFilename}%`]
+    );
+    if (rows.length === 0) return undefined;
+    const row = rows[0];
+    return this.mapCardRow(row);
+  }
+
+  private mapCardRow(row: Record<string, unknown>): Card {
+    return {
+      ...row,
+      images: JSON.parse((row.images as string) || '[]'),
+      isRookie: !!(row.isRookie),
+      isAutograph: !!(row.isAutograph),
+      isRelic: !!(row.isRelic),
+      isNumbered: !!(row.isNumbered),
+      isGraded: !!(row.isGraded),
+    } as Card;
   }
 
   public async deleteCard(id: string): Promise<boolean> {

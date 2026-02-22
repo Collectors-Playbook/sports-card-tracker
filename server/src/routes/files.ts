@@ -95,9 +95,46 @@ export function createFileRoutes(fileService: FileService): Router {
     res.status(201).json({ uploaded, count: uploaded.length });
   });
 
+  // Replace a raw file (used by crop/edit)
+  router.put('/raw/:filename', upload.single('file'), (req: Request, res: Response) => {
+    const existingPath = fileService.getFilePath(fileService.getRawDir(), req.params.filename);
+    if (!existingPath || !fileService.fileExists(fileService.getRawDir(), req.params.filename)) {
+      res.status(404).json({ error: 'File not found' });
+      return;
+    }
+
+    const file = req.file;
+    if (!file) {
+      res.status(400).json({ error: 'No file provided' });
+      return;
+    }
+
+    // The uploaded file was saved with a unique suffix by multer.
+    // We need to replace the original file with the uploaded content.
+    const fs = require('fs');
+    try {
+      fs.copyFileSync(file.path, existingPath);
+      fs.unlinkSync(file.path);
+      res.json({ name: req.params.filename, size: file.size });
+    } catch (error) {
+      console.error('Error replacing raw file:', error);
+      res.status(500).json({ error: 'Failed to replace file' });
+    }
+  });
+
   // Delete a raw file
   router.delete('/raw/:filename', (req: Request, res: Response) => {
     const deleted = fileService.deleteFile(fileService.getRawDir(), req.params.filename);
+    if (deleted) {
+      res.status(204).send();
+    } else {
+      res.status(404).json({ error: 'File not found' });
+    }
+  });
+
+  // Delete a processed file
+  router.delete('/processed/:filename', (req: Request, res: Response) => {
+    const deleted = fileService.deleteFile(fileService.getProcessedDir(), req.params.filename);
     if (deleted) {
       res.status(204).send();
     } else {
