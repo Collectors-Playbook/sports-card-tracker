@@ -31,6 +31,17 @@ export interface ExtractedCardData {
   };
 }
 
+export interface AuditLogEntry {
+  id: string;
+  userId: string | null;
+  action: string;
+  entity: string;
+  entityId: string | null;
+  details: Record<string, unknown> | null;
+  ipAddress: string | null;
+  createdAt: string;
+}
+
 interface CardInput {
   player: string;
   team: string;
@@ -458,6 +469,27 @@ class ApiService {
       logError('ApiService', 'Health check failed', error as Error);
       throw error;
     }
+  }
+
+  // ─── Audit Logs (Admin) ──────────────────────────────────────────────────
+
+  public async getAuditLogs(params: {
+    userId?: string;
+    action?: string;
+    entity?: string;
+    entityId?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ entries: AuditLogEntry[]; total: number }> {
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') query.append(key, String(value));
+    });
+    return this.request(`/audit-logs?${query.toString()}`);
+  }
+
+  public async getAuditLogActions(): Promise<string[]> {
+    return this.request('/audit-logs/actions');
   }
 }
 
