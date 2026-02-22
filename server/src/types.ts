@@ -16,6 +16,14 @@ export interface Card {
   parallel?: string;
   condition: string;
   gradingCompany?: string;
+  setName?: string;
+  serialNumber?: string;
+  grade?: string;
+  isRookie?: boolean;
+  isAutograph?: boolean;
+  isRelic?: boolean;
+  isNumbered?: boolean;
+  isGraded?: boolean;
   purchasePrice: number;
   purchaseDate: string;
   sellPrice?: number;
@@ -40,6 +48,14 @@ export interface CardInput {
   parallel?: string;
   condition: string;
   gradingCompany?: string;
+  setName?: string;
+  serialNumber?: string;
+  grade?: string;
+  isRookie?: boolean;
+  isAutograph?: boolean;
+  isRelic?: boolean;
+  isNumbered?: boolean;
+  isGraded?: boolean;
   purchasePrice: number;
   purchaseDate: string;
   sellPrice?: number;
@@ -243,6 +259,8 @@ export interface ExtractedCardData {
   category?: string;
   parallel?: string;
   serialNumber?: string;
+  gradingCompany?: string;
+  grade?: string;
   features?: CardFeatures;
   confidence?: DetectionConfidence;
   rawText?: string;

@@ -27,6 +27,14 @@ export interface Card {
   parallel?: string;
   condition: string;
   gradingCompany?: string;
+  setName?: string;
+  serialNumber?: string;
+  grade?: string;
+  isRookie?: boolean;
+  isAutograph?: boolean;
+  isRelic?: boolean;
+  isNumbered?: boolean;
+  isGraded?: boolean;
   purchasePrice: number;
   purchaseDate: Date;
   sellPrice?: number;

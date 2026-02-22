@@ -3,6 +3,34 @@ import { logDebug, logInfo, logError } from '../utils/logger';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
+export interface ExtractedCardData {
+  player?: string;
+  year?: string;
+  brand?: string;
+  setName?: string;
+  cardNumber?: string;
+  team?: string;
+  category?: string;
+  parallel?: string;
+  serialNumber?: string;
+  gradingCompany?: string;
+  grade?: string;
+  features?: {
+    isRookie: boolean;
+    isAutograph: boolean;
+    isRelic: boolean;
+    isNumbered: boolean;
+    isGraded: boolean;
+    isParallel: boolean;
+  };
+  confidence?: {
+    score: number;
+    level: 'high' | 'medium' | 'low';
+    detectedFields: number;
+    missingFields?: string[];
+  };
+}
+
 interface CardInput {
   player: string;
   team: string;
@@ -13,6 +41,14 @@ interface CardInput {
   parallel?: string;
   condition: string;
   gradingCompany?: string;
+  setName?: string;
+  serialNumber?: string;
+  grade?: string;
+  isRookie?: boolean;
+  isAutograph?: boolean;
+  isRelic?: boolean;
+  isNumbered?: boolean;
+  isGraded?: boolean;
   purchasePrice: number;
   purchaseDate: string;
   sellPrice?: number;
@@ -125,6 +161,14 @@ class ApiService {
         parallel: cardData.parallel,
         condition: cardData.condition,
         gradingCompany: cardData.gradingCompany,
+        setName: cardData.setName,
+        serialNumber: cardData.serialNumber,
+        grade: cardData.grade,
+        isRookie: cardData.isRookie,
+        isAutograph: cardData.isAutograph,
+        isRelic: cardData.isRelic,
+        isNumbered: cardData.isNumbered,
+        isGraded: cardData.isGraded,
         purchasePrice: cardData.purchasePrice,
         purchaseDate: cardData.purchaseDate.toISOString(),
         sellPrice: cardData.sellPrice,
@@ -167,6 +211,14 @@ class ApiService {
         parallel: cardData.parallel,
         condition: cardData.condition,
         gradingCompany: cardData.gradingCompany,
+        setName: cardData.setName,
+        serialNumber: cardData.serialNumber,
+        grade: cardData.grade,
+        isRookie: cardData.isRookie,
+        isAutograph: cardData.isAutograph,
+        isRelic: cardData.isRelic,
+        isNumbered: cardData.isNumbered,
+        isGraded: cardData.isGraded,
         purchasePrice: cardData.purchasePrice,
         purchaseDate: cardData.purchaseDate.toISOString(),
         sellPrice: cardData.sellPrice,
@@ -293,6 +345,107 @@ class ApiService {
     outputExists: boolean;
   }> {
     return this.request('/ebay/status');
+  }
+
+  // ─── Processed Files ────────────────────────────────────────────────────
+
+  public async getProcessedFiles(): Promise<{ name: string; size: number; modified: string; type: string }[]> {
+    return this.request('/files/processed');
+  }
+
+  public async deleteProcessedFile(filename: string): Promise<void> {
+    await this.request<void>(`/files/processed/${encodeURIComponent(filename)}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // ─── Raw Files (Holding Pen) ────────────────────────────────────────────
+
+  public async getRawFiles(): Promise<{ name: string; size: number; modified: string; type: string }[]> {
+    return this.request('/files/raw');
+  }
+
+  public async deleteRawFile(filename: string): Promise<void> {
+    await this.request<void>(`/files/raw/${encodeURIComponent(filename)}`, {
+      method: 'DELETE',
+    });
+  }
+
+  public async uploadRawFiles(files: File[]): Promise<{ uploaded: { name: string; size: number; originalName: string }[]; count: number }> {
+    const formData = new FormData();
+    files.forEach(file => formData.append('files', file));
+
+    const url = `${API_BASE_URL}/files/raw/upload`;
+    const token = localStorage.getItem('token');
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        ...(token && { 'Authorization': `Bearer ${token}` }),
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Upload failed' }));
+      throw new Error(errorData.error || `HTTP ${response.status}`);
+    }
+    return response.json();
+  }
+
+  public async replaceRawFile(filename: string, blob: Blob): Promise<void> {
+    const formData = new FormData();
+    formData.append('file', blob, filename);
+
+    const url = `${API_BASE_URL}/files/raw/${encodeURIComponent(filename)}`;
+    const token = localStorage.getItem('token');
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        ...(token && { 'Authorization': `Bearer ${token}` }),
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Replace failed' }));
+      throw new Error(errorData.error || `HTTP ${response.status}`);
+    }
+  }
+
+  public async processRawImages(filenames: string[]): Promise<{ processed: number; failed: number; skipped: number; duplicates: number }> {
+    return this.request('/image-processing/process', {
+      method: 'POST',
+      body: JSON.stringify({ filenames }),
+    });
+  }
+
+  public async identifyCard(filename: string, backFile?: string): Promise<ExtractedCardData> {
+    return this.request('/image-processing/identify', {
+      method: 'POST',
+      body: JSON.stringify({ filename, backFile }),
+    });
+  }
+
+  public async confirmCard(
+    filename: string,
+    cardData: ExtractedCardData,
+    backFile?: string
+  ): Promise<{ filename: string; status: string; processedFilename?: string; cardId?: string; confidence?: number; error?: string }> {
+    return this.request('/image-processing/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ filename, backFile, cardData }),
+    });
+  }
+
+  public async getCardByImage(imageFilename: string): Promise<Card> {
+    const card = await this.request<Card>(`/cards?image=${encodeURIComponent(imageFilename)}`);
+    return {
+      ...card,
+      purchaseDate: new Date(card.purchaseDate),
+      sellDate: card.sellDate ? new Date(card.sellDate) : undefined,
+      createdAt: new Date(card.createdAt),
+      updatedAt: new Date(card.updatedAt),
+    };
   }
 
   // ─── Health ───────────────────────────────────────────────────────────────
