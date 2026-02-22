@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import Database from '../database';
+import AuditService from '../services/auditService';
 import { AuthenticatedRequest, User } from '../types';
 import { authenticateToken } from '../middleware/auth';
 import { loadConfig } from '../config';
@@ -11,11 +12,11 @@ function sanitizeUser(user: User): Omit<User, 'passwordHash'> {
   return sanitized;
 }
 
-export function createAuthRoutes(db: Database): Router {
+export function createAuthRoutes(db: Database, auditService: AuditService): Router {
   const router = Router();
 
   // POST /api/auth/register
-  router.post('/register', async (req: Request, res: Response) => {
+  router.post('/register', async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { username, email, password } = req.body;
 
@@ -45,6 +46,7 @@ export function createAuthRoutes(db: Database): Router {
       const config = loadConfig();
       const token = jwt.sign({ userId: user.id, role: user.role }, config.jwtSecret, { expiresIn: '7d' });
 
+      auditService.log(req, { action: 'user.register', entity: 'user', entityId: user.id });
       res.status(201).json({ user: sanitizeUser(user), token });
     } catch (error) {
       console.error('Error registering user:', error);
@@ -53,7 +55,7 @@ export function createAuthRoutes(db: Database): Router {
   });
 
   // POST /api/auth/login
-  router.post('/login', async (req: Request, res: Response) => {
+  router.post('/login', async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { email, password } = req.body;
 
@@ -64,12 +66,14 @@ export function createAuthRoutes(db: Database): Router {
 
       const user = await db.getUserByEmail(email);
       if (!user) {
+        auditService.log(req, { action: 'user.login_failed', entity: 'user', details: { email } });
         res.status(401).json({ error: 'Invalid email or password' });
         return;
       }
 
       const validPassword = await bcrypt.compare(password, user.passwordHash);
       if (!validPassword) {
+        auditService.log(req, { action: 'user.login_failed', entity: 'user', details: { email } });
         res.status(401).json({ error: 'Invalid email or password' });
         return;
       }
@@ -77,6 +81,7 @@ export function createAuthRoutes(db: Database): Router {
       const config = loadConfig();
       const token = jwt.sign({ userId: user.id, role: user.role }, config.jwtSecret, { expiresIn: '7d' });
 
+      auditService.log(req, { action: 'user.login', entity: 'user', entityId: user.id });
       res.json({ user: sanitizeUser(user), token });
     } catch (error) {
       console.error('Error logging in:', error);
@@ -147,6 +152,7 @@ export function createAuthRoutes(db: Database): Router {
         }
         const newHash = await bcrypt.hash(newPassword, 10);
         await db.updateUserPassword(userId, newHash);
+        auditService.log(req, { action: 'user.password_change', entity: 'user', entityId: userId });
       }
 
       // Update username/email/profilePhoto
@@ -161,6 +167,7 @@ export function createAuthRoutes(db: Database): Router {
         return;
       }
 
+      auditService.log(req, { action: 'user.profile_update', entity: 'user', entityId: userId, details: { fields: Object.keys(updates) } });
       res.json(sanitizeUser(updated));
     } catch (error) {
       console.error('Error updating profile:', error);

@@ -1,5 +1,5 @@
 import sqlite3 from 'sqlite3';
-import { Card, CardInput, User, UserInput, Collection, CollectionInput, Job, JobInput, JobStatus } from './types';
+import { Card, CardInput, User, UserInput, Collection, CollectionInput, Job, JobInput, JobStatus, AuditLogEntry, AuditLogInput, AuditLogQuery } from './types';
 import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
 
@@ -132,6 +132,23 @@ class Database {
         updatedAt TEXT NOT NULL
       )
     `);
+
+    await this.runAsync(`
+      CREATE TABLE IF NOT EXISTS audit_logs (
+        id TEXT PRIMARY KEY,
+        userId TEXT,
+        action TEXT NOT NULL,
+        entity TEXT NOT NULL,
+        entityId TEXT,
+        details TEXT,
+        ipAddress TEXT,
+        createdAt TEXT NOT NULL
+      )
+    `);
+
+    await this.runAsync('CREATE INDEX IF NOT EXISTS idx_audit_logs_entity ON audit_logs(entity, entityId)');
+    await this.runAsync('CREATE INDEX IF NOT EXISTS idx_audit_logs_userId ON audit_logs(userId)');
+    await this.runAsync('CREATE INDEX IF NOT EXISTS idx_audit_logs_createdAt ON audit_logs(createdAt)');
   }
 
   public async waitReady(): Promise<void> {
@@ -548,6 +565,88 @@ class Database {
       payload: JSON.parse((row.payload as string) || '{}'),
       result: row.result ? JSON.parse(row.result as string) : null,
     } as Job;
+  }
+
+  // ─── Audit Logs ─────────────────────────────────────────────────────────────
+
+  public async insertAuditLog(input: AuditLogInput): Promise<AuditLogEntry> {
+    await this.ready;
+    const id = uuidv4();
+    const createdAt = new Date().toISOString();
+
+    const entry: AuditLogEntry = {
+      id,
+      userId: input.userId ?? null,
+      action: input.action,
+      entity: input.entity,
+      entityId: input.entityId ?? null,
+      details: input.details ?? null,
+      ipAddress: input.ipAddress ?? null,
+      createdAt,
+    };
+
+    await this.runAsync(
+      `INSERT INTO audit_logs (id, userId, action, entity, entityId, details, ipAddress, createdAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [entry.id, entry.userId, entry.action, entry.entity, entry.entityId,
+       entry.details ? JSON.stringify(entry.details) : null, entry.ipAddress, entry.createdAt]
+    );
+
+    return entry;
+  }
+
+  public async queryAuditLogs(query: AuditLogQuery): Promise<{ entries: AuditLogEntry[]; total: number }> {
+    await this.ready;
+    const conditions: string[] = [];
+    const params: unknown[] = [];
+
+    if (query.userId) {
+      conditions.push('userId = ?');
+      params.push(query.userId);
+    }
+    if (query.action) {
+      conditions.push('action = ?');
+      params.push(query.action);
+    }
+    if (query.entity) {
+      conditions.push('entity = ?');
+      params.push(query.entity);
+    }
+    if (query.entityId) {
+      conditions.push('entityId = ?');
+      params.push(query.entityId);
+    }
+
+    const whereClause = conditions.length > 0 ? ' WHERE ' + conditions.join(' AND ') : '';
+
+    const countRow = await this.getAsync<{ count: number }>(`SELECT COUNT(*) as count FROM audit_logs${whereClause}`, params);
+    const total = countRow?.count ?? 0;
+
+    let sql = `SELECT * FROM audit_logs${whereClause} ORDER BY createdAt DESC`;
+    const queryParams = [...params];
+
+    const limit = query.limit ?? 50;
+    sql += ' LIMIT ?';
+    queryParams.push(limit);
+
+    if (query.offset) {
+      sql += ' OFFSET ?';
+      queryParams.push(query.offset);
+    }
+
+    const rows = await this.allAsync<Record<string, unknown>>(sql, queryParams);
+    const entries: AuditLogEntry[] = rows.map(row => ({
+      ...row,
+      details: row.details ? JSON.parse(row.details as string) : null,
+    })) as AuditLogEntry[];
+
+    return { entries, total };
+  }
+
+  public async getDistinctAuditActions(): Promise<string[]> {
+    await this.ready;
+    const rows = await this.allAsync<{ action: string }>('SELECT DISTINCT action FROM audit_logs ORDER BY action');
+    return rows.map(r => r.action);
   }
 
   // ─── Lifecycle ───────────────────────────────────────────────────────────────

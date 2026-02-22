@@ -8,6 +8,7 @@ import EventService from './services/eventService';
 import JobService from './services/jobService';
 import { requestLogger } from './middleware/requestLogger';
 import { errorHandler } from './middleware/errorHandler';
+import { optionalAuth } from './middleware/auth';
 import { createHealthRoutes } from './routes/health';
 import { createCardRoutes } from './routes/cards';
 import { createFileRoutes } from './routes/files';
@@ -20,7 +21,9 @@ import CompService from './services/compService';
 import AnthropicVisionService from './services/anthropicVisionService';
 import ImageProcessingService from './services/imageProcessingService';
 import EbayExportService from './services/ebayExportService';
+import AuditService from './services/auditService';
 import { createEbayRoutes } from './routes/ebay';
+import { createAuditLogRoutes } from './routes/auditLogs';
 import { EbayExportOptions } from './types';
 
 dotenv.config();
@@ -36,6 +39,7 @@ const compService = new CompService(fileService);
 const visionService = new AnthropicVisionService();
 const imageProcessingService = new ImageProcessingService(fileService, db, visionService);
 const ebayExportService = new EbayExportService(db, fileService);
+const auditService = new AuditService(db);
 
 // Create Express app
 const app = express();
@@ -48,17 +52,19 @@ app.use(cors({
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 app.use(requestLogger);
+app.use(optionalAuth);
 
 // Routes
 app.use('/api/health', createHealthRoutes(db, fileService));
-app.use('/api/cards', createCardRoutes(db));
-app.use('/api/files', createFileRoutes(fileService));
-app.use('/api/jobs', createJobRoutes(db));
+app.use('/api/cards', createCardRoutes(db, auditService));
+app.use('/api/files', createFileRoutes(fileService, auditService));
+app.use('/api/jobs', createJobRoutes(db, auditService));
 app.use('/api/events', createEventRoutes(eventService));
-app.use('/api/auth', createAuthRoutes(db));
+app.use('/api/auth', createAuthRoutes(db, auditService));
 app.use('/api/comps', createCompRoutes(db, compService));
-app.use('/api/image-processing', createImageProcessingRoutes(db, imageProcessingService, fileService));
-app.use('/api/ebay', createEbayRoutes(db, ebayExportService));
+app.use('/api/image-processing', createImageProcessingRoutes(db, imageProcessingService, fileService, auditService));
+app.use('/api/ebay', createEbayRoutes(db, ebayExportService, auditService));
+app.use('/api/audit-logs', createAuditLogRoutes(auditService));
 
 // Error handling
 app.use(errorHandler);
@@ -153,4 +159,4 @@ if (require.main === module) {
   })();
 }
 
-export { app, db, fileService, eventService, jobService, compService, visionService, imageProcessingService, ebayExportService };
+export { app, db, fileService, eventService, jobService, compService, visionService, imageProcessingService, ebayExportService, auditService };

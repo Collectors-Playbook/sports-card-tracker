@@ -2,16 +2,19 @@ import { Router, Request, Response } from 'express';
 import Database from '../database';
 import ImageProcessingService from '../services/imageProcessingService';
 import FileService from '../services/fileService';
+import AuditService from '../services/auditService';
+import { AuthenticatedRequest } from '../types';
 
 export function createImageProcessingRoutes(
   db: Database,
   imageProcessingService: ImageProcessingService,
-  fileService: FileService
+  fileService: FileService,
+  auditService: AuditService
 ): Router {
   const router = Router();
 
   // POST /api/image-processing/process -- async via job queue
-  router.post('/process', async (req: Request, res: Response) => {
+  router.post('/process', async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { filenames, skipExisting, confidenceThreshold } = req.body;
 
@@ -25,6 +28,7 @@ export function createImageProcessingRoutes(
         payload: { filenames, skipExisting, confidenceThreshold },
       });
 
+      auditService.log(req, { action: 'image.process_batch', entity: 'job', entityId: job.id, details: { fileCount: filenames.length } });
       res.status(201).json(job);
     } catch (error) {
       console.error('Error creating image-processing job:', error);
@@ -54,7 +58,7 @@ export function createImageProcessingRoutes(
   });
 
   // POST /api/image-processing/identify -- vision only, no commit
-  router.post('/identify', async (req: Request, res: Response) => {
+  router.post('/identify', async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { filename, backFile } = req.body;
 
@@ -64,6 +68,7 @@ export function createImageProcessingRoutes(
       }
 
       const data = await imageProcessingService.identifyOnly(filename, backFile);
+      auditService.log(req, { action: 'image.identify', entity: 'file', entityId: filename });
       res.json(data);
     } catch (error) {
       console.error('Error identifying card:', error);
@@ -72,7 +77,7 @@ export function createImageProcessingRoutes(
   });
 
   // POST /api/image-processing/confirm -- commit user-reviewed card data
-  router.post('/confirm', async (req: Request, res: Response) => {
+  router.post('/confirm', async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { filename, backFile, cardData } = req.body;
 
@@ -86,6 +91,7 @@ export function createImageProcessingRoutes(
       }
 
       const result = await imageProcessingService.confirmCard(filename, cardData, backFile);
+      auditService.log(req, { action: 'image.confirm', entity: 'card', entityId: result.cardId, details: { filename } });
       res.json(result);
     } catch (error) {
       console.error('Error confirming card:', error);
