@@ -18,6 +18,7 @@ import Reports from './components/Reports/Reports';
 import EbayListings from './components/EbayListings/EbayListings';
 import { BackupRestore } from './components/BackupRestore/BackupRestore';
 import About from './components/About/About';
+import AuditLog from './components/AuditLog/AuditLog';
 import HoldingPen from './components/HoldingPen/HoldingPen';
 import ProcessedGallery from './components/ProcessedGallery/ProcessedGallery';
 import ErrorBoundary from './components/ErrorBoundary/ErrorBoundary';
@@ -26,7 +27,7 @@ import { saveEnhancedCard, mergeCardWithEnhanced } from './utils/enhancedCardInt
 import { logInfo } from './utils/logger';
 import './App.css';
 
-type View = 'dashboard' | 'inventory' | 'add-card' | 'holding-pen' | 'processed' | 'admin' | 'profile' | 'reports' | 'ebay' | 'backup' | 'users' | 'collections' | 'about';
+type View = 'dashboard' | 'inventory' | 'add-card' | 'holding-pen' | 'processed' | 'admin' | 'profile' | 'reports' | 'ebay' | 'backup' | 'users' | 'collections' | 'about' | 'audit-log';
 type FormType = 'classic' | 'enhanced' | 'photo';
 
 const AppContent: React.FC = () => {
@@ -232,6 +233,8 @@ const AppContent: React.FC = () => {
         return <BackupRestore />;
       case 'users':
         return <UserManagement />;
+      case 'audit-log':
+        return <AuditLog />;
       case 'collections':
         return <Collections />;
       case 'about':
