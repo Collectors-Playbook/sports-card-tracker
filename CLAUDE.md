@@ -6,12 +6,18 @@ A React/TypeScript sports card collection management application that runs local
 ## Core Workflows
 
 ### 1. Image Processing Pipeline
-- Raw card photos are placed in the `raw/` folder
-- The system evaluates each image to identify card content (player, year, set, manufacturer, card number)
-- Successfully identified images are **copied** to `processed/` and **renamed** based on content
-  - Naming format: `{Year}-{Manufacturer}-{Set}-{PlayerName}-{CardNumber}.{ext}`
-- Images that cannot be identified are logged to `image-error.log`
+- Raw card photos are uploaded or placed in the `raw/` folder
+- The **Holding Pen** UI shows all raw images and auto-detects front/back pairs (via `-front`/`-back` filename suffixes)
+- Two-step identify/confirm workflow:
+  1. **Identify**: Anthropic Claude Vision API (`claude-sonnet-4-20250514`) analyzes the image and extracts card data (player, year, brand, set, card number, team, category, parallel, serial number, grading info, feature flags) with a confidence score
+  2. **Review & Confirm**: User reviews extracted data in the **Card Review Form**, corrects any errors, and confirms. Only then is the image copied to `processed/` and a card record created
+- Front/back photo pairs are identified together for better accuracy and stored as `{card}-front.ext` / `{card}-back.ext`
+- Successfully confirmed images are **copied** to `processed/` and **renamed** based on content
+  - Naming format: `{Year}-{Brand}-{Set}-{PlayerName}-{CardNumber}.{ext}` (set name omitted if not detected)
+- Batch processing is also supported via job queue (skips the review step, uses confidence threshold)
+- Images that cannot be identified or fall below the confidence threshold (default 40%) are logged to `image-error.log`
   - Format: `[YYYY-MM-DD HH:MM:SS] FILENAME: reason for failure`
+- Confidence scoring: field-weighted score (0-100), levels: high (80%+), medium (60-80%), low (<60%)
 
 ### 2. Comp Generation
 - For each card in `processed/`, comps are pulled from:
@@ -34,7 +40,7 @@ A React/TypeScript sports card collection management application that runs local
 - **Grading Submission Tracker**: Track cards sent to PSA/BGS/SGC with submission #, status (Submitted → Received → Grading → Shipped Back → Complete), turnaround, cost. Alert when grades post.
 - **Bin/Box/Location Mapping**: Physical storage tracking (Room → Shelf → Box → Row → Slot). Search by card to find location.
 - **Barcode/QR Label Printing**: Generate QR codes linking to card detail pages. Print-ready Avery-compatible label sheets.
-- **Duplicate Detection**: Flag during image processing when a card already exists in inventory. Match on player + year + set + card number + manufacturer.
+- **Duplicate Detection**: Flag during image processing when a card already exists in inventory. Match on player + year + brand + card number. Orphaned DB records (no matching files on disk) are auto-cleaned.
 
 ### 5. Pricing & Investment
 - **Auto Price Alerts**: Set per-card price thresholds. Notify on threshold crossings (daily/weekly check).
@@ -49,7 +55,7 @@ A React/TypeScript sports card collection management application that runs local
 - **Sold Item Reconciliation**: Match eBay sold notifications to inventory. Auto-mark as sold, calculate actual profit, update portfolio.
 
 ### 7. Image Processing Enhancements
-- **Front/Back Photo Pairing**: Associate front/back photos per card (`{card}-front.ext`, `{card}-back.ext`). Both included in listings.
+- **Front/Back Photo Pairing**: Auto-detected via `-front`/`-back` filename suffixes. Both images sent to vision API together for better accuracy. Stored as separate files in `processed/` and both included in card's `images[]` array.
 - **Auto-Crop & Background Removal**: Detect card edges, crop, replace background with clean white. eBay-ready output.
 - **Condition Detection**: Analyze images for centering, corner sharpness, surface issues, edge wear. Output estimated grade range.
 - **Batch Watermarking**: Add store branding (logo/text) to images. Configurable position and opacity. Originals preserved.
@@ -72,30 +78,28 @@ A React/TypeScript sports card collection management application that runs local
 ## Technical Architecture
 
 ### Stack
-- **React 18** with TypeScript
-- **Dexie.js** for IndexedDB (local app state)
-- **Recharts** for data visualization
-- **React Router** for navigation
-- **Context API** for state management
+- **Frontend**: React 18 with TypeScript, Dexie.js for IndexedDB, Recharts, Context API
+- **Backend**: Express.js with TypeScript, SQLite (via sqlite3), JWT auth (jsonwebtoken + bcryptjs)
+- **Vision AI**: Anthropic Claude Vision API (`@anthropic-ai/sdk`) for card identification
+- **File handling**: Multer for uploads, fs-based image pipeline between `raw/` and `processed/`
 
 ### Deployment
 - **Local**: `npm start` for dev; `npm run build` for production
 - **GCP VM**: Static build served via Nginx with filesystem access for image/data workflows
 
-### Key Services
-- **Card Detection Service**: Image evaluation, card identification, condition detection
-- **Text Extraction Service**: Text parsing from card images
-- **Image Processing Service**: Auto-crop, background removal, watermarking, front/back pairing
-- **Comp Service**: Queries SportsCardsPro.com, eBay sold listings, Card Ladder, and Market Movers
-- **eBay Listing Service**: CSV generation, listing performance tracking, relist automation, sold reconciliation
-- **Multi-Channel Export Service**: Generate platform-specific CSVs (eBay, COMC, MySlabs, Fanatics)
-- **Pricing Service**: Break-even calculator, price alerts, deal scanner, grading ROI analysis
-- **Inventory Service**: Storage location mapping, duplicate detection, PC vs. inventory tagging, QR labels
-- **Grading Service**: Submission tracking, status updates, grading ROI projections
-- **Reporting Service**: P&L statements, sell-through rates, portfolio heatmap, tax lot tracking
-- **Sourcing Service**: Break calculator, want list management, deal scanning
-- **Player Database**: Local player information lookup
-- **Manufacturer Database**: Card manufacturer details
+### Key Services (Backend — `server/src/services/`)
+- **Anthropic Vision Service** (`anthropicVisionService.ts`): Claude Vision API integration for card identification from single or paired images. Returns `ExtractedCardData` with confidence scoring
+- **Image Processing Service** (`imageProcessingService.ts`): Orchestrates the pipeline — identify, confirm, copy/rename files, create card records. Handles front/back pairing, duplicate detection with orphan cleanup, batch processing
+- **File Service** (`fileService.ts`): Filesystem operations for `raw/` and `processed/` directories, error log management
+- **Comp Service** (`compService.ts`): Queries SportsCardsPro.com, eBay sold listings, Card Ladder, and Market Movers
+- **eBay Export Service** (`ebayExportService.ts`): CSV generation from card data using eBay template
+- **Job Service** (`jobService.ts`): Async job queue for batch operations with SSE progress events
+- **Event Service** (`eventService.ts`): Server-Sent Events for real-time client notifications
+
+### Key Components (Frontend — `src/components/`)
+- **Holding Pen** (`HoldingPen/`): Raw image management — upload, crop/edit, pair detection, identify/confirm workflow
+- **Card Review Form** (`CardReviewForm/`): Modal form for reviewing/editing vision-extracted data before confirming
+- **Processed Gallery** (`ProcessedGallery/`): View, edit, and delete processed cards with filename-parsed metadata
 - **User Service**: Authentication and user management
 
 ## Folder Structure
@@ -110,21 +114,50 @@ project-root/
 ├── ebay-draft-upload-batch.csv       # Generated eBay upload file (output)
 ├── image-error.log                   # Failed image processing log
 ├── comp-error.log                    # Failed comp generation log
-├── src/
+├── server/                           # Express.js backend
+│   ├── src/
+│   │   ├── index.ts                  # Server bootstrap and route registration
+│   │   ├── database.ts              # SQLite DB with migrations and CRUD
+│   │   ├── types.ts                 # Server-side type definitions
+│   │   ├── routes/                  # Express route handlers
+│   │   │   ├── auth.ts              # Authentication (register, login, profile)
+│   │   │   ├── cards.ts             # Card CRUD + image lookup
+│   │   │   ├── files.ts             # Raw/processed file management
+│   │   │   ├── imageProcessing.ts   # Identify, confirm, batch process
+│   │   │   ├── ebay.ts              # eBay CSV generation
+│   │   │   ├── jobs.ts              # Async job management
+│   │   │   └── comps.ts             # Comp generation
+│   │   └── services/                # Business logic
+│   │       ├── anthropicVisionService.ts  # Claude Vision API
+│   │       ├── imageProcessingService.ts  # Pipeline orchestration
+│   │       ├── fileService.ts             # Filesystem operations
+│   │       ├── ebayExportService.ts       # eBay CSV builder
+│   │       ├── compService.ts             # Comp data fetching
+│   │       ├── jobService.ts              # Job queue
+│   │       └── eventService.ts            # SSE events
+│   └── .env                          # ANTHROPIC_API_KEY, JWT_SECRET, etc.
+├── src/                              # React frontend
 │   ├── components/                   # React components
+│   │   ├── HoldingPen/              # Raw image management UI
+│   │   ├── CardReviewForm/          # Vision data review/edit modal
+│   │   ├── ProcessedGallery/        # Processed card gallery
+│   │   └── ...
 │   ├── context/                      # React Context providers
-│   ├── services/                     # Business logic services
+│   ├── services/                     # API client and business logic
 │   ├── types/                        # TypeScript type definitions
 │   ├── utils/                        # Utility functions
 │   ├── hooks/                        # Custom React hooks
-│   └── db/                           # Database configuration
+│   └── db/                           # Dexie database configuration
 ├── PRD.md                            # Product Requirements Document
 └── CLAUDE.md                         # This file
 ```
 
 ## Data Models
-- **Basic Card**: Core fields (player, team, year, set, card number, manufacturer)
-- **Enhanced Card**: 50+ fields including grading, autographs, memorabilia, investment metrics, market data
+- **Card** (`server/src/types.ts`): Core fields (player, team, year, brand, cardNumber, category, parallel, condition, gradingCompany) plus vision-extracted fields (setName, serialNumber, grade, isRookie, isAutograph, isRelic, isNumbered, isGraded)
+- **ExtractedCardData**: Vision API output — all card fields plus `gradingCompany`, `grade`, `features` (CardFeatures), `confidence` (DetectionConfidence), `rawText`
+- **CardFeatures**: Boolean flags — `isRookie`, `isAutograph`, `isRelic`, `isNumbered`, `isGraded`, `isParallel`
+- **DetectionConfidence**: `score` (0-100), `level` (high/medium/low), `detectedFields` count, `missingFields` list
+- **Enhanced Card** (frontend): 50+ fields including grading, autographs, memorabilia, investment metrics, market data
 
 ## Development Guidelines
 
@@ -137,13 +170,19 @@ project-root/
 
 ### Common Commands
 ```bash
-npm start              # Start development server
+# Frontend
+npm start              # Start React dev server
 npm run build          # Build for production
 npm run lint           # Run ESLint
 npm run typecheck      # Run TypeScript compiler
 npm test               # Run unit and integration tests
 npm run test:coverage  # Run tests with coverage report
 npm run test:e2e       # Run E2E tests
+
+# Backend
+cd server && npm run dev    # Start Express dev server (port 8000)
+cd server && npm run build  # Build server TypeScript
+cd server && npx tsc --noEmit  # Type-check server
 ```
 
 ### Testing
@@ -187,7 +226,7 @@ npm run test:e2e       # Run E2E tests
 ### Inventory Management
 - Cards tagged as PC (Personal Collection) or Inventory
 - Physical location tracking (Room → Shelf → Box → Row → Slot)
-- Duplicate detection on player + year + set + card number + manufacturer
+- Duplicate detection on player + year + brand + card number (orphaned DB records auto-cleaned)
 - Want list with target buy prices and set completion tracking
 
 ## Debugging & Troubleshooting
@@ -206,10 +245,10 @@ npm run test:e2e       # Run E2E tests
 - Console for error messages
 
 ## Known Limitations
-- **No Real OCR Yet**: Card detection from photos is simulated (Google Cloud Vision API planned)
-- **No Live API Integration**: SportsCardsPro.com, eBay, Card Ladder, and Market Movers comp lookups need API implementation
-- **Local Auth Only**: User authentication system is local-only
-- **No Backend**: All data stored locally in browser (IndexedDB) and filesystem
+- **No Live Comp API Integration**: SportsCardsPro.com, eBay, Card Ladder, and Market Movers comp lookups need API implementation
+- **Local Auth Only**: User authentication system is local-only (JWT with SQLite, no OAuth/SSO)
+- **Vision API Cost**: Each card identification uses an Anthropic API call (~1024 tokens max) — batch processing large sets has cost implications
+- **Audit UI Pending**: Audit logging is implemented server-side (issue #40) but has no admin UI yet
 
 ---
-*Last updated: 2026-02-08*
+*Last updated: 2026-02-22*

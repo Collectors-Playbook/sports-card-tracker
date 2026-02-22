@@ -26,6 +26,10 @@ yarn-error.log*
 server/dist/
 server/.env
 *.sqlite
+*.traineddata
+
+# raw card photos (symlink to input directory)
+raw
 
 # claude local settings
 .claude/settings.local.json
