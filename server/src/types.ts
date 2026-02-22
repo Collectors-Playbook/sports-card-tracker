@@ -281,3 +281,34 @@ export interface DetectionConfidence {
   detectedFields: number;
   missingFields?: string[];
 }
+
+// ─── Audit Log ──────────────────────────────────────────────────────────────
+
+export interface AuditLogEntry {
+  id: string;
+  userId: string | null;
+  action: string;
+  entity: string;
+  entityId: string | null;
+  details: Record<string, unknown> | null;
+  ipAddress: string | null;
+  createdAt: string;
+}
+
+export interface AuditLogInput {
+  userId?: string | null;
+  action: string;
+  entity: string;
+  entityId?: string | null;
+  details?: Record<string, unknown>;
+  ipAddress?: string | null;
+}
+
+export interface AuditLogQuery {
+  userId?: string;
+  action?: string;
+  entity?: string;
+  entityId?: string;
+  limit?: number;
+  offset?: number;
+}
