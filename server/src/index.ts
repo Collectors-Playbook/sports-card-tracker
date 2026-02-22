@@ -17,8 +17,7 @@ import { createAuthRoutes } from './routes/auth';
 import { createCompRoutes } from './routes/comps';
 import { createImageProcessingRoutes } from './routes/imageProcessing';
 import CompService from './services/compService';
-import OCRService from './services/ocrService';
-import CardParserService from './services/cardParserService';
+import AnthropicVisionService from './services/anthropicVisionService';
 import ImageProcessingService from './services/imageProcessingService';
 import EbayExportService from './services/ebayExportService';
 import { createEbayRoutes } from './routes/ebay';
@@ -34,9 +33,8 @@ const fileService = new FileService(config.rawDir, config.processedDir, config.d
 const eventService = new EventService();
 const jobService = new JobService(db, eventService);
 const compService = new CompService(fileService);
-const ocrService = new OCRService();
-const cardParserService = new CardParserService();
-const imageProcessingService = new ImageProcessingService(fileService, db, ocrService, cardParserService);
+const visionService = new AnthropicVisionService();
+const imageProcessingService = new ImageProcessingService(fileService, db, visionService);
 const ebayExportService = new EbayExportService(db, fileService);
 
 // Create Express app
@@ -155,4 +153,4 @@ if (require.main === module) {
   })();
 }
 
-export { app, db, fileService, eventService, jobService, compService, ocrService, cardParserService, imageProcessingService, ebayExportService };
+export { app, db, fileService, eventService, jobService, compService, visionService, imageProcessingService, ebayExportService };

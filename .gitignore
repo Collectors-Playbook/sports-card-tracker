@@ -24,6 +24,7 @@ yarn-error.log*
 
 # server
 server/dist/
+server/.env
 *.sqlite
 
 # claude local settings
