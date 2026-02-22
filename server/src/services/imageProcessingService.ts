@@ -1,13 +1,13 @@
 import path from 'path';
 import FileService from './fileService';
-import OCRService from './ocrService';
-import CardParserService from './cardParserService';
+import AnthropicVisionService from './anthropicVisionService';
 import Database from '../database';
 import {
   ImageProcessingPayload,
   ImageProcessingResult,
   ImageProcessingItemResult,
   ExtractedCardData,
+  CardInput,
   Card,
 } from '../types';
 
@@ -15,8 +15,7 @@ class ImageProcessingService {
   constructor(
     private fileService: FileService,
     private db: Database,
-    private ocrService: OCRService,
-    private cardParserService: CardParserService
+    private visionService: AnthropicVisionService
   ) {}
 
   async processImages(
@@ -90,6 +89,102 @@ class ImageProcessingService {
     return result;
   }
 
+  async identifyOnly(
+    filename: string,
+    backFile?: string
+  ): Promise<ExtractedCardData> {
+    const rawDir = this.fileService.getRawDir();
+
+    if (backFile) {
+      return this.visionService.identifyCardPair(
+        path.join(rawDir, filename),
+        path.join(rawDir, backFile)
+      );
+    }
+
+    return this.visionService.identifyCard(path.join(rawDir, filename));
+  }
+
+  async confirmCard(
+    filename: string,
+    cardData: ExtractedCardData,
+    backFile?: string
+  ): Promise<ImageProcessingItemResult> {
+    const rawDir = this.fileService.getRawDir();
+    const processedDir = this.fileService.getProcessedDir();
+
+    if (backFile) {
+      const frontExt = path.extname(filename);
+      const backExt = path.extname(backFile);
+      const baseName = this.buildProcessedFilename(cardData, '');
+      const processedFront = baseName + '-front' + frontExt;
+      const processedBack = baseName + '-back' + backExt;
+
+      if (this.isAlreadyProcessed(processedFront)) {
+        return { filename, status: 'skipped', processedFilename: processedFront, confidence: cardData.confidence?.score };
+      }
+
+      const duplicate = await this.checkDuplicate(cardData);
+      if (duplicate) {
+        const error = `Duplicate of card ${duplicate.id}`;
+        this.logError(filename, error);
+        return { filename, status: 'duplicate', confidence: cardData.confidence?.score, error };
+      }
+
+      this.fileService.copyFile(rawDir, filename, processedDir, processedFront);
+      this.fileService.copyFile(rawDir, backFile, processedDir, processedBack);
+
+      const card = await this.db.createCard(
+        this.buildCardInput(cardData, [processedFront, processedBack])
+      );
+
+      return {
+        filename,
+        status: 'processed',
+        processedFilename: processedFront,
+        cardId: card.id,
+        confidence: cardData.confidence?.score,
+      };
+    }
+
+    // Single image
+    const ext = path.extname(filename);
+    const processedFilename = this.buildProcessedFilename(cardData, ext);
+
+    if (this.isAlreadyProcessed(processedFilename)) {
+      return { filename, status: 'skipped', processedFilename, confidence: cardData.confidence?.score };
+    }
+
+    const duplicate = await this.checkDuplicate(cardData);
+    if (duplicate) {
+      const error = `Duplicate of card ${duplicate.id} (${duplicate.player} ${duplicate.year} ${duplicate.brand} #${duplicate.cardNumber})`;
+      this.logError(filename, error);
+      return { filename, status: 'duplicate', confidence: cardData.confidence?.score, error };
+    }
+
+    const copied = this.fileService.copyFile(
+      rawDir, filename,
+      processedDir, processedFilename
+    );
+    if (!copied) {
+      const error = 'Failed to copy file to processed directory';
+      this.logError(filename, error);
+      return { filename, status: 'failed', error };
+    }
+
+    const card = await this.db.createCard(
+      this.buildCardInput(cardData, [processedFilename])
+    );
+
+    return {
+      filename,
+      status: 'processed',
+      processedFilename,
+      cardId: card.id,
+      confidence: cardData.confidence?.score,
+    };
+  }
+
   async processSingleImage(
     filename: string,
     options: { skipExisting?: boolean; confidenceThreshold?: number } = {}
@@ -98,16 +193,8 @@ class ImageProcessingService {
     const rawDir = this.fileService.getRawDir();
     const filePath = path.join(rawDir, filename);
 
-    // Run OCR
-    const text = await this.ocrService.extractText(filePath);
-    if (!text || text.trim().length === 0) {
-      const error = 'OCR returned no text';
-      this.logError(filename, error);
-      return { filename, status: 'failed', error };
-    }
-
-    // Parse text
-    const data = this.cardParserService.parseText(text);
+    // Use Anthropic Vision to identify the card
+    const data = await this.visionService.identifyCard(filePath);
 
     // Check confidence
     const confidence = data.confidence?.score ?? 0;
@@ -146,21 +233,9 @@ class ImageProcessingService {
     }
 
     // Create card record
-    const card = await this.db.createCard({
-      player: data.player || 'Unknown',
-      team: data.team || '',
-      year: data.year ? parseInt(data.year) : 0,
-      brand: data.brand || 'Unknown',
-      category: data.category || 'Other',
-      cardNumber: data.cardNumber || '',
-      parallel: data.parallel,
-      condition: 'Raw',
-      purchasePrice: 0,
-      purchaseDate: new Date().toISOString().split('T')[0],
-      currentValue: 0,
-      images: [processedFilename],
-      notes: '',
-    });
+    const card = await this.db.createCard(
+      this.buildCardInput(data, [processedFilename])
+    );
 
     return {
       filename,
@@ -179,19 +254,12 @@ class ImageProcessingService {
     const { skipExisting = true, confidenceThreshold = 40 } = options;
     const rawDir = this.fileService.getRawDir();
 
-    // Run OCR on both images
-    const frontText = await this.ocrService.extractText(path.join(rawDir, frontFile));
-    const backText = await this.ocrService.extractText(path.join(rawDir, backFile));
-    const combinedText = (frontText || '') + '\n' + (backText || '');
+    // Use Anthropic Vision to identify the card from both images
+    const data = await this.visionService.identifyCardPair(
+      path.join(rawDir, frontFile),
+      path.join(rawDir, backFile)
+    );
 
-    if (combinedText.trim().length === 0) {
-      const error = 'OCR returned no text from front or back';
-      this.logError(frontFile, error);
-      return { filename: frontFile, status: 'failed', error };
-    }
-
-    // Parse combined text
-    const data = this.cardParserService.parseText(combinedText);
     const confidence = data.confidence?.score ?? 0;
 
     if (confidence < confidenceThreshold) {
@@ -221,21 +289,9 @@ class ImageProcessingService {
     this.fileService.copyFile(rawDir, frontFile, processedDir, processedFront);
     this.fileService.copyFile(rawDir, backFile, processedDir, processedBack);
 
-    const card = await this.db.createCard({
-      player: data.player || 'Unknown',
-      team: data.team || '',
-      year: data.year ? parseInt(data.year) : 0,
-      brand: data.brand || 'Unknown',
-      category: data.category || 'Other',
-      cardNumber: data.cardNumber || '',
-      parallel: data.parallel,
-      condition: 'Raw',
-      purchasePrice: 0,
-      purchaseDate: new Date().toISOString().split('T')[0],
-      currentValue: 0,
-      images: [processedFront, processedBack],
-      notes: '',
-    });
+    const card = await this.db.createCard(
+      this.buildCardInput(data, [processedFront, processedBack])
+    );
 
     return {
       filename: frontFile,
@@ -249,9 +305,40 @@ class ImageProcessingService {
   buildProcessedFilename(data: ExtractedCardData, ext: string): string {
     const year = data.year || 'Unknown';
     const brand = (data.brand || 'Unknown').replace(/\s+/g, '-');
+    const setName = data.setName ? data.setName.replace(/\s+/g, '-') : '';
     const player = (data.player || 'Unknown').replace(/\s+/g, '-');
     const cardNumber = data.cardNumber || '0';
+    if (setName) {
+      return `${year}-${brand}-${setName}-${player}-${cardNumber}${ext}`;
+    }
     return `${year}-${brand}-${player}-${cardNumber}${ext}`;
+  }
+
+  private buildCardInput(data: ExtractedCardData, images: string[]): CardInput {
+    return {
+      player: data.player || 'Unknown',
+      team: data.team || '',
+      year: data.year ? parseInt(data.year) : 0,
+      brand: data.brand || 'Unknown',
+      category: data.category || 'Other',
+      cardNumber: data.cardNumber || '',
+      parallel: data.parallel,
+      condition: data.features?.isGraded ? 'Graded' : 'Raw',
+      gradingCompany: data.gradingCompany,
+      setName: data.setName,
+      serialNumber: data.serialNumber,
+      grade: data.grade,
+      isRookie: data.features?.isRookie ?? false,
+      isAutograph: data.features?.isAutograph ?? false,
+      isRelic: data.features?.isRelic ?? false,
+      isNumbered: data.features?.isNumbered ?? false,
+      isGraded: data.features?.isGraded ?? false,
+      purchasePrice: 0,
+      purchaseDate: new Date().toISOString().split('T')[0],
+      currentValue: 0,
+      images,
+      notes: '',
+    };
   }
 
   async checkDuplicate(data: ExtractedCardData): Promise<Card | null> {
@@ -268,7 +355,19 @@ class ImageProcessingService {
         card.cardNumber === data.cardNumber
     );
 
-    return match || null;
+    if (!match) return null;
+
+    // Verify the duplicate's processed files actually exist.
+    // If none of its images are on disk, the record is orphaned — remove it.
+    const hasFiles = match.images.some(img =>
+      this.fileService.fileExists(this.fileService.getProcessedDir(), img)
+    );
+    if (!hasFiles) {
+      await this.db.deleteCard(match.id);
+      return null;
+    }
+
+    return match;
   }
 
   isAlreadyProcessed(filename: string): boolean {

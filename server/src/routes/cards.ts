@@ -5,9 +5,20 @@ import { CardInput } from '../types';
 export function createCardRoutes(db: Database): Router {
   const router = Router();
 
-  // Get all cards
+  // Get all cards (or find by image filename)
   router.get('/', async (req: Request, res: Response) => {
     try {
+      const image = req.query.image as string | undefined;
+      if (image) {
+        const card = await db.getCardByImage(image);
+        if (card) {
+          res.json(card);
+        } else {
+          res.status(404).json({ error: 'No card found for that image' });
+        }
+        return;
+      }
+
       const userId = req.query.userId as string | undefined;
       const collectionId = req.query.collectionId as string | undefined;
       const collectionType = req.query.collectionType as string | undefined;
