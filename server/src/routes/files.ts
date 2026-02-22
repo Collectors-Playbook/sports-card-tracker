@@ -2,12 +2,14 @@ import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import path from 'path';
 import FileService from '../services/fileService';
+import AuditService from '../services/auditService';
+import { AuthenticatedRequest } from '../types';
 
 const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tiff'];
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 const MAX_FILES = 50;
 
-export function createFileRoutes(fileService: FileService): Router {
+export function createFileRoutes(fileService: FileService, auditService: AuditService): Router {
   const router = Router();
 
   const storage = multer.diskStorage({
@@ -79,7 +81,7 @@ export function createFileRoutes(fileService: FileService): Router {
   });
 
   // Upload files to raw
-  router.post('/raw/upload', upload.array('files', MAX_FILES), (req: Request, res: Response) => {
+  router.post('/raw/upload', upload.array('files', MAX_FILES), (req: AuthenticatedRequest, res: Response) => {
     const files = req.files as Express.Multer.File[];
     if (!files || files.length === 0) {
       res.status(400).json({ error: 'No files uploaded' });
@@ -92,11 +94,12 @@ export function createFileRoutes(fileService: FileService): Router {
       originalName: f.originalname,
     }));
 
+    auditService.log(req, { action: 'file.upload', entity: 'file', details: { count: uploaded.length, filenames: uploaded.map(u => u.name) } });
     res.status(201).json({ uploaded, count: uploaded.length });
   });
 
   // Replace a raw file (used by crop/edit)
-  router.put('/raw/:filename', upload.single('file'), (req: Request, res: Response) => {
+  router.put('/raw/:filename', upload.single('file'), (req: AuthenticatedRequest, res: Response) => {
     const existingPath = fileService.getFilePath(fileService.getRawDir(), req.params.filename);
     if (!existingPath || !fileService.fileExists(fileService.getRawDir(), req.params.filename)) {
       res.status(404).json({ error: 'File not found' });
@@ -115,6 +118,7 @@ export function createFileRoutes(fileService: FileService): Router {
     try {
       fs.copyFileSync(file.path, existingPath);
       fs.unlinkSync(file.path);
+      auditService.log(req, { action: 'file.replace', entity: 'file', entityId: req.params.filename });
       res.json({ name: req.params.filename, size: file.size });
     } catch (error) {
       console.error('Error replacing raw file:', error);
@@ -123,9 +127,10 @@ export function createFileRoutes(fileService: FileService): Router {
   });
 
   // Delete a raw file
-  router.delete('/raw/:filename', (req: Request, res: Response) => {
+  router.delete('/raw/:filename', (req: AuthenticatedRequest, res: Response) => {
     const deleted = fileService.deleteFile(fileService.getRawDir(), req.params.filename);
     if (deleted) {
+      auditService.log(req, { action: 'file.delete_raw', entity: 'file', entityId: req.params.filename });
       res.status(204).send();
     } else {
       res.status(404).json({ error: 'File not found' });
@@ -133,9 +138,10 @@ export function createFileRoutes(fileService: FileService): Router {
   });
 
   // Delete a processed file
-  router.delete('/processed/:filename', (req: Request, res: Response) => {
+  router.delete('/processed/:filename', (req: AuthenticatedRequest, res: Response) => {
     const deleted = fileService.deleteFile(fileService.getProcessedDir(), req.params.filename);
     if (deleted) {
+      auditService.log(req, { action: 'file.delete_processed', entity: 'file', entityId: req.params.filename });
       res.status(204).send();
     } else {
       res.status(404).json({ error: 'File not found' });
@@ -154,13 +160,14 @@ export function createFileRoutes(fileService: FileService): Router {
   });
 
   // Clear a log file
-  router.delete('/logs/:logname', (req: Request, res: Response) => {
+  router.delete('/logs/:logname', (req: AuthenticatedRequest, res: Response) => {
     const validLogs = ['image-error.log', 'comp-error.log'];
     if (!validLogs.includes(req.params.logname)) {
       res.status(400).json({ error: `Invalid log name. Valid: ${validLogs.join(', ')}` });
       return;
     }
     fileService.clearLog(req.params.logname);
+    auditService.log(req, { action: 'log.clear', entity: 'log', entityId: req.params.logname });
     res.status(204).send();
   });
 

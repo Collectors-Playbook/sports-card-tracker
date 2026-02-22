@@ -1,8 +1,9 @@
 import { Router, Request, Response } from 'express';
 import Database from '../database';
-import { CardInput } from '../types';
+import AuditService from '../services/auditService';
+import { AuthenticatedRequest, CardInput } from '../types';
 
-export function createCardRoutes(db: Database): Router {
+export function createCardRoutes(db: Database, auditService: AuditService): Router {
   const router = Router();
 
   // Get all cards (or find by image filename)
@@ -46,7 +47,7 @@ export function createCardRoutes(db: Database): Router {
   });
 
   // Create a new card
-  router.post('/', async (req: Request, res: Response) => {
+  router.post('/', async (req: AuthenticatedRequest, res: Response) => {
     try {
       const cardInput: CardInput = req.body;
 
@@ -66,6 +67,7 @@ export function createCardRoutes(db: Database): Router {
       }
 
       const card = await db.createCard(cardInput);
+      auditService.log(req, { action: 'card.create', entity: 'card', entityId: card.id, details: { player: card.player, year: card.year, brand: card.brand } });
       res.status(201).json(card);
     } catch (error) {
       console.error('Error creating card:', error);
@@ -74,7 +76,7 @@ export function createCardRoutes(db: Database): Router {
   });
 
   // Update a card
-  router.put('/:id', async (req: Request, res: Response) => {
+  router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
     try {
       const cardInput: CardInput = req.body;
 
@@ -95,6 +97,7 @@ export function createCardRoutes(db: Database): Router {
 
       const card = await db.updateCard(req.params.id, cardInput);
       if (card) {
+        auditService.log(req, { action: 'card.update', entity: 'card', entityId: card.id, details: { player: card.player, year: card.year, brand: card.brand } });
         res.json(card);
       } else {
         res.status(404).json({ error: 'Card not found' });
@@ -106,10 +109,11 @@ export function createCardRoutes(db: Database): Router {
   });
 
   // Delete a card
-  router.delete('/:id', async (req: Request, res: Response) => {
+  router.delete('/:id', async (req: AuthenticatedRequest, res: Response) => {
     try {
       const success = await db.deleteCard(req.params.id);
       if (success) {
+        auditService.log(req, { action: 'card.delete', entity: 'card', entityId: req.params.id });
         res.status(204).send();
       } else {
         res.status(404).json({ error: 'Card not found' });

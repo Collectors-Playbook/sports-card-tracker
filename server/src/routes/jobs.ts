@@ -1,12 +1,13 @@
 import { Router, Request, Response } from 'express';
 import Database from '../database';
-import { JobStatus } from '../types';
+import AuditService from '../services/auditService';
+import { AuthenticatedRequest, JobStatus } from '../types';
 
-export function createJobRoutes(db: Database): Router {
+export function createJobRoutes(db: Database, auditService: AuditService): Router {
   const router = Router();
 
   // Create a job
-  router.post('/', async (req: Request, res: Response) => {
+  router.post('/', async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { type, payload } = req.body;
       if (!type) {
@@ -15,6 +16,7 @@ export function createJobRoutes(db: Database): Router {
       }
 
       const job = await db.createJob({ type, payload });
+      auditService.log(req, { action: 'job.create', entity: 'job', entityId: job.id, details: { type } });
       res.status(201).json(job);
     } catch (error) {
       console.error('Error creating job:', error);
@@ -52,7 +54,7 @@ export function createJobRoutes(db: Database): Router {
   });
 
   // Cancel a job
-  router.delete('/:id', async (req: Request, res: Response) => {
+  router.delete('/:id', async (req: AuthenticatedRequest, res: Response) => {
     try {
       const job = await db.getJobById(req.params.id);
       if (!job) {
@@ -66,6 +68,7 @@ export function createJobRoutes(db: Database): Router {
       }
 
       const updated = await db.updateJob(req.params.id, { status: 'cancelled' });
+      auditService.log(req, { action: 'job.cancel', entity: 'job', entityId: req.params.id, details: { type: job.type } });
       res.json(updated);
     } catch (error) {
       console.error('Error cancelling job:', error);
