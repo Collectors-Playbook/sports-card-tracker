@@ -12,15 +12,22 @@ const SUPPORTED_TYPES: Record<string, 'image/jpeg' | 'image/png' | 'image/gif' |
 };
 
 class AnthropicVisionService {
-  private client: Anthropic;
+  private client: Anthropic | null = null;
+  private apiKey: string | undefined;
   private model = 'claude-sonnet-4-20250514';
 
   constructor(apiKey?: string) {
-    const key = apiKey || process.env.ANTHROPIC_API_KEY;
-    if (!key) {
+    this.apiKey = apiKey || process.env.ANTHROPIC_API_KEY;
+    if (this.apiKey) {
+      this.client = new Anthropic({ apiKey: this.apiKey });
+    }
+  }
+
+  private getClient(): Anthropic {
+    if (!this.client) {
       throw new Error('ANTHROPIC_API_KEY is required. Set it in server/.env');
     }
-    this.client = new Anthropic({ apiKey: key });
+    return this.client;
   }
 
   async identifyCard(filePath: string): Promise<ExtractedCardData> {
@@ -34,7 +41,7 @@ class AnthropicVisionService {
     const imageData = fs.readFileSync(filePath);
     const base64 = imageData.toString('base64');
 
-    const response = await this.client.messages.create({
+    const response = await this.getClient().messages.create({
       model: this.model,
       max_tokens: 1024,
       messages: [
@@ -96,7 +103,7 @@ Return ONLY the JSON object, no other text.`,
     const frontData = fs.readFileSync(frontPath).toString('base64');
     const backData = fs.readFileSync(backPath).toString('base64');
 
-    const response = await this.client.messages.create({
+    const response = await this.getClient().messages.create({
       model: this.model,
       max_tokens: 1024,
       messages: [

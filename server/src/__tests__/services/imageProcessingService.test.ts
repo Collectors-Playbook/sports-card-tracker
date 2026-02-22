@@ -2,10 +2,15 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import FileService from '../../services/fileService';
-import OCRService from '../../services/ocrService';
-import CardParserService from '../../services/cardParserService';
 import ImageProcessingService from '../../services/imageProcessingService';
 import Database from '../../database';
+import { ExtractedCardData } from '../../types';
+
+// Stub vision service — tests mock identifyCard per test
+const mockVisionService = {
+  identifyCard: jest.fn(),
+  identifyCardPair: jest.fn(),
+} as any;
 
 describe('ImageProcessingService', () => {
   let tempDir: string;
@@ -13,8 +18,6 @@ describe('ImageProcessingService', () => {
   let processedDir: string;
   let fileService: FileService;
   let db: Database;
-  let ocrService: OCRService;
-  let cardParserService: CardParserService;
   let service: ImageProcessingService;
 
   beforeEach(async () => {
@@ -27,9 +30,8 @@ describe('ImageProcessingService', () => {
     fileService = new FileService(rawDir, processedDir, tempDir);
     db = new Database(':memory:');
     await db.waitReady();
-    ocrService = new OCRService();
-    cardParserService = new CardParserService();
-    service = new ImageProcessingService(fileService, db, ocrService, cardParserService);
+    service = new ImageProcessingService(fileService, db, mockVisionService);
+    jest.clearAllMocks();
   });
 
   afterEach(async () => {
@@ -39,6 +41,19 @@ describe('ImageProcessingService', () => {
 
   function createTestFile(name: string, content: string = 'fake image data'): void {
     fs.writeFileSync(path.join(rawDir, name), content);
+  }
+
+  function mockVisionResult(overrides: Partial<ExtractedCardData> = {}): ExtractedCardData {
+    return {
+      player: 'Mike Trout',
+      year: '2023',
+      brand: 'Topps Chrome',
+      team: 'Angels',
+      cardNumber: '1',
+      category: 'Baseball',
+      confidence: { score: 85, level: 'high', detectedFields: 6 },
+      ...overrides,
+    };
   }
 
   describe('buildProcessedFilename', () => {
@@ -73,11 +88,13 @@ describe('ImageProcessingService', () => {
     });
 
     it('returns existing card when duplicate found', async () => {
+      // Create a processed file so the card is not treated as orphaned
+      fs.writeFileSync(path.join(processedDir, 'existing.jpg'), 'data');
       await db.createCard({
         player: 'Mike Trout', team: 'Angels', year: 2023, brand: 'Topps',
         category: 'Baseball', cardNumber: '1', condition: 'Raw',
         purchasePrice: 0, purchaseDate: '2023-01-01', currentValue: 0,
-        images: [], notes: '',
+        images: ['existing.jpg'], notes: '',
       });
 
       const result = await service.checkDuplicate({
@@ -93,11 +110,12 @@ describe('ImageProcessingService', () => {
     });
 
     it('is case-insensitive', async () => {
+      fs.writeFileSync(path.join(processedDir, 'existing2.jpg'), 'data');
       await db.createCard({
         player: 'Mike Trout', team: 'Angels', year: 2023, brand: 'Topps',
         category: 'Baseball', cardNumber: '1', condition: 'Raw',
         purchasePrice: 0, purchaseDate: '2023-01-01', currentValue: 0,
-        images: [], notes: '',
+        images: ['existing2.jpg'], notes: '',
       });
 
       const result = await service.checkDuplicate({
@@ -143,9 +161,7 @@ describe('ImageProcessingService', () => {
   describe('processSingleImage', () => {
     it('processes a card image successfully', async () => {
       createTestFile('card.jpg');
-      jest.spyOn(ocrService, 'extractText').mockResolvedValue(
-        '2023 Topps Chrome\nMike Trout\nAngels\n#1\nMLB BASEBALL'
-      );
+      mockVisionService.identifyCard.mockResolvedValue(mockVisionResult());
 
       const result = await service.processSingleImage('card.jpg');
       expect(result.status).toBe('processed');
@@ -154,18 +170,11 @@ describe('ImageProcessingService', () => {
       expect(result.confidence).toBeGreaterThan(0);
     });
 
-    it('fails when OCR returns empty text', async () => {
-      createTestFile('blank.jpg');
-      jest.spyOn(ocrService, 'extractText').mockResolvedValue('');
-
-      const result = await service.processSingleImage('blank.jpg');
-      expect(result.status).toBe('failed');
-      expect(result.error).toContain('no text');
-    });
-
     it('fails when confidence is below threshold', async () => {
       createTestFile('blurry.jpg');
-      jest.spyOn(ocrService, 'extractText').mockResolvedValue('gibberish xyzzy');
+      mockVisionService.identifyCard.mockResolvedValue(
+        mockVisionResult({ confidence: { score: 20, level: 'low', detectedFields: 1 } })
+      );
 
       const result = await service.processSingleImage('blurry.jpg', { confidenceThreshold: 50 });
       expect(result.status).toBe('failed');
@@ -174,9 +183,7 @@ describe('ImageProcessingService', () => {
 
     it('skips already processed files', async () => {
       createTestFile('card.jpg');
-      jest.spyOn(ocrService, 'extractText').mockResolvedValue(
-        '2023 Topps Chrome\nMike Trout\nAngels\n#1\nMLB BASEBALL'
-      );
+      mockVisionService.identifyCard.mockResolvedValue(mockVisionResult());
 
       // Process once
       const first = await service.processSingleImage('card.jpg');
@@ -188,28 +195,29 @@ describe('ImageProcessingService', () => {
     });
 
     it('detects duplicates', async () => {
-      // Create existing card in DB
+      // Create existing card in DB with a real processed file
+      fs.writeFileSync(path.join(processedDir, 'existing.jpg'), 'data');
       await db.createCard({
-        player: 'Mike Trout', team: 'Angels', year: 2023, brand: 'Topps',
+        player: 'Mike Trout', team: 'Angels', year: 2023, brand: 'Topps Chrome',
         category: 'Baseball', cardNumber: '1', condition: 'Raw',
         purchasePrice: 0, purchaseDate: '2023-01-01', currentValue: 0,
         images: ['existing.jpg'], notes: '',
       });
 
       createTestFile('card2.jpg');
-      jest.spyOn(ocrService, 'extractText').mockResolvedValue(
-        '2023 Topps Chrome\nMike Trout\nAngels\n#1\nMLB BASEBALL'
+      mockVisionService.identifyCard.mockResolvedValue(
+        mockVisionResult({ brand: 'Topps Chrome' })
       );
 
       const result = await service.processSingleImage('card2.jpg', { skipExisting: false });
       expect(result.status).toBe('duplicate');
     });
 
-    it('handles OCR error gracefully', async () => {
+    it('handles vision API error gracefully', async () => {
       createTestFile('corrupt.jpg');
-      jest.spyOn(ocrService, 'extractText').mockRejectedValue(new Error('OCR engine failure'));
+      mockVisionService.identifyCard.mockRejectedValue(new Error('Vision API failure'));
 
-      await expect(service.processSingleImage('corrupt.jpg')).rejects.toThrow('OCR engine failure');
+      await expect(service.processSingleImage('corrupt.jpg')).rejects.toThrow('Vision API failure');
     });
   });
 
@@ -217,9 +225,9 @@ describe('ImageProcessingService', () => {
     it('processes a batch of images', async () => {
       createTestFile('card1.jpg');
       createTestFile('card2.jpg');
-      jest.spyOn(ocrService, 'extractText')
-        .mockResolvedValueOnce('2023 Topps Chrome\nMike Trout\nAngels\n#1\nMLB')
-        .mockResolvedValueOnce('2023 Topps Chrome\nAaron Judge\nYankees\n#99\nMLB');
+      mockVisionService.identifyCard
+        .mockResolvedValueOnce(mockVisionResult())
+        .mockResolvedValueOnce(mockVisionResult({ player: 'Aaron Judge', cardNumber: '99', team: 'Yankees' }));
 
       const result = await service.processImages({
         filenames: ['card1.jpg', 'card2.jpg'],
@@ -233,9 +241,7 @@ describe('ImageProcessingService', () => {
 
     it('reports progress via callback', async () => {
       createTestFile('card1.jpg');
-      jest.spyOn(ocrService, 'extractText').mockResolvedValue(
-        '2023 Topps Chrome\nMike Trout\nAngels\n#1\nMLB'
-      );
+      mockVisionService.identifyCard.mockResolvedValue(mockVisionResult());
 
       const progressCalls: number[] = [];
       await service.processImages(
@@ -250,9 +256,9 @@ describe('ImageProcessingService', () => {
     it('handles mixed results (success and failure)', async () => {
       createTestFile('good.jpg');
       createTestFile('bad.jpg');
-      jest.spyOn(ocrService, 'extractText')
-        .mockResolvedValueOnce('2023 Topps Chrome\nMike Trout\nAngels\n#1\nMLB')
-        .mockResolvedValueOnce('');
+      mockVisionService.identifyCard
+        .mockResolvedValueOnce(mockVisionResult())
+        .mockResolvedValueOnce(mockVisionResult({ confidence: { score: 10, level: 'low', detectedFields: 0 } }));
 
       const result = await service.processImages({
         filenames: ['good.jpg', 'bad.jpg'],
@@ -265,9 +271,7 @@ describe('ImageProcessingService', () => {
     it('handles front/back pairs', async () => {
       createTestFile('trout-front.jpg');
       createTestFile('trout-back.jpg');
-      jest.spyOn(ocrService, 'extractText')
-        .mockResolvedValueOnce('2023 Topps Chrome\nMike Trout')
-        .mockResolvedValueOnce('Angels\n#1\nMLB BASEBALL');
+      mockVisionService.identifyCardPair.mockResolvedValue(mockVisionResult());
 
       const result = await service.processImages({
         filenames: ['trout-front.jpg', 'trout-back.jpg'],
@@ -280,9 +284,7 @@ describe('ImageProcessingService', () => {
 
     it('ensures idempotency on re-run', async () => {
       createTestFile('card1.jpg');
-      jest.spyOn(ocrService, 'extractText').mockResolvedValue(
-        '2023 Topps Chrome\nMike Trout\nAngels\n#1\nMLB'
-      );
+      mockVisionService.identifyCard.mockResolvedValue(mockVisionResult());
 
       const first = await service.processImages({ filenames: ['card1.jpg'] });
       expect(first.processed).toBe(1);

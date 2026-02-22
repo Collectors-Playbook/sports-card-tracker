@@ -9,8 +9,10 @@ import OCRService from '../../services/ocrService';
 import CardParserService from '../../services/cardParserService';
 import ImageProcessingService from '../../services/imageProcessingService';
 import EbayExportService from '../../services/ebayExportService';
+import AuditService from '../../services/auditService';
 import { requestLogger } from '../../middleware/requestLogger';
 import { errorHandler } from '../../middleware/errorHandler';
+import { optionalAuth } from '../../middleware/auth';
 import { createHealthRoutes } from '../../routes/health';
 import { createCardRoutes } from '../../routes/cards';
 import { createFileRoutes } from '../../routes/files';
@@ -35,6 +37,7 @@ export interface TestContext {
   ebayExportService: EbayExportService;
   ocrService: OCRService;
   cardParserService: CardParserService;
+  visionService: { identifyCard: jest.Mock; identifyCardPair: jest.Mock };
   tempDir: string;
 }
 
@@ -58,27 +61,34 @@ export async function createTestApp(): Promise<TestContext> {
   const compService = new CompService(fileService);
   const ocrService = new OCRService();
   const cardParserService = new CardParserService();
-  const imageProcessingService = new ImageProcessingService(fileService, db, ocrService, cardParserService);
+  // Use a stub vision service to avoid requiring ANTHROPIC_API_KEY in tests
+  const stubVisionService = {
+    identifyCard: jest.fn().mockRejectedValue(new Error('Vision service not configured in tests')),
+    identifyCardPair: jest.fn().mockRejectedValue(new Error('Vision service not configured in tests')),
+  } as any;
+  const imageProcessingService = new ImageProcessingService(fileService, db, stubVisionService);
   const ebayExportService = new EbayExportService(db, fileService);
+  const auditService = new AuditService(db);
 
   const app = express();
   app.use(cors());
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true }));
+  app.use(optionalAuth);
 
   app.use('/api/health', createHealthRoutes(db, fileService));
-  app.use('/api/cards', createCardRoutes(db));
-  app.use('/api/files', createFileRoutes(fileService));
-  app.use('/api/jobs', createJobRoutes(db));
+  app.use('/api/cards', createCardRoutes(db, auditService));
+  app.use('/api/files', createFileRoutes(fileService, auditService));
+  app.use('/api/jobs', createJobRoutes(db, auditService));
   app.use('/api/events', createEventRoutes(eventService));
-  app.use('/api/auth', createAuthRoutes(db));
+  app.use('/api/auth', createAuthRoutes(db, auditService));
   app.use('/api/comps', createCompRoutes(db, compService));
-  app.use('/api/image-processing', createImageProcessingRoutes(db, imageProcessingService, fileService));
-  app.use('/api/ebay', createEbayRoutes(db, ebayExportService));
+  app.use('/api/image-processing', createImageProcessingRoutes(db, imageProcessingService, fileService, auditService));
+  app.use('/api/ebay', createEbayRoutes(db, ebayExportService, auditService));
 
   app.use(errorHandler);
 
-  return { app, db, fileService, eventService, jobService, compService, imageProcessingService, ebayExportService, ocrService, cardParserService, tempDir };
+  return { app, db, fileService, eventService, jobService, compService, imageProcessingService, ebayExportService, ocrService, cardParserService, visionService: stubVisionService, tempDir };
 }
 
 export async function cleanupTestContext(ctx: TestContext): Promise<void> {

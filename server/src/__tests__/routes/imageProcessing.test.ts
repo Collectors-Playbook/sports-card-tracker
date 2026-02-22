@@ -62,10 +62,16 @@ describe('Image Processing Routes', () => {
       const rawDir = ctx.fileService.getRawDir();
       fs.writeFileSync(path.join(rawDir, 'test.jpg'), 'fake image');
 
-      // Mock OCR on the service
-      jest.spyOn(ctx.ocrService, 'extractText').mockResolvedValue(
-        '2023 Topps Chrome\nMike Trout\nAngels\n#1\nMLB BASEBALL'
-      );
+      // Mock vision service to return identified card data
+      ctx.visionService.identifyCard.mockResolvedValue({
+        player: 'Mike Trout',
+        year: '2023',
+        brand: 'Topps Chrome',
+        team: 'Angels',
+        cardNumber: '1',
+        category: 'Baseball',
+        confidence: { score: 85, level: 'high', detectedFields: 6 },
+      });
 
       const res = await request(ctx.app)
         .post('/api/image-processing/process-sync')
