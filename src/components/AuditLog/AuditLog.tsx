@@ -17,7 +17,7 @@ interface SortState {
   direction: 'asc' | 'desc';
 }
 
-const ENTITY_OPTIONS = ['', 'card', 'user', 'file', 'job', 'export', 'log'];
+const ENTITY_OPTIONS = ['', 'card', 'user', 'file', 'job', 'export', 'log', 'audit'];
 
 const getActionBadgeClass = (action: string): string => {
   const prefix = action.split('.')[0].toLowerCase();
@@ -28,6 +28,7 @@ const getActionBadgeClass = (action: string): string => {
     case 'job': return 'badge-job';
     case 'ebay': return 'badge-ebay';
     case 'image': return 'badge-image';
+    case 'audit': return 'badge-audit';
     default: return 'badge-default';
   }
 };
@@ -49,6 +50,21 @@ const AuditLog: React.FC = () => {
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [refreshInterval, setRefreshInterval] = useState(0);
   const [sort, setSort] = useState<SortState>({ column: 'createdAt', direction: 'desc' });
+
+  // Selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Purge dialog state
+  const [showPurgeDialog, setShowPurgeDialog] = useState(false);
+  const [purgeDate, setPurgeDate] = useState('');
+  const [purgeAction, setPurgeAction] = useState('');
+  const [purgeEntity, setPurgeEntity] = useState('');
+
+  // Success banner
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Export loading
+  const [exporting, setExporting] = useState(false);
 
   const fetchEntries = useCallback(async () => {
     try {
@@ -90,6 +106,13 @@ const AuditLog: React.FC = () => {
     return () => clearInterval(id);
   }, [refreshInterval, fetchEntries]);
 
+  // Auto-dismiss success message
+  useEffect(() => {
+    if (!successMessage) return;
+    const id = setTimeout(() => setSuccessMessage(null), 4000);
+    return () => clearTimeout(id);
+  }, [successMessage]);
+
   const handleSort = (column: SortableColumn) => {
     setSort(prev => {
       if (prev.column === column) {
@@ -116,6 +139,102 @@ const AuditLog: React.FC = () => {
       </th>
     );
   };
+
+  // ─── Selection helpers ──────────────────────────────────────────────────────
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === entries.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(entries.map(e => e.id)));
+    }
+  };
+
+  const toggleSelectRow = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  // ─── Delete handlers ───────────────────────────────────────────────────────
+
+  const handleDeleteSingle = async (id: string) => {
+    if (!window.confirm('Delete this audit log entry?')) return;
+    try {
+      await apiService.deleteAuditLog(id);
+      setSuccessMessage('1 entry deleted.');
+      setSelectedIds(prev => { const n = new Set(prev); n.delete(id); return n; });
+      fetchEntries();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Delete failed');
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    if (!window.confirm(`Delete ${ids.length} selected audit log entries?`)) return;
+    try {
+      const { deletedCount } = await apiService.deleteAuditLogsBulk(ids);
+      setSuccessMessage(`${deletedCount} entries deleted.`);
+      setSelectedIds(new Set());
+      fetchEntries();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Bulk delete failed');
+    }
+  };
+
+  const handlePurge = async () => {
+    if (!purgeDate) return;
+    const isoDate = new Date(purgeDate).toISOString();
+    const filterParts: string[] = [];
+    if (purgeAction) filterParts.push(`action=${purgeAction}`);
+    if (purgeEntity) filterParts.push(`entity=${purgeEntity}`);
+    const desc = `Purge all entries before ${purgeDate}${filterParts.length ? ` (${filterParts.join(', ')})` : ''}?`;
+    if (!window.confirm(desc)) return;
+    try {
+      const purgeFilters: { action?: string; entity?: string } = {};
+      if (purgeAction) purgeFilters.action = purgeAction;
+      if (purgeEntity) purgeFilters.entity = purgeEntity;
+      const { deletedCount } = await apiService.purgeAuditLogs(
+        isoDate,
+        Object.keys(purgeFilters).length > 0 ? purgeFilters : undefined
+      );
+      setSuccessMessage(`${deletedCount} entries purged.`);
+      setShowPurgeDialog(false);
+      setPurgeDate('');
+      setPurgeAction('');
+      setPurgeEntity('');
+      setSelectedIds(new Set());
+      fetchEntries();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Purge failed');
+    }
+  };
+
+  // ─── Export handlers ────────────────────────────────────────────────────────
+
+  const handleExport = async (format: 'csv' | 'json') => {
+    setExporting(true);
+    try {
+      const exportFilters: Record<string, string> = {};
+      if (filters.action) exportFilters.action = filters.action;
+      if (filters.entity) exportFilters.entity = filters.entity;
+      await apiService.exportAuditLogs(
+        format,
+        Object.keys(exportFilters).length > 0 ? exportFilters : undefined
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Export failed');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // ─── Access guard ───────────────────────────────────────────────────────────
 
   if (authState.user?.role !== 'admin') {
     return (
@@ -186,10 +305,80 @@ const AuditLog: React.FC = () => {
         </select>
       </div>
 
+      {/* Toolbar */}
+      <div className="audit-toolbar">
+        <div className="audit-toolbar-left">
+          {selectedIds.size > 0 && (
+            <button className="audit-btn audit-btn-danger" onClick={handleDeleteSelected}>
+              Delete Selected ({selectedIds.size})
+            </button>
+          )}
+          <button className="audit-btn audit-btn-warning" onClick={() => setShowPurgeDialog(true)}>
+            Purge...
+          </button>
+        </div>
+        <div className="audit-toolbar-right">
+          <button className="audit-btn audit-btn-secondary" onClick={() => handleExport('csv')} disabled={exporting}>
+            {exporting ? 'Exporting...' : 'Export CSV'}
+          </button>
+          <button className="audit-btn audit-btn-secondary" onClick={() => handleExport('json')} disabled={exporting}>
+            {exporting ? 'Exporting...' : 'Export JSON'}
+          </button>
+        </div>
+      </div>
+
+      {successMessage && (
+        <div className="audit-success">{successMessage}</div>
+      )}
+
       {error && (
         <div className="audit-error">
           <p>{error}</p>
           <button onClick={fetchEntries}>Retry</button>
+        </div>
+      )}
+
+      {/* Purge Dialog */}
+      {showPurgeDialog && (
+        <div className="audit-purge-overlay" onClick={() => setShowPurgeDialog(false)}>
+          <div className="audit-purge-dialog" onClick={e => e.stopPropagation()}>
+            <h3>Purge Audit Logs</h3>
+            <p>Delete all entries before the specified date.</p>
+            <label>
+              Before date:
+              <input
+                type="date"
+                value={purgeDate}
+                onChange={e => setPurgeDate(e.target.value)}
+              />
+            </label>
+            <label>
+              Action (optional):
+              <select value={purgeAction} onChange={e => setPurgeAction(e.target.value)}>
+                <option value="">All actions</option>
+                {actions.map(a => (
+                  <option key={a} value={a}>{a}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Entity (optional):
+              <select value={purgeEntity} onChange={e => setPurgeEntity(e.target.value)}>
+                <option value="">All entities</option>
+                {ENTITY_OPTIONS.filter(Boolean).map(e => (
+                  <option key={e} value={e}>{e}</option>
+                ))}
+              </select>
+            </label>
+            <div className="audit-purge-actions">
+              <button className="audit-btn audit-btn-danger" onClick={handlePurge} disabled={!purgeDate}>
+                Purge
+              </button>
+              <button className="audit-btn audit-btn-secondary" onClick={() => setShowPurgeDialog(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -201,26 +390,41 @@ const AuditLog: React.FC = () => {
             <table className="audit-table">
               <thead>
                 <tr>
+                  <th className="audit-checkbox-th">
+                    <input
+                      type="checkbox"
+                      checked={entries.length > 0 && selectedIds.size === entries.length}
+                      onChange={toggleSelectAll}
+                    />
+                  </th>
                   {renderSortableHeader('Timestamp', 'createdAt')}
                   {renderSortableHeader('Action', 'action')}
                   {renderSortableHeader('Entity', 'entity')}
                   {renderSortableHeader('Entity ID', 'entityId')}
                   <th>Details</th>
                   <th>IP</th>
+                  <th className="audit-actions-th">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {entries.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="audit-empty">No audit log entries found.</td>
+                    <td colSpan={8} className="audit-empty">No audit log entries found.</td>
                   </tr>
                 ) : (
                   entries.map(entry => (
                     <React.Fragment key={entry.id}>
                       <tr
-                        className={`audit-row ${expandedRow === entry.id ? 'expanded' : ''}`}
+                        className={`audit-row ${expandedRow === entry.id ? 'expanded' : ''} ${selectedIds.has(entry.id) ? 'selected' : ''}`}
                         onClick={() => setExpandedRow(expandedRow === entry.id ? null : entry.id)}
                       >
+                        <td className="audit-checkbox-cell" onClick={e => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(entry.id)}
+                            onChange={() => toggleSelectRow(entry.id)}
+                          />
+                        </td>
                         <td>{new Date(entry.createdAt).toLocaleString()}</td>
                         <td>
                           <span className={`audit-action-badge ${getActionBadgeClass(entry.action)}`}>
@@ -231,10 +435,19 @@ const AuditLog: React.FC = () => {
                         <td className="audit-entity-id">{entry.entityId || '-'}</td>
                         <td className="audit-details-cell">{truncateDetails(entry.details)}</td>
                         <td>{entry.ipAddress || '-'}</td>
+                        <td className="audit-actions-cell" onClick={e => e.stopPropagation()}>
+                          <button
+                            className="audit-row-delete-btn"
+                            title="Delete entry"
+                            onClick={() => handleDeleteSingle(entry.id)}
+                          >
+                            &#128465;
+                          </button>
+                        </td>
                       </tr>
                       {expandedRow === entry.id && entry.details && (
                         <tr className="audit-details-row">
-                          <td colSpan={6}>
+                          <td colSpan={8}>
                             <pre>{JSON.stringify(entry.details, null, 2)}</pre>
                           </td>
                         </tr>
