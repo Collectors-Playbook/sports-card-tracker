@@ -32,8 +32,8 @@ const EnhancedCardForm: React.FC<Props> = ({ card, onSave, onCancel }) => {
   useEffect(() => {
     const loadCollections = async () => {
       try {
-        const { collectionsDatabase } = await import('../../db/collectionsDatabase');
-        const userCollections = await collectionsDatabase.getUserCollections();
+        const { apiService } = await import('../../services/api');
+        const userCollections = await apiService.getCollections();
         setCollections(userCollections);
       } catch (error) {
         console.error('Error loading collections:', error);

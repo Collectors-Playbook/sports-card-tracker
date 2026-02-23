@@ -67,6 +67,8 @@ interface CardInput {
   currentValue: number;
   images: string[];
   notes: string;
+  collectionId?: string;
+  collectionType?: string;
 }
 
 class ApiService {
@@ -161,7 +163,7 @@ class ApiService {
   public async createCard(cardData: Card): Promise<Card> {
     try {
       logInfo('ApiService', 'Creating new card', { player: cardData.player });
-      
+
       const cardInput: CardInput = {
         player: cardData.player,
         team: cardData.team,
@@ -186,7 +188,9 @@ class ApiService {
         sellDate: cardData.sellDate?.toISOString(),
         currentValue: cardData.currentValue,
         images: cardData.images,
-        notes: cardData.notes
+        notes: cardData.notes,
+        collectionId: cardData.collectionId,
+        collectionType: cardData.collectionType
       };
 
       const card = await this.request<Card>('/cards', {
@@ -211,7 +215,7 @@ class ApiService {
   public async updateCard(cardData: Card): Promise<Card> {
     try {
       logInfo('ApiService', `Updating card ${cardData.id}`, { player: cardData.player });
-      
+
       const cardInput: CardInput = {
         player: cardData.player,
         team: cardData.team,
@@ -236,7 +240,9 @@ class ApiService {
         sellDate: cardData.sellDate?.toISOString(),
         currentValue: cardData.currentValue,
         images: cardData.images,
-        notes: cardData.notes
+        notes: cardData.notes,
+        collectionId: cardData.collectionId,
+        collectionType: cardData.collectionType
       };
 
       const card = await this.request<Card>(`/cards/${cardData.id}`, {
@@ -493,6 +499,82 @@ class ApiService {
 
   public async getAuditLogActions(): Promise<string[]> {
     return this.request('/audit-logs/actions');
+  }
+
+  // ─── Collections ──────────────────────────────────────────────────────────
+
+  public async getCollections(): Promise<any[]> {
+    return this.request('/collections');
+  }
+
+  public async getDefaultCollection(): Promise<any> {
+    return this.request('/collections/default');
+  }
+
+  public async getCollection(id: string): Promise<any> {
+    return this.request(`/collections/${id}`);
+  }
+
+  public async getCollectionStats(id: string): Promise<{
+    cardCount: number;
+    totalValue: number;
+    totalCost: number;
+    categoryBreakdown: { [category: string]: number };
+  }> {
+    return this.request(`/collections/${id}/stats`);
+  }
+
+  public async createCollection(data: {
+    name: string;
+    description?: string;
+    icon?: string;
+    color?: string;
+    visibility?: string;
+    tags?: string[];
+  }): Promise<any> {
+    return this.request('/collections', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  public async updateCollection(id: string, data: {
+    name?: string;
+    description?: string;
+    icon?: string;
+    color?: string;
+    visibility?: string;
+    tags?: string[];
+  }): Promise<any> {
+    return this.request(`/collections/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  public async deleteCollection(id: string): Promise<void> {
+    await this.request<void>(`/collections/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  public async setCollectionAsDefault(id: string): Promise<any> {
+    return this.request(`/collections/${id}/set-default`, {
+      method: 'POST',
+    });
+  }
+
+  public async moveCardsToCollection(cardIds: string[], targetCollectionId: string): Promise<{ moved: number }> {
+    return this.request('/collections/move-cards', {
+      method: 'POST',
+      body: JSON.stringify({ cardIds, targetCollectionId }),
+    });
+  }
+
+  public async initializeCollections(): Promise<any> {
+    return this.request('/collections/initialize', {
+      method: 'POST',
+    });
   }
 }
 

@@ -1,5 +1,5 @@
 import sqlite3 from 'sqlite3';
-import { Card, CardInput, User, UserInput, Collection, CollectionInput, Job, JobInput, JobStatus, AuditLogEntry, AuditLogInput, AuditLogQuery } from './types';
+import { Card, CardInput, User, UserInput, Collection, CollectionInput, CollectionStats, Job, JobInput, JobStatus, AuditLogEntry, AuditLogInput, AuditLogQuery } from './types';
 import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
 
@@ -74,6 +74,18 @@ class Database {
         FOREIGN KEY (userId) REFERENCES users(id)
       )
     `);
+
+    // Migration: add new collection columns
+    const collectionMigrations = [
+      "ALTER TABLE collections ADD COLUMN icon TEXT DEFAULT ''",
+      "ALTER TABLE collections ADD COLUMN color TEXT DEFAULT '#4F46E5'",
+      "ALTER TABLE collections ADD COLUMN isDefault INTEGER DEFAULT 0",
+      "ALTER TABLE collections ADD COLUMN visibility TEXT DEFAULT 'private'",
+      "ALTER TABLE collections ADD COLUMN tags TEXT DEFAULT '[]'",
+    ];
+    for (const migration of collectionMigrations) {
+      await this.runAsync(migration).catch(() => { /* column already exists */ });
+    }
 
     await this.runAsync(`
       CREATE TABLE IF NOT EXISTS cards (
@@ -414,20 +426,43 @@ class Database {
 
   // ─── Collections ─────────────────────────────────────────────────────────────
 
+  private mapCollectionRow(row: Record<string, unknown>): Collection {
+    return {
+      ...row,
+      isDefault: !!(row.isDefault),
+      tags: JSON.parse((row.tags as string) || '[]'),
+    } as Collection;
+  }
+
   public async getAllCollections(userId?: string): Promise<Collection[]> {
     await this.ready;
+    let rows: Record<string, unknown>[];
     if (userId) {
-      return this.allAsync<Collection>(
-        'SELECT * FROM collections WHERE userId = ? ORDER BY createdAt DESC',
+      rows = await this.allAsync<Record<string, unknown>>(
+        'SELECT * FROM collections WHERE userId = ? ORDER BY isDefault DESC, name ASC',
         [userId]
       );
+    } else {
+      rows = await this.allAsync<Record<string, unknown>>('SELECT * FROM collections ORDER BY createdAt DESC');
     }
-    return this.allAsync<Collection>('SELECT * FROM collections ORDER BY createdAt DESC');
+    return rows.map(row => this.mapCollectionRow(row));
   }
 
   public async getCollectionById(id: string): Promise<Collection | undefined> {
     await this.ready;
-    return this.getAsync<Collection>('SELECT * FROM collections WHERE id = ?', [id]);
+    const row = await this.getAsync<Record<string, unknown>>('SELECT * FROM collections WHERE id = ?', [id]);
+    if (!row) return undefined;
+    return this.mapCollectionRow(row);
+  }
+
+  public async getDefaultCollection(userId: string): Promise<Collection | undefined> {
+    await this.ready;
+    const row = await this.getAsync<Record<string, unknown>>(
+      'SELECT * FROM collections WHERE userId = ? AND isDefault = 1',
+      [userId]
+    );
+    if (!row) return undefined;
+    return this.mapCollectionRow(row);
   }
 
   public async createCollection(input: CollectionInput): Promise<Collection> {
@@ -440,17 +475,115 @@ class Database {
       userId: input.userId,
       name: input.name,
       description: input.description || '',
+      icon: input.icon || '',
+      color: input.color || '#4F46E5',
+      isDefault: input.isDefault || false,
+      visibility: input.visibility || 'private',
+      tags: input.tags || [],
       createdAt: now,
       updatedAt: now,
     };
 
     await this.runAsync(
-      `INSERT INTO collections (id, userId, name, description, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [collection.id, collection.userId, collection.name, collection.description, collection.createdAt, collection.updatedAt]
+      `INSERT INTO collections (id, userId, name, description, icon, color, isDefault, visibility, tags, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [collection.id, collection.userId, collection.name, collection.description,
+       collection.icon, collection.color, collection.isDefault ? 1 : 0,
+       collection.visibility, JSON.stringify(collection.tags), collection.createdAt, collection.updatedAt]
     );
 
     return collection;
+  }
+
+  public async updateCollection(id: string, updates: Partial<Omit<Collection, 'id' | 'userId' | 'createdAt'>>): Promise<Collection | undefined> {
+    await this.ready;
+    const existing = await this.getCollectionById(id);
+    if (!existing) return undefined;
+
+    const updatedAt = new Date().toISOString();
+    const updated: Collection = {
+      ...existing,
+      ...updates,
+      updatedAt,
+    };
+
+    await this.runAsync(
+      `UPDATE collections SET name = ?, description = ?, icon = ?, color = ?, isDefault = ?, visibility = ?, tags = ?, updatedAt = ? WHERE id = ?`,
+      [updated.name, updated.description, updated.icon, updated.color,
+       updated.isDefault ? 1 : 0, updated.visibility, JSON.stringify(updated.tags),
+       updatedAt, id]
+    );
+
+    return updated;
+  }
+
+  public async setCollectionAsDefault(collectionId: string, userId: string): Promise<void> {
+    await this.ready;
+    // Unset any existing default for this user
+    await this.runAsync(
+      'UPDATE collections SET isDefault = 0 WHERE userId = ? AND isDefault = 1',
+      [userId]
+    );
+    // Set the new default
+    await this.runAsync(
+      'UPDATE collections SET isDefault = 1 WHERE id = ? AND userId = ?',
+      [collectionId, userId]
+    );
+  }
+
+  public async getCollectionStats(collectionId: string): Promise<CollectionStats> {
+    await this.ready;
+    const cards = await this.allAsync<Record<string, unknown>>(
+      'SELECT category, currentValue, purchasePrice FROM cards WHERE collectionId = ?',
+      [collectionId]
+    );
+
+    const stats: CollectionStats = {
+      cardCount: cards.length,
+      totalValue: cards.reduce((sum, c) => sum + (c.currentValue as number), 0),
+      totalCost: cards.reduce((sum, c) => sum + (c.purchasePrice as number), 0),
+      categoryBreakdown: {}
+    };
+
+    cards.forEach(card => {
+      const cat = card.category as string;
+      stats.categoryBreakdown[cat] = (stats.categoryBreakdown[cat] || 0) + 1;
+    });
+
+    return stats;
+  }
+
+  public async moveCardsToCollection(cardIds: string[], targetCollectionId: string): Promise<number> {
+    await this.ready;
+    const updatedAt = new Date().toISOString();
+    let moved = 0;
+    for (const cardId of cardIds) {
+      const result = await this.runAsync(
+        'UPDATE cards SET collectionId = ?, updatedAt = ? WHERE id = ?',
+        [targetCollectionId, updatedAt, cardId]
+      );
+      if ((result.changes ?? 0) > 0) moved++;
+    }
+    return moved;
+  }
+
+  public async initializeUserCollections(userId: string): Promise<Collection> {
+    await this.ready;
+    // Check if default already exists
+    const existing = await this.getDefaultCollection(userId);
+    if (existing) return existing;
+
+    // Create default collection
+    return this.createCollection({
+      userId,
+      name: 'My Collection',
+      description: 'Default collection for all cards',
+      icon: '',
+      color: '#4F46E5',
+      isDefault: true,
+      visibility: 'private',
+      tags: [],
+    });
   }
 
   public async deleteCollection(id: string): Promise<boolean> {

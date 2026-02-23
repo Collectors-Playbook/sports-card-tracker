@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { useCards } from '../../context/DexieCardContext';
+import { useCards } from '../../context/ApiCardContext';
 import { Card } from '../../types';
 import BulkEbayExport from './BulkEbayExport';
 import { quickExportAllUnsoldCards, generateExportSummary } from '../../utils/quickEbayExport';

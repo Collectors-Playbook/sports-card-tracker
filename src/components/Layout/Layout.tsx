@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { useCards } from '../../context/DexieCardContext';
+import { useCards } from '../../context/ApiCardContext';
 import { exportCardsAsJSON, exportCardsAsCSV } from '../../utils/exportUtils';
 import { exportCardsToPDF } from '../../utils/pdfExport';
 import './Layout.css';

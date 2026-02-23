@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { useCards } from '../../context/DexieCardContext';
+import { useCards } from '../../context/ApiCardContext';
 import { ReportingService } from '../../services/reportingService';
 import { ReportTemplate } from '../../types/reports';
 import {

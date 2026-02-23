@@ -1,11 +1,11 @@
 import { Card } from '../types';
-import { cardDatabase } from '../db/simpleDatabase';
+import { apiService } from '../services/api';
 
 // Automatically export ALL unsold cards - no user interaction needed
 export const autoExportAllUnsoldCards = async () => {
   try {
-    // Get cards from database
-    const cards = await cardDatabase.getAllCards();
+    // Get cards from API
+    const cards = await apiService.getAllCards();
     
     if (!cards || cards.length === 0) {
       console.log('No cards found in database');
