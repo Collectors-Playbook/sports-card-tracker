@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useCards } from '../context/DexieCardContext';
 import { apiService } from '../services/api';
 import { cardDatabase } from '../db/simpleDatabase';
@@ -7,9 +7,10 @@ import { logInfo, logError } from '../utils/logger';
 export const useApi = () => {
   const { setCards, setLoading, setError } = useCards();
   const hasLoadedRef = useRef(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
-    // Only load once on mount
+    // Only load once on mount (or on retry)
     if (hasLoadedRef.current) return;
 
     const loadCards = async () => {
@@ -51,9 +52,9 @@ export const useApi = () => {
         logError('useApi', 'Failed to load cards from API', error as Error);
         setError('Failed to connect to server. Please make sure the server is running.');
 
-        // Try again in 5 seconds if failed
+        // Retry in 5 seconds by bumping state to re-trigger the effect
         setTimeout(() => {
-          hasLoadedRef.current = false;
+          setRetryCount(c => c + 1);
         }, 5000);
       } finally {
         setLoading(false);
@@ -61,7 +62,7 @@ export const useApi = () => {
     };
 
     loadCards();
-  }, [setCards, setError, setLoading]); // Include dependencies
+  }, [setCards, setError, setLoading, retryCount]); // retryCount triggers re-run
 
   return {
     // Health check function for manual use
