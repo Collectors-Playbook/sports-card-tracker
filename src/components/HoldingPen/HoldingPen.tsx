@@ -212,7 +212,8 @@ const HoldingPen: React.FC = () => {
       const result = await apiService.confirmCard(
         primaryFile,
         data,
-        frontFile && backFile ? backFile : undefined
+        frontFile && backFile ? backFile : undefined,
+        reviewTarget.data
       );
       if (result.status === 'failed' || result.status === 'duplicate' || result.status === 'skipped') {
         setError(result.error || `Processing ${result.status}`);

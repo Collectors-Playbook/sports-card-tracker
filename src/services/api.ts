@@ -440,11 +440,12 @@ class ApiService {
   public async confirmCard(
     filename: string,
     cardData: ExtractedCardData,
-    backFile?: string
+    backFile?: string,
+    originalData?: ExtractedCardData
   ): Promise<{ filename: string; status: string; processedFilename?: string; cardId?: string; confidence?: number; error?: string }> {
     return this.request('/image-processing/confirm', {
       method: 'POST',
-      body: JSON.stringify({ filename, backFile, cardData }),
+      body: JSON.stringify({ filename, backFile, cardData, originalData }),
     });
   }
 
@@ -480,6 +481,8 @@ class ApiService {
     entityId?: string;
     limit?: number;
     offset?: number;
+    sortBy?: string;
+    sortDirection?: string;
   }): Promise<{ entries: AuditLogEntry[]; total: number }> {
     const query = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
