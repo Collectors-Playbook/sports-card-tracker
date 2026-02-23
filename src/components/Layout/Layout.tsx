@@ -7,8 +7,8 @@ import './Layout.css';
 
 interface LayoutProps {
   children: React.ReactNode;
-  currentView: 'dashboard' | 'inventory' | 'add-card' | 'holding-pen' | 'processed' | 'admin' | 'profile' | 'reports' | 'ebay' | 'backup' | 'users' | 'collections' | 'about' | 'audit-log' | 'grading' | 'grading-roi';
-  onViewChange: (view: 'dashboard' | 'inventory' | 'add-card' | 'holding-pen' | 'processed' | 'admin' | 'profile' | 'reports' | 'ebay' | 'backup' | 'users' | 'collections' | 'about' | 'audit-log' | 'grading' | 'grading-roi') => void;
+  currentView: 'dashboard' | 'inventory' | 'add-card' | 'holding-pen' | 'processed' | 'admin' | 'profile' | 'reports' | 'ebay' | 'backup' | 'users' | 'collections' | 'about' | 'audit-log' | 'grading' | 'grading-roi' | 'heatmap';
+  onViewChange: (view: 'dashboard' | 'inventory' | 'add-card' | 'holding-pen' | 'processed' | 'admin' | 'profile' | 'reports' | 'ebay' | 'backup' | 'users' | 'collections' | 'about' | 'audit-log' | 'grading' | 'grading-roi' | 'heatmap') => void;
 }
 
 const Layout: React.FC<LayoutProps> = ({ children, currentView, onViewChange }) => {
@@ -193,6 +193,16 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, onViewChange }) 
             Dashboard
           </button>
           
+          <button
+            className={`nav-item ${currentView === 'heatmap' ? 'active' : ''}`}
+            onClick={() => {
+              onViewChange('heatmap');
+              setIsMobileMenuOpen(false);
+            }}
+          >
+            Heatmap
+          </button>
+
           <button
             className={`nav-item ${currentView === 'collections' ? 'active' : ''}`}
             onClick={() => {
