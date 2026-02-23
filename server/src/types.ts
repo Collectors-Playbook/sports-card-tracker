@@ -264,6 +264,14 @@ export interface ExtractedCardData {
   features?: CardFeatures;
   confidence?: DetectionConfidence;
   rawText?: string;
+  _apiMeta?: {
+    model: string;
+    inputTokens: number;
+    outputTokens: number;
+    durationMs: number;
+    imageCount: number;
+  };
+  _parseFailed?: boolean;
 }
 
 export interface CardFeatures {
@@ -311,4 +319,6 @@ export interface AuditLogQuery {
   entityId?: string;
   limit?: number;
   offset?: number;
+  sortBy?: 'createdAt' | 'action' | 'entity' | 'entityId';
+  sortDirection?: 'asc' | 'desc';
 }

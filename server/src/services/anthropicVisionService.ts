@@ -41,6 +41,7 @@ class AnthropicVisionService {
     const imageData = fs.readFileSync(filePath);
     const base64 = imageData.toString('base64');
 
+    const startMs = Date.now();
     const response = await this.getClient().messages.create({
       model: this.model,
       max_tokens: 1024,
@@ -85,9 +86,18 @@ Return ONLY the JSON object, no other text.`,
         },
       ],
     });
+    const durationMs = Date.now() - startMs;
 
     const text = response.content[0].type === 'text' ? response.content[0].text : '';
-    return this.parseResponse(text);
+    const data = this.parseResponse(text);
+    data._apiMeta = {
+      model: response.model,
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+      durationMs,
+      imageCount: 1,
+    };
+    return data;
   }
 
   async identifyCardPair(frontPath: string, backPath: string): Promise<ExtractedCardData> {
@@ -103,6 +113,7 @@ Return ONLY the JSON object, no other text.`,
     const frontData = fs.readFileSync(frontPath).toString('base64');
     const backData = fs.readFileSync(backPath).toString('base64');
 
+    const startMs = Date.now();
     const response = await this.getClient().messages.create({
       model: this.model,
       max_tokens: 1024,
@@ -159,9 +170,18 @@ Return ONLY the JSON object, no other text.`,
         },
       ],
     });
+    const durationMs = Date.now() - startMs;
 
     const text = response.content[0].type === 'text' ? response.content[0].text : '';
-    return this.parseResponse(text);
+    const data = this.parseResponse(text);
+    data._apiMeta = {
+      model: response.model,
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+      durationMs,
+      imageCount: 2,
+    };
+    return data;
   }
 
   private parseResponse(text: string): ExtractedCardData {
@@ -177,7 +197,7 @@ Return ONLY the JSON object, no other text.`,
       parsed = JSON.parse(jsonStr);
     } catch {
       console.error('Failed to parse Anthropic response:', text);
-      return { confidence: { score: 0, level: 'low', detectedFields: 0, missingFields: ['player', 'year', 'brand', 'cardNumber'] } };
+      return { confidence: { score: 0, level: 'low', detectedFields: 0, missingFields: ['player', 'year', 'brand', 'cardNumber'] }, _parseFailed: true };
     }
 
     const features: CardFeatures = {
