@@ -25,6 +25,7 @@ import EbayExportService from './services/ebayExportService';
 import AuditService from './services/auditService';
 import { createEbayRoutes } from './routes/ebay';
 import { createAuditLogRoutes } from './routes/auditLogs';
+import { createCollectionRoutes } from './routes/collections';
 import { EbayExportOptions } from './types';
 
 dotenv.config();
@@ -67,6 +68,7 @@ app.use('/api/comps', createCompRoutes(db, compService));
 app.use('/api/image-processing', createImageProcessingRoutes(db, imageProcessingService, fileService, auditService));
 app.use('/api/ebay', createEbayRoutes(db, ebayExportService, auditService));
 app.use('/api/audit-logs', createAuditLogRoutes(auditService));
+app.use('/api/collections', createCollectionRoutes(db, auditService));
 
 // Error handling
 app.use(errorHandler);

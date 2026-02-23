@@ -93,6 +93,11 @@ export interface Collection {
   userId: string;
   name: string;
   description: string;
+  icon: string;
+  color: string;
+  isDefault: boolean;
+  visibility: 'private' | 'public' | 'shared';
+  tags: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -101,6 +106,18 @@ export interface CollectionInput {
   userId: string;
   name: string;
   description?: string;
+  icon?: string;
+  color?: string;
+  isDefault?: boolean;
+  visibility?: 'private' | 'public' | 'shared';
+  tags?: string[];
+}
+
+export interface CollectionStats {
+  cardCount: number;
+  totalValue: number;
+  totalCost: number;
+  categoryBreakdown: { [category: string]: number };
 }
 
 // ─── Job ─────────────────────────────────────────────────────────────────────
