@@ -49,7 +49,7 @@ class EbayExportService {
   ): Promise<EbayExportResult> {
     // Fetch cards, always filtering out PC
     const allCards = await this.fetchCards(options.cardIds);
-    const inventoryCards = allCards.filter(c => c.collectionType !== 'PC');
+    const inventoryCards = allCards.filter(c => c.collectionType === 'Inventory');
     const skippedPcCards = allCards.length - inventoryCards.length;
 
     const rows: string[] = [];
