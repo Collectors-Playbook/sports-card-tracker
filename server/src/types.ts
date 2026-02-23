@@ -379,6 +379,12 @@ export interface AuditDetailsMap {
   'audit.delete_bulk': { deletedCount: number; requestedIds: string[] };
   'audit.purge': { deletedCount: number; before: string; filters?: Record<string, string> };
   'audit.export': { format: 'csv' | 'json'; entryCount: number; filters?: Record<string, string> };
+  'admin.user_create': { username: string; email: string; role: 'admin' | 'user' };
+  'admin.user_update': { userId: string; fields: string[] };
+  'admin.user_delete': { userId: string; username: string };
+  'admin.user_toggle_status': { userId: string; newStatus: boolean };
+  'admin.user_change_role': { userId: string; oldRole: string; newRole: string };
+  'admin.user_reset_password': { userId: string };
 }
 
 export type AuditAction = keyof AuditDetailsMap;
