@@ -5,6 +5,22 @@ import FileService from '../services/fileService';
 import AuditService from '../services/auditService';
 import { AuthenticatedRequest } from '../types';
 
+function diffCardData(
+  original: Record<string, unknown>,
+  edited: Record<string, unknown>
+): { field: string; from: unknown; to: unknown }[] {
+  const trackFields = ['player', 'year', 'brand', 'setName', 'cardNumber', 'team', 'category', 'parallel', 'serialNumber', 'gradingCompany', 'grade'];
+  const changes: { field: string; from: unknown; to: unknown }[] = [];
+  for (const field of trackFields) {
+    const orig = original[field] ?? null;
+    const edit = edited[field] ?? null;
+    if (String(orig) !== String(edit)) {
+      changes.push({ field, from: orig, to: edit });
+    }
+  }
+  return changes;
+}
+
 export function createImageProcessingRoutes(
   db: Database,
   imageProcessingService: ImageProcessingService,
@@ -37,7 +53,7 @@ export function createImageProcessingRoutes(
   });
 
   // POST /api/image-processing/process-sync -- process single file synchronously
-  router.post('/process-sync', async (req: Request, res: Response) => {
+  router.post('/process-sync', async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { filename, confidenceThreshold } = req.body;
 
@@ -50,6 +66,7 @@ export function createImageProcessingRoutes(
         confidenceThreshold,
       });
 
+      auditService.log(req, { action: 'image.process_sync', entity: 'file', entityId: filename, details: { status: result.status, cardId: result.cardId } });
       res.json(result);
     } catch (error) {
       console.error('Error processing image:', error);
@@ -67,10 +84,60 @@ export function createImageProcessingRoutes(
         return;
       }
 
+      // Event #6 — pair detected
+      if (backFile) {
+        auditService.log(req, {
+          action: 'image.pair_detected',
+          entity: 'file',
+          entityId: filename,
+          details: { backFile },
+        });
+      }
+
       const data = await imageProcessingService.identifyOnly(filename, backFile);
-      auditService.log(req, { action: 'image.identify', entity: 'file', entityId: filename });
+
+      // Event #10 — vision API call telemetry
+      if (data._apiMeta) {
+        auditService.log(req, {
+          action: 'vision.api_call',
+          entity: 'file',
+          entityId: filename,
+          details: {
+            ...data._apiMeta,
+            confidenceScore: data.confidence?.score,
+            parseFailed: data._parseFailed || false,
+          },
+        });
+      }
+
+      // Event #11 — enriched image.identify
+      auditService.log(req, {
+        action: 'image.identify',
+        entity: 'file',
+        entityId: filename,
+        details: {
+          backFile: backFile || null,
+          confidenceScore: data.confidence?.score,
+          confidenceLevel: data.confidence?.level,
+          detectedFields: data.confidence?.detectedFields,
+          missingFields: data.confidence?.missingFields,
+        },
+      });
+
+      // Strip internal fields before sending response
+      delete data._apiMeta;
+      delete data._parseFailed;
+
       res.json(data);
     } catch (error) {
+      const { filename, backFile } = req.body;
+      // Event #3 — identify failed
+      auditService.log(req, {
+        action: 'image.identify_failed',
+        entity: 'file',
+        entityId: filename || null,
+        details: { error: error instanceof Error ? error.message : String(error), backFile: backFile || null },
+      });
       console.error('Error identifying card:', error);
       res.status(500).json({ error: 'Failed to identify card' });
     }
@@ -79,7 +146,7 @@ export function createImageProcessingRoutes(
   // POST /api/image-processing/confirm -- commit user-reviewed card data
   router.post('/confirm', async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const { filename, backFile, cardData } = req.body;
+      const { filename, backFile, cardData, originalData } = req.body;
 
       if (!filename || typeof filename !== 'string') {
         res.status(400).json({ error: 'filename is required' });
@@ -90,8 +157,35 @@ export function createImageProcessingRoutes(
         return;
       }
 
+      // Event #5 — user modifications diff
+      if (originalData) {
+        const changedFields = diffCardData(originalData, cardData);
+        if (changedFields.length > 0) {
+          auditService.log(req, {
+            action: 'image.user_modifications',
+            entity: 'file',
+            entityId: filename,
+            details: { modifications: changedFields },
+          });
+        }
+      }
+
       const result = await imageProcessingService.confirmCard(filename, cardData, backFile);
-      auditService.log(req, { action: 'image.confirm', entity: 'card', entityId: result.cardId, details: { filename } });
+
+      // Event #11 — enriched image.confirm
+      auditService.log(req, {
+        action: 'image.confirm',
+        entity: 'card',
+        entityId: result.cardId || null,
+        details: {
+          filename,
+          backFile: backFile || null,
+          processedFilename: result.processedFilename,
+          confidence: result.confidence,
+          status: result.status,
+        },
+      });
+
       res.json(result);
     } catch (error) {
       console.error('Error confirming card:', error);
@@ -100,12 +194,16 @@ export function createImageProcessingRoutes(
   });
 
   // GET /api/image-processing/status
-  router.get('/status', (_req: Request, res: Response) => {
+  router.get('/status', async (_req: Request, res: Response) => {
     try {
       const rawFiles = fileService.listFiles(fileService.getRawDir());
       const processedFiles = fileService.listFiles(fileService.getProcessedDir());
-      const errors = fileService.readLog('image-error.log');
-      const recentErrors = errors.slice(-10);
+      const { entries: recentLogs } = await db.queryAuditLogs({ action: 'image.process_failed', limit: 10 });
+      const recentErrors = recentLogs.map(log => ({
+        timestamp: log.createdAt,
+        filename: log.entityId ?? '',
+        reason: (log.details as Record<string, unknown>)?.reason ?? '',
+      }));
 
       res.json({
         rawCount: rawFiles.length,

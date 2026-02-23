@@ -81,7 +81,19 @@ export function createFileRoutes(fileService: FileService, auditService: AuditSe
   });
 
   // Upload files to raw
-  router.post('/raw/upload', upload.array('files', MAX_FILES), (req: AuthenticatedRequest, res: Response) => {
+  router.post('/raw/upload', (req: AuthenticatedRequest, res: Response, next: any) => {
+    upload.array('files', MAX_FILES)(req as any, res as any, (err: any) => {
+      if (err) {
+        auditService.log(req, {
+          action: 'file.upload_rejected',
+          entity: 'file',
+          details: { error: err.message, code: err.code },
+        });
+        return res.status(400).json({ error: err.message });
+      }
+      next();
+    });
+  }, (req: AuthenticatedRequest, res: Response) => {
     const files = req.files as Express.Multer.File[];
     if (!files || files.length === 0) {
       res.status(400).json({ error: 'No files uploaded' });
@@ -94,7 +106,18 @@ export function createFileRoutes(fileService: FileService, auditService: AuditSe
       originalName: f.originalname,
     }));
 
-    auditService.log(req, { action: 'file.upload', entity: 'file', details: { count: uploaded.length, filenames: uploaded.map(u => u.name) } });
+    auditService.log(req, {
+      action: 'file.upload',
+      entity: 'file',
+      details: {
+        count: uploaded.length,
+        files: (req.files as Express.Multer.File[]).map(f => ({
+          name: f.filename,
+          originalName: f.originalname,
+          size: f.size,
+        })),
+      },
+    });
     res.status(201).json({ uploaded, count: uploaded.length });
   });
 
@@ -150,7 +173,7 @@ export function createFileRoutes(fileService: FileService, auditService: AuditSe
 
   // Read a log file
   router.get('/logs/:logname', (req: Request, res: Response) => {
-    const validLogs = ['image-error.log', 'comp-error.log'];
+    const validLogs = ['comp-error.log'];
     if (!validLogs.includes(req.params.logname)) {
       res.status(400).json({ error: `Invalid log name. Valid: ${validLogs.join(', ')}` });
       return;
@@ -161,7 +184,7 @@ export function createFileRoutes(fileService: FileService, auditService: AuditSe
 
   // Clear a log file
   router.delete('/logs/:logname', (req: AuthenticatedRequest, res: Response) => {
-    const validLogs = ['image-error.log', 'comp-error.log'];
+    const validLogs = ['comp-error.log'];
     if (!validLogs.includes(req.params.logname)) {
       res.status(400).json({ error: `Invalid log name. Valid: ${validLogs.join(', ')}` });
       return;
