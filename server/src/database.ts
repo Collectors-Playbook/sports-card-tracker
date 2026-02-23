@@ -1,166 +1,178 @@
-import sqlite3 from 'sqlite3';
+import BetterSqlite3 from 'better-sqlite3';
+import { drizzle, BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
+import { eq, and, like, desc, asc, sql, count } from 'drizzle-orm';
 import { Card, CardInput, User, UserInput, Collection, CollectionInput, CollectionStats, Job, JobInput, JobStatus, AuditLogEntry, AuditLogInput, AuditLogQuery } from './types';
 import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
+import * as schema from './db/schema';
+import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
+import path from 'path';
+import fs from 'fs';
+import crypto from 'crypto';
+
+const { users, collections, cards, jobs, auditLogs } = schema;
+
+// Baseline SQL executed for in-memory databases (no migration journal needed)
+const BASELINE_SQL = `
+CREATE TABLE IF NOT EXISTS users (
+  id text PRIMARY KEY NOT NULL,
+  username text NOT NULL,
+  email text NOT NULL,
+  passwordHash text NOT NULL,
+  role text DEFAULT 'user' NOT NULL,
+  isActive integer DEFAULT 1 NOT NULL,
+  profilePhoto text,
+  createdAt text NOT NULL,
+  updatedAt text NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS users_username_unique ON users (username);
+CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique ON users (email);
+
+CREATE TABLE IF NOT EXISTS collections (
+  id text PRIMARY KEY NOT NULL,
+  userId text NOT NULL,
+  name text NOT NULL,
+  description text DEFAULT '' NOT NULL,
+  icon text DEFAULT '',
+  color text DEFAULT '#4F46E5',
+  isDefault integer DEFAULT 0,
+  visibility text DEFAULT 'private',
+  tags text DEFAULT '[]',
+  createdAt text NOT NULL,
+  updatedAt text NOT NULL,
+  FOREIGN KEY (userId) REFERENCES users(id) ON UPDATE no action ON DELETE no action
+);
+
+CREATE TABLE IF NOT EXISTS cards (
+  id text PRIMARY KEY NOT NULL,
+  userId text DEFAULT '' NOT NULL,
+  collectionId text,
+  collectionType text DEFAULT 'Inventory' NOT NULL,
+  player text NOT NULL,
+  team text NOT NULL,
+  year integer NOT NULL,
+  brand text NOT NULL,
+  category text NOT NULL,
+  cardNumber text NOT NULL,
+  parallel text,
+  condition text NOT NULL,
+  gradingCompany text,
+  setName text,
+  serialNumber text,
+  grade text,
+  isRookie integer DEFAULT 0,
+  isAutograph integer DEFAULT 0,
+  isRelic integer DEFAULT 0,
+  isNumbered integer DEFAULT 0,
+  isGraded integer DEFAULT 0,
+  purchasePrice real NOT NULL,
+  purchaseDate text NOT NULL,
+  sellPrice real,
+  sellDate text,
+  currentValue real NOT NULL,
+  images text DEFAULT '[]' NOT NULL,
+  notes text DEFAULT '' NOT NULL,
+  createdAt text NOT NULL,
+  updatedAt text NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS jobs (
+  id text PRIMARY KEY NOT NULL,
+  type text NOT NULL,
+  status text DEFAULT 'pending' NOT NULL,
+  payload text DEFAULT '{}' NOT NULL,
+  result text,
+  error text,
+  progress real DEFAULT 0 NOT NULL,
+  totalItems integer DEFAULT 0 NOT NULL,
+  completedItems integer DEFAULT 0 NOT NULL,
+  createdAt text NOT NULL,
+  updatedAt text NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id text PRIMARY KEY NOT NULL,
+  userId text,
+  action text NOT NULL,
+  entity text NOT NULL,
+  entityId text,
+  details text,
+  ipAddress text,
+  createdAt text NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_entity ON audit_logs (entity, entityId);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_userId ON audit_logs (userId);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_createdAt ON audit_logs (createdAt);
+`;
 
 class Database {
-  private db: sqlite3.Database;
+  private sqlite: BetterSqlite3.Database;
+  private db: BetterSQLite3Database<typeof schema>;
   private ready: Promise<void>;
 
   constructor(dbPath: string = ':memory:') {
-    this.db = new sqlite3.Database(dbPath);
-    this.ready = this.initTables();
-  }
+    this.sqlite = new BetterSqlite3(dbPath);
+    this.sqlite.pragma('journal_mode = WAL');
+    this.sqlite.pragma('foreign_keys = ON');
+    this.db = drizzle(this.sqlite, { schema });
 
-  // ─── Promise Helpers ─────────────────────────────────────────────────────────
-
-  private runAsync(sql: string, params: unknown[] = []): Promise<sqlite3.RunResult> {
-    return new Promise((resolve, reject) => {
-      this.db.run(sql, params, function (err) {
-        if (err) reject(err);
-        else resolve(this);
-      });
-    });
-  }
-
-  private getAsync<T>(sql: string, params: unknown[] = []): Promise<T | undefined> {
-    return new Promise((resolve, reject) => {
-      this.db.get(sql, params, (err, row) => {
-        if (err) reject(err);
-        else resolve(row as T | undefined);
-      });
-    });
-  }
-
-  private allAsync<T>(sql: string, params: unknown[] = []): Promise<T[]> {
-    return new Promise((resolve, reject) => {
-      this.db.all(sql, params, (err, rows) => {
-        if (err) reject(err);
-        else resolve((rows || []) as T[]);
-      });
-    });
-  }
-
-  // ─── Init ────────────────────────────────────────────────────────────────────
-
-  private async initTables(): Promise<void> {
-    await this.runAsync(`
-      CREATE TABLE IF NOT EXISTS users (
-        id TEXT PRIMARY KEY,
-        username TEXT NOT NULL UNIQUE,
-        email TEXT NOT NULL UNIQUE,
-        passwordHash TEXT NOT NULL,
-        role TEXT NOT NULL DEFAULT 'user',
-        isActive INTEGER NOT NULL DEFAULT 1,
-        profilePhoto TEXT DEFAULT NULL,
-        createdAt TEXT NOT NULL,
-        updatedAt TEXT NOT NULL
-      )
-    `);
-
-    // Migration: add profilePhoto column if missing (existing databases)
-    await this.runAsync(`
-      ALTER TABLE users ADD COLUMN profilePhoto TEXT DEFAULT NULL
-    `).catch(() => { /* column already exists */ });
-
-    await this.runAsync(`
-      CREATE TABLE IF NOT EXISTS collections (
-        id TEXT PRIMARY KEY,
-        userId TEXT NOT NULL,
-        name TEXT NOT NULL,
-        description TEXT NOT NULL DEFAULT '',
-        createdAt TEXT NOT NULL,
-        updatedAt TEXT NOT NULL,
-        FOREIGN KEY (userId) REFERENCES users(id)
-      )
-    `);
-
-    // Migration: add new collection columns
-    const collectionMigrations = [
-      "ALTER TABLE collections ADD COLUMN icon TEXT DEFAULT ''",
-      "ALTER TABLE collections ADD COLUMN color TEXT DEFAULT '#4F46E5'",
-      "ALTER TABLE collections ADD COLUMN isDefault INTEGER DEFAULT 0",
-      "ALTER TABLE collections ADD COLUMN visibility TEXT DEFAULT 'private'",
-      "ALTER TABLE collections ADD COLUMN tags TEXT DEFAULT '[]'",
-    ];
-    for (const migration of collectionMigrations) {
-      await this.runAsync(migration).catch(() => { /* column already exists */ });
+    if (dbPath === ':memory:') {
+      this.sqlite.exec(BASELINE_SQL);
+      this.ready = Promise.resolve();
+    } else {
+      const migrationsFolder = path.resolve(__dirname, '..', 'drizzle');
+      if (fs.existsSync(migrationsFolder)) {
+        // If this is a pre-existing DB that predates Drizzle migrations,
+        // seed the migration journal so the baseline is skipped.
+        this.ensureMigrationJournal();
+        migrate(this.db, { migrationsFolder });
+      } else {
+        this.sqlite.exec(BASELINE_SQL);
+      }
+      this.ready = Promise.resolve();
     }
+  }
 
-    await this.runAsync(`
-      CREATE TABLE IF NOT EXISTS cards (
-        id TEXT PRIMARY KEY,
-        userId TEXT NOT NULL DEFAULT '',
-        collectionId TEXT,
-        collectionType TEXT NOT NULL DEFAULT 'Inventory',
-        player TEXT NOT NULL,
-        team TEXT NOT NULL,
-        year INTEGER NOT NULL,
-        brand TEXT NOT NULL,
-        category TEXT NOT NULL,
-        cardNumber TEXT NOT NULL,
-        parallel TEXT,
-        condition TEXT NOT NULL,
-        gradingCompany TEXT,
-        purchasePrice REAL NOT NULL,
-        purchaseDate TEXT NOT NULL,
-        sellPrice REAL,
-        sellDate TEXT,
-        currentValue REAL NOT NULL,
-        images TEXT NOT NULL DEFAULT '[]',
-        notes TEXT NOT NULL DEFAULT '',
-        createdAt TEXT NOT NULL,
-        updatedAt TEXT NOT NULL
-      )
+  /**
+   * For pre-existing databases that were created before Drizzle migrations,
+   * seed the __drizzle_migrations table so the baseline migration is skipped.
+   */
+  private ensureMigrationJournal(): void {
+    const hasTable = this.sqlite.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='users'"
+    ).get();
+
+    if (!hasTable) return; // Fresh DB — migrator will handle everything
+
+    // Create journal table if it doesn't exist
+    this.sqlite.exec(`
+      CREATE TABLE IF NOT EXISTS __drizzle_migrations (
+        id integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+        hash text NOT NULL,
+        created_at numeric
+      );
     `);
 
-    // Migration: add new card fields for vision-extracted data
-    const cardMigrations = [
-      'ALTER TABLE cards ADD COLUMN setName TEXT',
-      'ALTER TABLE cards ADD COLUMN serialNumber TEXT',
-      'ALTER TABLE cards ADD COLUMN grade TEXT',
-      'ALTER TABLE cards ADD COLUMN isRookie INTEGER DEFAULT 0',
-      'ALTER TABLE cards ADD COLUMN isAutograph INTEGER DEFAULT 0',
-      'ALTER TABLE cards ADD COLUMN isRelic INTEGER DEFAULT 0',
-      'ALTER TABLE cards ADD COLUMN isNumbered INTEGER DEFAULT 0',
-      'ALTER TABLE cards ADD COLUMN isGraded INTEGER DEFAULT 0',
-    ];
-    for (const migration of cardMigrations) {
-      await this.runAsync(migration).catch(() => { /* column already exists */ });
-    }
+    const journalCount = this.sqlite.prepare(
+      'SELECT COUNT(*) as cnt FROM __drizzle_migrations'
+    ).get() as { cnt: number };
 
-    await this.runAsync(`
-      CREATE TABLE IF NOT EXISTS jobs (
-        id TEXT PRIMARY KEY,
-        type TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'pending',
-        payload TEXT NOT NULL DEFAULT '{}',
-        result TEXT,
-        error TEXT,
-        progress REAL NOT NULL DEFAULT 0,
-        totalItems INTEGER NOT NULL DEFAULT 0,
-        completedItems INTEGER NOT NULL DEFAULT 0,
-        createdAt TEXT NOT NULL,
-        updatedAt TEXT NOT NULL
-      )
-    `);
+    if (journalCount.cnt > 0) return; // Already has migration records
 
-    await this.runAsync(`
-      CREATE TABLE IF NOT EXISTS audit_logs (
-        id TEXT PRIMARY KEY,
-        userId TEXT,
-        action TEXT NOT NULL,
-        entity TEXT NOT NULL,
-        entityId TEXT,
-        details TEXT,
-        ipAddress TEXT,
-        createdAt TEXT NOT NULL
-      )
-    `);
-
-    await this.runAsync('CREATE INDEX IF NOT EXISTS idx_audit_logs_entity ON audit_logs(entity, entityId)');
-    await this.runAsync('CREATE INDEX IF NOT EXISTS idx_audit_logs_userId ON audit_logs(userId)');
-    await this.runAsync('CREATE INDEX IF NOT EXISTS idx_audit_logs_createdAt ON audit_logs(createdAt)');
+    // Tables exist but no migration records — this is a pre-Drizzle DB.
+    // Mark the baseline migration as already applied.
+    const migrationsFolder = path.resolve(__dirname, '..', 'drizzle');
+    const journalPath = path.join(migrationsFolder, 'meta', '_journal.json');
+    const journal = JSON.parse(fs.readFileSync(journalPath, 'utf-8'));
+    const baselineEntry = journal.entries[0];
+    const migrationSql = fs.readFileSync(
+      path.join(migrationsFolder, `${baselineEntry.tag}.sql`), 'utf-8'
+    );
+    // Drizzle uses SHA-256 to hash migration SQL
+    const hash = crypto.createHash('sha256').update(migrationSql).digest('hex');
+    this.sqlite.prepare(
+      'INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)'
+    ).run(hash, baselineEntry.when);
   }
 
   public async waitReady(): Promise<void> {
@@ -170,44 +182,26 @@ class Database {
   // ─── Cards ───────────────────────────────────────────────────────────────────
 
   public async getAllCards(filters?: { userId?: string; collectionId?: string; collectionType?: string }): Promise<Card[]> {
-    await this.ready;
-    let sql = 'SELECT * FROM cards';
-    const params: unknown[] = [];
-    const conditions: string[] = [];
+    const conditions = [];
+    if (filters?.userId) conditions.push(eq(cards.userId, filters.userId));
+    if (filters?.collectionId) conditions.push(eq(cards.collectionId, filters.collectionId));
+    if (filters?.collectionType) conditions.push(eq(cards.collectionType, filters.collectionType as 'PC' | 'Inventory' | 'Pending'));
 
-    if (filters?.userId) {
-      conditions.push('userId = ?');
-      params.push(filters.userId);
-    }
-    if (filters?.collectionId) {
-      conditions.push('collectionId = ?');
-      params.push(filters.collectionId);
-    }
-    if (filters?.collectionType) {
-      conditions.push('collectionType = ?');
-      params.push(filters.collectionType);
-    }
-    if (conditions.length > 0) {
-      sql += ' WHERE ' + conditions.join(' AND ');
-    }
-    sql += ' ORDER BY createdAt DESC';
+    const rows = this.db.select().from(cards)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(cards.createdAt))
+      .all();
 
-    const rows = await this.allAsync<Record<string, unknown>>(sql, params);
     return rows.map(row => this.mapCardRow(row));
   }
 
   public async getCardById(id: string): Promise<Card | undefined> {
-    await this.ready;
-    const row = await this.getAsync<Record<string, unknown>>(
-      'SELECT * FROM cards WHERE id = ?',
-      [id]
-    );
+    const row = this.db.select().from(cards).where(eq(cards.id, id)).get();
     if (!row) return undefined;
     return this.mapCardRow(row);
   }
 
   public async createCard(cardInput: CardInput): Promise<Card> {
-    await this.ready;
     const id = uuidv4();
     const now = new Date().toISOString();
 
@@ -244,62 +238,78 @@ class Database {
       updatedAt: now,
     };
 
-    await this.runAsync(
-      `INSERT INTO cards (
-        id, userId, collectionId, collectionType, player, team, year, brand, category, cardNumber,
-        parallel, condition, gradingCompany, setName, serialNumber, grade,
-        isRookie, isAutograph, isRelic, isNumbered, isGraded,
-        purchasePrice, purchaseDate,
-        sellPrice, sellDate, currentValue, images, notes, createdAt, updatedAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        card.id, card.userId, card.collectionId || null, card.collectionType,
-        card.player, card.team,
-        card.year, card.brand, card.category, card.cardNumber, card.parallel || null,
-        card.condition, card.gradingCompany || null,
-        card.setName || null, card.serialNumber || null, card.grade || null,
-        card.isRookie ? 1 : 0, card.isAutograph ? 1 : 0, card.isRelic ? 1 : 0,
-        card.isNumbered ? 1 : 0, card.isGraded ? 1 : 0,
-        card.purchasePrice, card.purchaseDate,
-        card.sellPrice || null, card.sellDate || null, card.currentValue,
-        JSON.stringify(card.images), card.notes, card.createdAt, card.updatedAt,
-      ]
-    );
+    this.db.insert(cards).values({
+      id: card.id,
+      userId: card.userId,
+      collectionId: card.collectionId || null,
+      collectionType: card.collectionType,
+      player: card.player,
+      team: card.team,
+      year: card.year,
+      brand: card.brand,
+      category: card.category,
+      cardNumber: card.cardNumber,
+      parallel: card.parallel || null,
+      condition: card.condition,
+      gradingCompany: card.gradingCompany || null,
+      setName: card.setName || null,
+      serialNumber: card.serialNumber || null,
+      grade: card.grade || null,
+      isRookie: card.isRookie ? true : false,
+      isAutograph: card.isAutograph ? true : false,
+      isRelic: card.isRelic ? true : false,
+      isNumbered: card.isNumbered ? true : false,
+      isGraded: card.isGraded ? true : false,
+      purchasePrice: card.purchasePrice,
+      purchaseDate: card.purchaseDate,
+      sellPrice: card.sellPrice || null,
+      sellDate: card.sellDate || null,
+      currentValue: card.currentValue,
+      images: card.images,
+      notes: card.notes,
+      createdAt: card.createdAt,
+      updatedAt: card.updatedAt,
+    }).run();
 
     return card;
   }
 
   public async updateCard(id: string, cardInput: CardInput): Promise<Card | undefined> {
-    await this.ready;
     const existing = await this.getCardById(id);
     if (!existing) return undefined;
 
     const updatedAt = new Date().toISOString();
 
-    await this.runAsync(
-      `UPDATE cards SET
-        userId = ?, collectionId = ?, collectionType = ?, player = ?, team = ?, year = ?, brand = ?,
-        category = ?, cardNumber = ?, parallel = ?, condition = ?, gradingCompany = ?,
-        setName = ?, serialNumber = ?, grade = ?,
-        isRookie = ?, isAutograph = ?, isRelic = ?, isNumbered = ?, isGraded = ?,
-        purchasePrice = ?, purchaseDate = ?, sellPrice = ?, sellDate = ?,
-        currentValue = ?, images = ?, notes = ?, updatedAt = ?
-      WHERE id = ?`,
-      [
-        cardInput.userId || existing.userId, cardInput.collectionId || null,
-        cardInput.collectionType || existing.collectionType,
-        cardInput.player, cardInput.team, cardInput.year, cardInput.brand,
-        cardInput.category, cardInput.cardNumber, cardInput.parallel || null,
-        cardInput.condition, cardInput.gradingCompany || null,
-        cardInput.setName || null, cardInput.serialNumber || null, cardInput.grade || null,
-        cardInput.isRookie ? 1 : 0, cardInput.isAutograph ? 1 : 0, cardInput.isRelic ? 1 : 0,
-        cardInput.isNumbered ? 1 : 0, cardInput.isGraded ? 1 : 0,
-        cardInput.purchasePrice,
-        cardInput.purchaseDate, cardInput.sellPrice || null, cardInput.sellDate || null,
-        cardInput.currentValue, JSON.stringify(cardInput.images || []),
-        cardInput.notes || '', updatedAt, id,
-      ]
-    );
+    this.db.update(cards).set({
+      userId: cardInput.userId || existing.userId,
+      collectionId: cardInput.collectionId || null,
+      collectionType: cardInput.collectionType || existing.collectionType,
+      player: cardInput.player,
+      team: cardInput.team,
+      year: cardInput.year,
+      brand: cardInput.brand,
+      category: cardInput.category,
+      cardNumber: cardInput.cardNumber,
+      parallel: cardInput.parallel || null,
+      condition: cardInput.condition,
+      gradingCompany: cardInput.gradingCompany || null,
+      setName: cardInput.setName || null,
+      serialNumber: cardInput.serialNumber || null,
+      grade: cardInput.grade || null,
+      isRookie: cardInput.isRookie ? true : false,
+      isAutograph: cardInput.isAutograph ? true : false,
+      isRelic: cardInput.isRelic ? true : false,
+      isNumbered: cardInput.isNumbered ? true : false,
+      isGraded: cardInput.isGraded ? true : false,
+      purchasePrice: cardInput.purchasePrice,
+      purchaseDate: cardInput.purchaseDate,
+      sellPrice: cardInput.sellPrice || null,
+      sellDate: cardInput.sellDate || null,
+      currentValue: cardInput.currentValue,
+      images: cardInput.images || [],
+      notes: cardInput.notes || '',
+      updatedAt,
+    }).where(eq(cards.id, id)).run();
 
     return {
       ...existing,
@@ -315,58 +325,75 @@ class Database {
   }
 
   public async getCardByImage(imageFilename: string): Promise<Card | undefined> {
-    await this.ready;
-    const rows = await this.allAsync<Record<string, unknown>>(
-      'SELECT * FROM cards WHERE images LIKE ?',
-      [`%${imageFilename}%`]
-    );
+    const rows = this.db.select().from(cards)
+      .where(like(cards.images, `%${imageFilename}%`))
+      .all();
     if (rows.length === 0) return undefined;
-    const row = rows[0];
-    return this.mapCardRow(row);
+    return this.mapCardRow(rows[0]);
   }
 
-  private mapCardRow(row: Record<string, unknown>): Card {
+  private mapCardRow(row: typeof cards.$inferSelect): Card {
     return {
       ...row,
-      images: JSON.parse((row.images as string) || '[]'),
+      collectionId: row.collectionId ?? undefined,
+      collectionType: (row.collectionType || 'Inventory') as 'PC' | 'Inventory' | 'Pending',
+      parallel: row.parallel ?? undefined,
+      gradingCompany: row.gradingCompany ?? undefined,
+      setName: row.setName ?? undefined,
+      serialNumber: row.serialNumber ?? undefined,
+      grade: row.grade ?? undefined,
       isRookie: !!(row.isRookie),
       isAutograph: !!(row.isAutograph),
       isRelic: !!(row.isRelic),
       isNumbered: !!(row.isNumbered),
       isGraded: !!(row.isGraded),
-    } as Card;
+      sellPrice: row.sellPrice ?? undefined,
+      sellDate: row.sellDate ?? undefined,
+      images: row.images ?? [],
+      notes: row.notes || '',
+    };
   }
 
   public async deleteCard(id: string): Promise<boolean> {
-    await this.ready;
-    const result = await this.runAsync('DELETE FROM cards WHERE id = ?', [id]);
-    return (result.changes ?? 0) > 0;
+    const result = this.db.delete(cards).where(eq(cards.id, id)).run();
+    return result.changes > 0;
   }
 
   // ─── Users ───────────────────────────────────────────────────────────────────
 
   public async getAllUsers(): Promise<User[]> {
-    await this.ready;
-    return this.allAsync<User>('SELECT * FROM users ORDER BY createdAt DESC');
+    const rows = this.db.select().from(users).orderBy(desc(users.createdAt)).all();
+    return rows.map(row => this.mapUserRow(row));
   }
 
   public async getUserById(id: string): Promise<User | undefined> {
-    await this.ready;
-    return this.getAsync<User>('SELECT * FROM users WHERE id = ?', [id]);
+    const row = this.db.select().from(users).where(eq(users.id, id)).get();
+    if (!row) return undefined;
+    return this.mapUserRow(row);
   }
 
   public async getUserByEmail(email: string): Promise<User | undefined> {
-    await this.ready;
-    return this.getAsync<User>('SELECT * FROM users WHERE email = ?', [email]);
+    const row = this.db.select().from(users).where(eq(users.email, email)).get();
+    if (!row) return undefined;
+    return this.mapUserRow(row);
   }
 
   public async getUserByUsername(username: string): Promise<User | undefined> {
-    await this.ready;
-    return this.getAsync<User>('SELECT * FROM users WHERE username = ?', [username]);
+    const row = this.db.select().from(users).where(eq(users.username, username)).get();
+    if (!row) return undefined;
+    return this.mapUserRow(row);
+  }
+
+  private mapUserRow(row: typeof users.$inferSelect): User {
+    return {
+      ...row,
+      role: (row.role || 'user') as 'admin' | 'user',
+      isActive: !!(row.isActive),
+      profilePhoto: row.profilePhoto ?? null,
+    };
   }
 
   public async createUser(input: UserInput): Promise<User> {
-    await this.ready;
     const id = uuidv4();
     const now = new Date().toISOString();
     const passwordHash = await bcrypt.hash(input.password, 10);
@@ -383,90 +410,98 @@ class Database {
       updatedAt: now,
     };
 
-    await this.runAsync(
-      `INSERT INTO users (id, username, email, passwordHash, role, isActive, profilePhoto, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [user.id, user.username, user.email, user.passwordHash, user.role, 1, null, user.createdAt, user.updatedAt]
-    );
+    this.db.insert(users).values({
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      passwordHash: user.passwordHash,
+      role: user.role,
+      isActive: true,
+      profilePhoto: null,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    }).run();
 
     return user;
   }
 
   public async updateUser(id: string, updates: Partial<Pick<User, 'username' | 'email' | 'role' | 'isActive' | 'profilePhoto'>>): Promise<User | undefined> {
-    await this.ready;
     const existing = await this.getUserById(id);
     if (!existing) return undefined;
 
     const updatedAt = new Date().toISOString();
     const updated: User = { ...existing, ...updates, updatedAt };
 
-    await this.runAsync(
-      `UPDATE users SET username = ?, email = ?, role = ?, isActive = ?, profilePhoto = ?, updatedAt = ? WHERE id = ?`,
-      [updated.username, updated.email, updated.role, updated.isActive ? 1 : 0, updated.profilePhoto, updatedAt, id]
-    );
+    this.db.update(users).set({
+      username: updated.username,
+      email: updated.email,
+      role: updated.role,
+      isActive: updated.isActive,
+      profilePhoto: updated.profilePhoto,
+      updatedAt,
+    }).where(eq(users.id, id)).run();
 
     return updated;
   }
 
   public async updateUserPassword(id: string, newPasswordHash: string): Promise<boolean> {
-    await this.ready;
     const updatedAt = new Date().toISOString();
-    const result = await this.runAsync(
-      `UPDATE users SET passwordHash = ?, updatedAt = ? WHERE id = ?`,
-      [newPasswordHash, updatedAt, id]
-    );
-    return (result.changes ?? 0) > 0;
+    const result = this.db.update(users).set({
+      passwordHash: newPasswordHash,
+      updatedAt,
+    }).where(eq(users.id, id)).run();
+    return result.changes > 0;
   }
 
   public async deleteUser(id: string): Promise<boolean> {
-    await this.ready;
-    const result = await this.runAsync('DELETE FROM users WHERE id = ?', [id]);
-    return (result.changes ?? 0) > 0;
+    const result = this.db.delete(users).where(eq(users.id, id)).run();
+    return result.changes > 0;
   }
 
   // ─── Collections ─────────────────────────────────────────────────────────────
 
-  private mapCollectionRow(row: Record<string, unknown>): Collection {
+  private mapCollectionRow(row: typeof collections.$inferSelect): Collection {
     return {
       ...row,
+      description: row.description || '',
+      icon: row.icon || '',
+      color: row.color || '#4F46E5',
       isDefault: !!(row.isDefault),
-      tags: JSON.parse((row.tags as string) || '[]'),
-    } as Collection;
+      visibility: (row.visibility || 'private') as 'private' | 'public' | 'shared',
+      tags: row.tags ?? [],
+    };
   }
 
   public async getAllCollections(userId?: string): Promise<Collection[]> {
-    await this.ready;
-    let rows: Record<string, unknown>[];
+    let rows: (typeof collections.$inferSelect)[];
     if (userId) {
-      rows = await this.allAsync<Record<string, unknown>>(
-        'SELECT * FROM collections WHERE userId = ? ORDER BY isDefault DESC, name ASC',
-        [userId]
-      );
+      rows = this.db.select().from(collections)
+        .where(eq(collections.userId, userId))
+        .orderBy(desc(collections.isDefault), asc(collections.name))
+        .all();
     } else {
-      rows = await this.allAsync<Record<string, unknown>>('SELECT * FROM collections ORDER BY createdAt DESC');
+      rows = this.db.select().from(collections)
+        .orderBy(desc(collections.createdAt))
+        .all();
     }
     return rows.map(row => this.mapCollectionRow(row));
   }
 
   public async getCollectionById(id: string): Promise<Collection | undefined> {
-    await this.ready;
-    const row = await this.getAsync<Record<string, unknown>>('SELECT * FROM collections WHERE id = ?', [id]);
+    const row = this.db.select().from(collections).where(eq(collections.id, id)).get();
     if (!row) return undefined;
     return this.mapCollectionRow(row);
   }
 
   public async getDefaultCollection(userId: string): Promise<Collection | undefined> {
-    await this.ready;
-    const row = await this.getAsync<Record<string, unknown>>(
-      'SELECT * FROM collections WHERE userId = ? AND isDefault = 1',
-      [userId]
-    );
+    const row = this.db.select().from(collections)
+      .where(and(eq(collections.userId, userId), eq(collections.isDefault, true)))
+      .get();
     if (!row) return undefined;
     return this.mapCollectionRow(row);
   }
 
   public async createCollection(input: CollectionInput): Promise<Collection> {
-    await this.ready;
     const id = uuidv4();
     const now = new Date().toISOString();
 
@@ -484,19 +519,24 @@ class Database {
       updatedAt: now,
     };
 
-    await this.runAsync(
-      `INSERT INTO collections (id, userId, name, description, icon, color, isDefault, visibility, tags, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [collection.id, collection.userId, collection.name, collection.description,
-       collection.icon, collection.color, collection.isDefault ? 1 : 0,
-       collection.visibility, JSON.stringify(collection.tags), collection.createdAt, collection.updatedAt]
-    );
+    this.db.insert(collections).values({
+      id: collection.id,
+      userId: collection.userId,
+      name: collection.name,
+      description: collection.description,
+      icon: collection.icon,
+      color: collection.color,
+      isDefault: collection.isDefault,
+      visibility: collection.visibility,
+      tags: collection.tags,
+      createdAt: collection.createdAt,
+      updatedAt: collection.updatedAt,
+    }).run();
 
     return collection;
   }
 
   public async updateCollection(id: string, updates: Partial<Omit<Collection, 'id' | 'userId' | 'createdAt'>>): Promise<Collection | undefined> {
-    await this.ready;
     const existing = await this.getCollectionById(id);
     if (!existing) return undefined;
 
@@ -507,73 +547,71 @@ class Database {
       updatedAt,
     };
 
-    await this.runAsync(
-      `UPDATE collections SET name = ?, description = ?, icon = ?, color = ?, isDefault = ?, visibility = ?, tags = ?, updatedAt = ? WHERE id = ?`,
-      [updated.name, updated.description, updated.icon, updated.color,
-       updated.isDefault ? 1 : 0, updated.visibility, JSON.stringify(updated.tags),
-       updatedAt, id]
-    );
+    this.db.update(collections).set({
+      name: updated.name,
+      description: updated.description,
+      icon: updated.icon,
+      color: updated.color,
+      isDefault: updated.isDefault,
+      visibility: updated.visibility,
+      tags: updated.tags,
+      updatedAt,
+    }).where(eq(collections.id, id)).run();
 
     return updated;
   }
 
   public async setCollectionAsDefault(collectionId: string, userId: string): Promise<void> {
-    await this.ready;
     // Unset any existing default for this user
-    await this.runAsync(
-      'UPDATE collections SET isDefault = 0 WHERE userId = ? AND isDefault = 1',
-      [userId]
-    );
+    this.db.update(collections).set({ isDefault: false })
+      .where(and(eq(collections.userId, userId), eq(collections.isDefault, true)))
+      .run();
     // Set the new default
-    await this.runAsync(
-      'UPDATE collections SET isDefault = 1 WHERE id = ? AND userId = ?',
-      [collectionId, userId]
-    );
+    this.db.update(collections).set({ isDefault: true })
+      .where(and(eq(collections.id, collectionId), eq(collections.userId, userId)))
+      .run();
   }
 
   public async getCollectionStats(collectionId: string): Promise<CollectionStats> {
-    await this.ready;
-    const cards = await this.allAsync<Record<string, unknown>>(
-      'SELECT category, currentValue, purchasePrice FROM cards WHERE collectionId = ?',
-      [collectionId]
-    );
+    const rows = this.db.select({
+      category: cards.category,
+      currentValue: cards.currentValue,
+      purchasePrice: cards.purchasePrice,
+    }).from(cards)
+      .where(eq(cards.collectionId, collectionId))
+      .all();
 
     const stats: CollectionStats = {
-      cardCount: cards.length,
-      totalValue: cards.reduce((sum, c) => sum + (c.currentValue as number), 0),
-      totalCost: cards.reduce((sum, c) => sum + (c.purchasePrice as number), 0),
+      cardCount: rows.length,
+      totalValue: rows.reduce((sum, c) => sum + c.currentValue, 0),
+      totalCost: rows.reduce((sum, c) => sum + c.purchasePrice, 0),
       categoryBreakdown: {}
     };
 
-    cards.forEach(card => {
-      const cat = card.category as string;
-      stats.categoryBreakdown[cat] = (stats.categoryBreakdown[cat] || 0) + 1;
+    rows.forEach(card => {
+      stats.categoryBreakdown[card.category] = (stats.categoryBreakdown[card.category] || 0) + 1;
     });
 
     return stats;
   }
 
   public async moveCardsToCollection(cardIds: string[], targetCollectionId: string): Promise<number> {
-    await this.ready;
     const updatedAt = new Date().toISOString();
     let moved = 0;
     for (const cardId of cardIds) {
-      const result = await this.runAsync(
-        'UPDATE cards SET collectionId = ?, updatedAt = ? WHERE id = ?',
-        [targetCollectionId, updatedAt, cardId]
-      );
-      if ((result.changes ?? 0) > 0) moved++;
+      const result = this.db.update(cards).set({
+        collectionId: targetCollectionId,
+        updatedAt,
+      }).where(eq(cards.id, cardId)).run();
+      if (result.changes > 0) moved++;
     }
     return moved;
   }
 
   public async initializeUserCollections(userId: string): Promise<Collection> {
-    await this.ready;
-    // Check if default already exists
     const existing = await this.getDefaultCollection(userId);
     if (existing) return existing;
 
-    // Create default collection
     return this.createCollection({
       userId,
       name: 'My Collection',
@@ -587,60 +625,47 @@ class Database {
   }
 
   public async deleteCollection(id: string): Promise<boolean> {
-    await this.ready;
-    const result = await this.runAsync('DELETE FROM collections WHERE id = ?', [id]);
-    return (result.changes ?? 0) > 0;
+    const result = this.db.delete(collections).where(eq(collections.id, id)).run();
+    return result.changes > 0;
   }
 
   // ─── Jobs ────────────────────────────────────────────────────────────────────
 
-  public async getAllJobs(filters?: { status?: JobStatus; type?: string; limit?: number }): Promise<Job[]> {
-    await this.ready;
-    let sql = 'SELECT * FROM jobs';
-    const params: unknown[] = [];
-    const conditions: string[] = [];
-
-    if (filters?.status) {
-      conditions.push('status = ?');
-      params.push(filters.status);
-    }
-    if (filters?.type) {
-      conditions.push('type = ?');
-      params.push(filters.type);
-    }
-    if (conditions.length > 0) {
-      sql += ' WHERE ' + conditions.join(' AND ');
-    }
-    sql += ' ORDER BY createdAt DESC';
-    if (filters?.limit) {
-      sql += ' LIMIT ?';
-      params.push(filters.limit);
-    }
-
-    const rows = await this.allAsync<Record<string, unknown>>(sql, params);
-    return rows.map(row => ({
+  private mapJobRow(row: typeof jobs.$inferSelect): Job {
+    return {
       ...row,
-      payload: JSON.parse((row.payload as string) || '{}'),
-      result: row.result ? JSON.parse(row.result as string) : null,
-    })) as Job[];
+      status: row.status as JobStatus,
+      payload: (row.payload ?? {}) as Record<string, unknown>,
+      result: (row.result ?? null) as Record<string, unknown> | null,
+      error: row.error ?? null,
+    };
+  }
+
+  public async getAllJobs(filters?: { status?: JobStatus; type?: string; limit?: number }): Promise<Job[]> {
+    const conditions = [];
+    if (filters?.status) conditions.push(eq(jobs.status, filters.status));
+    if (filters?.type) conditions.push(eq(jobs.type, filters.type));
+
+    let query = this.db.select().from(jobs)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(jobs.createdAt))
+      .$dynamic();
+
+    if (filters?.limit) {
+      query = query.limit(filters.limit);
+    }
+
+    const rows = query.all();
+    return rows.map(row => this.mapJobRow(row));
   }
 
   public async getJobById(id: string): Promise<Job | undefined> {
-    await this.ready;
-    const row = await this.getAsync<Record<string, unknown>>(
-      'SELECT * FROM jobs WHERE id = ?',
-      [id]
-    );
+    const row = this.db.select().from(jobs).where(eq(jobs.id, id)).get();
     if (!row) return undefined;
-    return {
-      ...row,
-      payload: JSON.parse((row.payload as string) || '{}'),
-      result: row.result ? JSON.parse(row.result as string) : null,
-    } as Job;
+    return this.mapJobRow(row);
   }
 
   public async createJob(input: JobInput): Promise<Job> {
-    await this.ready;
     const id = uuidv4();
     const now = new Date().toISOString();
 
@@ -658,52 +683,56 @@ class Database {
       updatedAt: now,
     };
 
-    await this.runAsync(
-      `INSERT INTO jobs (id, type, status, payload, result, error, progress, totalItems, completedItems, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [job.id, job.type, job.status, JSON.stringify(job.payload), null, null, 0, 0, 0, job.createdAt, job.updatedAt]
-    );
+    this.db.insert(jobs).values({
+      id: job.id,
+      type: job.type,
+      status: job.status,
+      payload: job.payload,
+      result: null,
+      error: null,
+      progress: 0,
+      totalItems: 0,
+      completedItems: 0,
+      createdAt: job.createdAt,
+      updatedAt: job.updatedAt,
+    }).run();
 
     return job;
   }
 
   public async updateJob(id: string, updates: Partial<Pick<Job, 'status' | 'result' | 'error' | 'progress' | 'totalItems' | 'completedItems'>>): Promise<Job | undefined> {
-    await this.ready;
     const existing = await this.getJobById(id);
     if (!existing) return undefined;
 
     const updatedAt = new Date().toISOString();
     const updated: Job = { ...existing, ...updates, updatedAt };
 
-    await this.runAsync(
-      `UPDATE jobs SET status = ?, result = ?, error = ?, progress = ?, totalItems = ?, completedItems = ?, updatedAt = ? WHERE id = ?`,
-      [
-        updated.status, updated.result ? JSON.stringify(updated.result) : null,
-        updated.error, updated.progress, updated.totalItems, updated.completedItems,
-        updatedAt, id,
-      ]
-    );
+    this.db.update(jobs).set({
+      status: updated.status,
+      result: updated.result,
+      error: updated.error,
+      progress: updated.progress,
+      totalItems: updated.totalItems,
+      completedItems: updated.completedItems,
+      updatedAt,
+    }).where(eq(jobs.id, id)).run();
 
     return updated;
   }
 
   public async getNextPendingJob(): Promise<Job | undefined> {
-    await this.ready;
-    const row = await this.getAsync<Record<string, unknown>>(
-      `SELECT * FROM jobs WHERE status = 'pending' ORDER BY createdAt ASC LIMIT 1`
-    );
+    const row = this.db.select().from(jobs)
+      .where(eq(jobs.status, 'pending'))
+      .orderBy(asc(jobs.createdAt))
+      .limit(1)
+      .get();
     if (!row) return undefined;
-    return {
-      ...row,
-      payload: JSON.parse((row.payload as string) || '{}'),
-      result: row.result ? JSON.parse(row.result as string) : null,
-    } as Job;
+    return this.mapJobRow(row);
   }
 
   // ─── Audit Logs ─────────────────────────────────────────────────────────────
 
   public async insertAuditLog(input: AuditLogInput): Promise<AuditLogEntry> {
-    await this.ready;
     const id = uuidv4();
     const createdAt = new Date().toISOString();
 
@@ -718,82 +747,70 @@ class Database {
       createdAt,
     };
 
-    await this.runAsync(
-      `INSERT INTO audit_logs (id, userId, action, entity, entityId, details, ipAddress, createdAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [entry.id, entry.userId, entry.action, entry.entity, entry.entityId,
-       entry.details ? JSON.stringify(entry.details) : null, entry.ipAddress, entry.createdAt]
-    );
+    this.db.insert(auditLogs).values({
+      id: entry.id,
+      userId: entry.userId,
+      action: entry.action,
+      entity: entry.entity,
+      entityId: entry.entityId,
+      details: entry.details,
+      ipAddress: entry.ipAddress,
+      createdAt: entry.createdAt,
+    }).run();
 
     return entry;
   }
 
   public async queryAuditLogs(query: AuditLogQuery): Promise<{ entries: AuditLogEntry[]; total: number }> {
-    await this.ready;
-    const conditions: string[] = [];
-    const params: unknown[] = [];
+    const conditions = [];
+    if (query.userId) conditions.push(eq(auditLogs.userId, query.userId));
+    if (query.action) conditions.push(eq(auditLogs.action, query.action));
+    if (query.entity) conditions.push(eq(auditLogs.entity, query.entity));
+    if (query.entityId) conditions.push(eq(auditLogs.entityId, query.entityId));
 
-    if (query.userId) {
-      conditions.push('userId = ?');
-      params.push(query.userId);
-    }
-    if (query.action) {
-      conditions.push('action = ?');
-      params.push(query.action);
-    }
-    if (query.entity) {
-      conditions.push('entity = ?');
-      params.push(query.entity);
-    }
-    if (query.entityId) {
-      conditions.push('entityId = ?');
-      params.push(query.entityId);
-    }
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-    const whereClause = conditions.length > 0 ? ' WHERE ' + conditions.join(' AND ') : '';
-
-    const countRow = await this.getAsync<{ count: number }>(`SELECT COUNT(*) as count FROM audit_logs${whereClause}`, params);
-    const total = countRow?.count ?? 0;
+    const countResult = this.db.select({ value: count() }).from(auditLogs).where(whereClause).get();
+    const total = countResult?.value ?? 0;
 
     const allowedSortColumns = ['createdAt', 'action', 'entity', 'entityId'];
     const sortCol = query.sortBy && allowedSortColumns.includes(query.sortBy) ? query.sortBy : 'createdAt';
     const sortDir = query.sortDirection === 'asc' ? 'ASC' : 'DESC';
-    let sql = `SELECT * FROM audit_logs${whereClause} ORDER BY ${sortCol} ${sortDir}`;
-    const queryParams = [...params];
 
     const limit = query.limit ?? 50;
-    sql += ' LIMIT ?';
-    queryParams.push(limit);
+
+    let dbQuery = this.db.select().from(auditLogs)
+      .where(whereClause)
+      .orderBy(sql.raw(`${sortCol} ${sortDir}`))
+      .limit(limit)
+      .$dynamic();
 
     if (query.offset) {
-      sql += ' OFFSET ?';
-      queryParams.push(query.offset);
+      dbQuery = dbQuery.offset(query.offset);
     }
 
-    const rows = await this.allAsync<Record<string, unknown>>(sql, queryParams);
+    const rows = dbQuery.all();
     const entries: AuditLogEntry[] = rows.map(row => ({
       ...row,
-      details: row.details ? JSON.parse(row.details as string) : null,
-    })) as AuditLogEntry[];
+      details: (row.details ?? null) as Record<string, unknown> | null,
+    }));
 
     return { entries, total };
   }
 
   public async getDistinctAuditActions(): Promise<string[]> {
-    await this.ready;
-    const rows = await this.allAsync<{ action: string }>('SELECT DISTINCT action FROM audit_logs ORDER BY action');
+    const rows = this.db.selectDistinct({ action: auditLogs.action })
+      .from(auditLogs)
+      .orderBy(asc(auditLogs.action))
+      .all();
     return rows.map(r => r.action);
   }
 
   // ─── Lifecycle ───────────────────────────────────────────────────────────────
 
   public close(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.db.close((err) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
+    this.sqlite.close();
+    return Promise.resolve();
   }
 }
 
