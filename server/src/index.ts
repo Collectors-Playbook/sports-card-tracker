@@ -20,6 +20,7 @@ import { createImageProcessingRoutes } from './routes/imageProcessing';
 import CompService from './services/compService';
 import AnthropicVisionService from './services/anthropicVisionService';
 import ImageProcessingService from './services/imageProcessingService';
+import ImageCropService from './services/imageCropService';
 import EbayExportService from './services/ebayExportService';
 import AuditService from './services/auditService';
 import { createEbayRoutes } from './routes/ebay';
@@ -37,7 +38,8 @@ const eventService = new EventService();
 const jobService = new JobService(db, eventService);
 const compService = new CompService(fileService);
 const visionService = new AnthropicVisionService();
-const imageProcessingService = new ImageProcessingService(fileService, db, visionService);
+const imageCropService = new ImageCropService();
+const imageProcessingService = new ImageProcessingService(fileService, db, visionService, imageCropService);
 const ebayExportService = new EbayExportService(db, fileService);
 const auditService = new AuditService(db);
 
@@ -159,4 +161,4 @@ if (require.main === module) {
   })();
 }
 
-export { app, db, fileService, eventService, jobService, compService, visionService, imageProcessingService, ebayExportService, auditService };
+export { app, db, fileService, eventService, jobService, compService, visionService, imageCropService, imageProcessingService, ebayExportService, auditService };
