@@ -449,6 +449,7 @@ class ImageProcessingService {
       currentValue: 0,
       images,
       notes: '',
+      collectionType: 'Pending',
     };
   }
 
