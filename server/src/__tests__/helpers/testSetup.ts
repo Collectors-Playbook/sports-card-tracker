@@ -22,6 +22,7 @@ import { createAuthRoutes } from '../../routes/auth';
 import { createCompRoutes } from '../../routes/comps';
 import { createImageProcessingRoutes } from '../../routes/imageProcessing';
 import { createEbayRoutes } from '../../routes/ebay';
+import { createAuditLogRoutes } from '../../routes/auditLogs';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
@@ -85,6 +86,7 @@ export async function createTestApp(): Promise<TestContext> {
   app.use('/api/comps', createCompRoutes(db, compService));
   app.use('/api/image-processing', createImageProcessingRoutes(db, imageProcessingService, fileService, auditService));
   app.use('/api/ebay', createEbayRoutes(db, ebayExportService, auditService));
+  app.use('/api/audit-logs', createAuditLogRoutes(auditService));
 
   app.use(errorHandler);
 
