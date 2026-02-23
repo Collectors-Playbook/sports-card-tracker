@@ -1,6 +1,7 @@
 import path from 'path';
 import FileService from './fileService';
 import AnthropicVisionService from './anthropicVisionService';
+import ImageCropService from './imageCropService';
 import Database from '../database';
 import {
   ImageProcessingPayload,
@@ -15,8 +16,25 @@ class ImageProcessingService {
   constructor(
     private fileService: FileService,
     private db: Database,
-    private visionService: AnthropicVisionService
+    private visionService: AnthropicVisionService,
+    private cropService?: ImageCropService
   ) {}
+
+  private async copyOrCropFile(
+    srcDir: string,
+    srcFilename: string,
+    destDir: string,
+    destFilename: string
+  ): Promise<boolean> {
+    if (this.cropService) {
+      const srcPath = this.fileService.getFilePath(srcDir, srcFilename);
+      const destPath = this.fileService.getFilePath(destDir, destFilename);
+      if (!srcPath || !destPath) return false;
+      const result = await this.cropService.cropAndSave(srcPath, destPath);
+      return result.success;
+    }
+    return this.fileService.copyFile(srcDir, srcFilename, destDir, destFilename);
+  }
 
   async processImages(
     payload: ImageProcessingPayload,
@@ -131,8 +149,8 @@ class ImageProcessingService {
         return { filename, status: 'duplicate', confidence: cardData.confidence?.score, error };
       }
 
-      this.fileService.copyFile(rawDir, filename, processedDir, processedFront);
-      this.fileService.copyFile(rawDir, backFile, processedDir, processedBack);
+      await this.copyOrCropFile(rawDir, filename, processedDir, processedFront);
+      await this.copyOrCropFile(rawDir, backFile, processedDir, processedBack);
 
       const card = await this.db.createCard(
         this.buildCardInput(cardData, [processedFront, processedBack])
@@ -162,7 +180,7 @@ class ImageProcessingService {
       return { filename, status: 'duplicate', confidence: cardData.confidence?.score, error };
     }
 
-    const copied = this.fileService.copyFile(
+    const copied = await this.copyOrCropFile(
       rawDir, filename,
       processedDir, processedFilename
     );
@@ -221,8 +239,8 @@ class ImageProcessingService {
       return { filename, status: 'duplicate', confidence, error };
     }
 
-    // Copy to processed directory
-    const copied = this.fileService.copyFile(
+    // Copy (with auto-crop) to processed directory
+    const copied = await this.copyOrCropFile(
       rawDir, filename,
       this.fileService.getProcessedDir(), processedFilename
     );
@@ -286,8 +304,8 @@ class ImageProcessingService {
     }
 
     const processedDir = this.fileService.getProcessedDir();
-    this.fileService.copyFile(rawDir, frontFile, processedDir, processedFront);
-    this.fileService.copyFile(rawDir, backFile, processedDir, processedBack);
+    await this.copyOrCropFile(rawDir, frontFile, processedDir, processedFront);
+    await this.copyOrCropFile(rawDir, backFile, processedDir, processedBack);
 
     const card = await this.db.createCard(
       this.buildCardInput(data, [processedFront, processedBack])

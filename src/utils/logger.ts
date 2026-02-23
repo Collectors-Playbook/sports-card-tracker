@@ -46,9 +46,23 @@ class Logger {
 
   private saveLogs() {
     try {
-      sessionStorage.setItem('app-logs', JSON.stringify(this.logs));
-    } catch (error) {
-      console.error('Failed to save logs:', error);
+      // Persist only lightweight fields; data/error are for console output only
+      const slim = this.logs.map(({ timestamp, level, component, message }) => ({
+        timestamp, level, component, message
+      }));
+      sessionStorage.setItem('app-logs', JSON.stringify(slim));
+    } catch {
+      // If still too large, drop the oldest half and retry
+      this.logs = this.logs.slice(this.logs.length >> 1);
+      try {
+        const slim = this.logs.map(({ timestamp, level, component, message }) => ({
+          timestamp, level, component, message
+        }));
+        sessionStorage.setItem('app-logs', JSON.stringify(slim));
+      } catch {
+        // Give up persisting rather than spamming the console
+        sessionStorage.removeItem('app-logs');
+      }
     }
   }
 
