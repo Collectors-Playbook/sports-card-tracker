@@ -1,0 +1,332 @@
+.grading-roi-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1001;
+  padding: 20px;
+}
+
+.grading-roi-container {
+  background: white;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 900px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.grading-roi-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 20px 24px;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.grading-roi-header h2 {
+  margin: 0;
+  color: #333;
+  font-size: 22px;
+}
+
+.grading-roi-card-name {
+  margin: 4px 0 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.grading-roi-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #666;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.grading-roi-close:hover {
+  background: #f0f0f0;
+  color: #333;
+}
+
+.grading-roi-body {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 24px;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.grading-roi-inputs h3,
+.gr-projections h3 {
+  margin: 0 0 16px;
+  font-size: 16px;
+  color: #333;
+  font-weight: 600;
+}
+
+/* Input fields */
+.gr-field {
+  margin-bottom: 16px;
+}
+
+.gr-field label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #555;
+}
+
+.gr-field select {
+  width: 100%;
+  padding: 10px;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: border-color 0.2s;
+  background: white;
+}
+
+.gr-field select:focus {
+  outline: none;
+  border-color: #007bff;
+}
+
+.gr-input-wrapper {
+  display: flex;
+  align-items: center;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.gr-input-wrapper:focus-within {
+  border-color: #007bff;
+}
+
+.gr-input-prefix {
+  padding: 8px 10px;
+  background: #f8f9fa;
+  color: #666;
+  font-weight: 600;
+  font-size: 14px;
+  border-right: 1px solid #e0e0e0;
+}
+
+.gr-input-wrapper input {
+  flex: 1;
+  padding: 8px 10px;
+  border: none;
+  outline: none;
+  font-size: 14px;
+  width: 100%;
+}
+
+.gr-submitted-notice {
+  padding: 10px 12px;
+  background: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffc107;
+  border-radius: 6px;
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+.gr-loading {
+  font-size: 13px;
+  color: #999;
+  font-style: italic;
+  margin-top: 8px;
+}
+
+/* Recommendation badge */
+.gr-recommendation {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.gr-recommendation.grade {
+  background: #d4edda;
+  border: 2px solid #28a745;
+}
+
+.gr-recommendation.dont-grade {
+  background: #f8d7da;
+  border: 2px solid #dc3545;
+}
+
+.gr-recommendation.borderline {
+  background: #fff3cd;
+  border: 2px solid #ffc107;
+}
+
+.gr-recommendation-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.gr-recommendation-value {
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.gr-recommendation.grade .gr-recommendation-value {
+  color: #155724;
+}
+
+.gr-recommendation.dont-grade .gr-recommendation-value {
+  color: #721c24;
+}
+
+.gr-recommendation.borderline .gr-recommendation-value {
+  color: #856404;
+}
+
+/* Summary grid */
+.gr-roi-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.gr-summary-item {
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 6px;
+}
+
+.gr-summary-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.gr-summary-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+}
+
+.gr-summary-value.positive {
+  color: #155724;
+}
+
+.gr-summary-value.negative {
+  color: #721c24;
+}
+
+/* Projections table */
+.gr-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.gr-table th {
+  text-align: left;
+  padding: 10px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.gr-table th:last-child,
+.gr-table td:last-child {
+  text-align: right;
+}
+
+.gr-table td {
+  padding: 10px 8px;
+  color: #555;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.gr-grade-cell {
+  font-weight: 600;
+  color: #333;
+}
+
+.gr-table td.positive {
+  color: #155724;
+  font-weight: 500;
+}
+
+.gr-table td.negative {
+  color: #721c24;
+  font-weight: 500;
+}
+
+.gr-break-even-row {
+  background: #e8f4fd;
+}
+
+.gr-break-even-row td {
+  border-bottom-color: #b8daff;
+}
+
+.gr-profit-row td:first-child {
+  border-left: 3px solid #28a745;
+}
+
+.gr-loss-row td:first-child {
+  border-left: 3px solid #dc3545;
+}
+
+@media (max-width: 768px) {
+  .grading-roi-modal {
+    padding: 10px;
+  }
+
+  .grading-roi-container {
+    max-height: 100vh;
+    border-radius: 0;
+  }
+
+  .grading-roi-body {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    padding: 16px;
+  }
+
+  .gr-roi-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .gr-recommendation-value {
+    font-size: 24px;
+  }
+}
