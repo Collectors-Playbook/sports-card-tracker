@@ -2,6 +2,7 @@ import React, { useState, memo, useCallback } from 'react';
 import { Card } from '../../types';
 import { exportDetailedCardReport } from '../../utils/pdfExport';
 import { EbayListingPreview } from '../EbayListing/EbayListingPreview';
+import { BreakEvenCalculator } from '../BreakEvenCalculator/BreakEvenCalculator';
 import './CardDetail.css';
 
 interface CardDetailProps {
@@ -13,6 +14,7 @@ interface CardDetailProps {
 const CardDetail: React.FC<CardDetailProps> = ({ card, onEdit, onClose }) => {
   const [imageIndex, setImageIndex] = useState(0);
   const [showEbayListing, setShowEbayListing] = useState(false);
+  const [showBreakEven, setShowBreakEven] = useState(false);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -65,6 +67,9 @@ const CardDetail: React.FC<CardDetailProps> = ({ card, onEdit, onClose }) => {
             </button>
             <button onClick={() => setShowEbayListing(true)} className="ebay-listing-btn" title="Generate eBay Listing">
               🛒 eBay
+            </button>
+            <button onClick={() => setShowBreakEven(true)} className="break-even-btn" title="Break-Even Calculator">
+              Break-Even
             </button>
             {onEdit && (
               <button onClick={() => onEdit(card)} className="edit-btn">
@@ -222,9 +227,15 @@ const CardDetail: React.FC<CardDetailProps> = ({ card, onEdit, onClose }) => {
       </div>
       
       {showEbayListing && (
-        <EbayListingPreview 
-          card={card} 
-          onClose={() => setShowEbayListing(false)} 
+        <EbayListingPreview
+          card={card}
+          onClose={() => setShowEbayListing(false)}
+        />
+      )}
+      {showBreakEven && (
+        <BreakEvenCalculator
+          card={card}
+          onClose={() => setShowBreakEven(false)}
         />
       )}
     </div>
