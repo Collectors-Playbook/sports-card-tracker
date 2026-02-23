@@ -339,3 +339,46 @@ export interface AuditLogQuery {
   sortBy?: 'createdAt' | 'action' | 'entity' | 'entityId';
   sortDirection?: 'asc' | 'desc';
 }
+
+// ─── Typed Audit Details ────────────────────────────────────────────────────
+
+export interface AuditDetailsMap {
+  'user.register': undefined;
+  'user.login': undefined;
+  'user.login_failed': { email: string };
+  'user.password_change': undefined;
+  'user.profile_update': { fields: string[] };
+  'file.upload': { count: number; files: { name: string; originalName: string; size: number }[] };
+  'file.upload_rejected': { error: string; code?: string };
+  'file.replace': undefined;
+  'file.delete_raw': undefined;
+  'file.delete_processed': undefined;
+  'log.clear': undefined;
+  'card.create': { player: string; year: number; brand: string };
+  'card.update': { player: string; year: number; brand: string };
+  'card.delete': undefined;
+  'job.create': { type: string };
+  'job.cancel': { type: string };
+  'collection.create': { name: string };
+  'collection.update': { name: string };
+  'collection.delete': undefined;
+  'collection.set-default': undefined;
+  'collection.move-cards': { cardCount: number };
+  'ebay.generate': { totalCards: number };
+  'ebay.generate_async': undefined;
+  'ebay.download': undefined;
+  'image.process_batch': { fileCount: number };
+  'image.process_sync': { status: string; cardId?: string };
+  'image.pair_detected': { backFile: string };
+  'image.identify': { backFile: string | null; confidenceScore?: number; confidenceLevel?: string; detectedFields?: number; missingFields?: string[] };
+  'image.identify_failed': { error: string; backFile: string | null };
+  'image.user_modifications': { modifications: { field: string; from: unknown; to: unknown }[] };
+  'image.confirm': { filename: string; backFile: string | null; processedFilename?: string; confidence?: number; status: string };
+  'vision.api_call': { model?: string; inputTokens?: number; outputTokens?: number; durationMs?: number; imageCount?: number; confidenceScore?: number; parseFailed: boolean };
+  'audit.delete': { deletedId: string };
+  'audit.delete_bulk': { deletedCount: number; requestedIds: string[] };
+  'audit.purge': { deletedCount: number; before: string; filters?: Record<string, string> };
+  'audit.export': { format: 'csv' | 'json'; entryCount: number; filters?: Record<string, string> };
+}
+
+export type AuditAction = keyof AuditDetailsMap;

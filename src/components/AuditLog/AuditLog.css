@@ -28,7 +28,7 @@
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
-  margin-bottom: 20px;
+  margin-bottom: 12px;
 }
 
 .audit-filter-bar select {
@@ -46,6 +46,77 @@
   outline: none;
   border-color: #007bff;
   box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.15);
+}
+
+/* Toolbar */
+.audit-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.audit-toolbar-left,
+.audit-toolbar-right {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.audit-btn {
+  padding: 7px 14px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.audit-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.audit-btn-danger {
+  background: #dc3545;
+  color: white;
+}
+
+.audit-btn-danger:hover:not(:disabled) {
+  background: #c82333;
+}
+
+.audit-btn-warning {
+  background: #f59e0b;
+  color: white;
+}
+
+.audit-btn-warning:hover:not(:disabled) {
+  background: #d97706;
+}
+
+.audit-btn-secondary {
+  background: #6b7280;
+  color: white;
+}
+
+.audit-btn-secondary:hover:not(:disabled) {
+  background: #4b5563;
+}
+
+/* Success Banner */
+.audit-success {
+  background: #d1fae5;
+  color: #065f46;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  font-weight: 500;
 }
 
 /* Error & Loading */
@@ -111,6 +182,16 @@
   white-space: nowrap;
 }
 
+.audit-checkbox-th {
+  width: 40px;
+  text-align: center !important;
+}
+
+.audit-actions-th {
+  width: 60px;
+  text-align: center !important;
+}
+
 .audit-sortable-th {
   cursor: pointer;
   user-select: none;
@@ -142,6 +223,31 @@
   border-bottom: none;
 }
 
+.audit-checkbox-cell {
+  text-align: center;
+  width: 40px;
+}
+
+.audit-actions-cell {
+  text-align: center;
+  width: 60px;
+}
+
+.audit-row-delete-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+
+.audit-row-delete-btn:hover {
+  opacity: 1;
+}
+
 .audit-row {
   cursor: pointer;
   transition: background 0.15s;
@@ -153,6 +259,14 @@
 
 .audit-row.expanded {
   background: #edf2f7;
+}
+
+.audit-row.selected {
+  background: #ebf5ff;
+}
+
+.audit-row.selected:hover {
+  background: #dbeafe;
 }
 
 .audit-empty {
@@ -220,6 +334,11 @@
   color: #4338ca;
 }
 
+.badge-audit {
+  background: #fef3c7;
+  color: #92400e;
+}
+
 .badge-default {
   background: #f3f4f6;
   color: #4b5563;
@@ -243,6 +362,68 @@
   overflow-x: auto;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* Purge Dialog */
+.audit-purge-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.audit-purge-dialog {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  width: 400px;
+  max-width: 90vw;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.audit-purge-dialog h3 {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  color: #333;
+}
+
+.audit-purge-dialog p {
+  margin: 0 0 16px 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.audit-purge-dialog label {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #555;
+}
+
+.audit-purge-dialog input[type="date"],
+.audit-purge-dialog select {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 8px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.audit-purge-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 20px;
+  justify-content: flex-end;
 }
 
 /* Pagination */
@@ -302,6 +483,21 @@
 
   .audit-filter-bar select {
     width: 100%;
+  }
+
+  .audit-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .audit-toolbar-left,
+  .audit-toolbar-right {
+    justify-content: stretch;
+  }
+
+  .audit-toolbar-left .audit-btn,
+  .audit-toolbar-right .audit-btn {
+    flex: 1;
   }
 
   .audit-table-wrapper {
