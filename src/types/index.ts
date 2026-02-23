@@ -6,11 +6,12 @@ export interface User {
   profilePhoto?: string | null;
 }
 
-export type CollectionType = 'PC' | 'Inventory';
+export type CollectionType = 'PC' | 'Inventory' | 'Pending';
 
 export const COLLECTION_TYPES: { value: CollectionType; label: string }[] = [
   { value: 'Inventory', label: 'Inventory (For Sale)' },
-  { value: 'PC', label: 'Personal Collection (Keep)' }
+  { value: 'PC', label: 'Personal Collection (Keep)' },
+  { value: 'Pending', label: 'Pending (Unsorted)' }
 ];
 
 export interface Card {
