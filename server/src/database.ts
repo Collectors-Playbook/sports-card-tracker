@@ -1,6 +1,6 @@
 import BetterSqlite3 from 'better-sqlite3';
 import { drizzle, BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
-import { eq, and, like, desc, asc, sql, count } from 'drizzle-orm';
+import { eq, and, like, desc, asc, sql, count, lt, inArray } from 'drizzle-orm';
 import { Card, CardInput, User, UserInput, Collection, CollectionInput, CollectionStats, Job, JobInput, JobStatus, AuditLogEntry, AuditLogInput, AuditLogQuery } from './types';
 import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
@@ -804,6 +804,50 @@ class Database {
       .orderBy(asc(auditLogs.action))
       .all();
     return rows.map(r => r.action);
+  }
+
+  public async deleteAuditLog(id: string): Promise<boolean> {
+    const result = this.db.delete(auditLogs).where(eq(auditLogs.id, id)).run();
+    return result.changes > 0;
+  }
+
+  public async deleteAuditLogs(ids: string[]): Promise<number> {
+    if (ids.length === 0) return 0;
+    const result = this.db.delete(auditLogs).where(inArray(auditLogs.id, ids)).run();
+    return result.changes;
+  }
+
+  public async purgeAuditLogs(before: string, filters?: { action?: string; entity?: string; userId?: string }): Promise<number> {
+    const conditions = [lt(auditLogs.createdAt, before)];
+    if (filters?.action) conditions.push(eq(auditLogs.action, filters.action));
+    if (filters?.entity) conditions.push(eq(auditLogs.entity, filters.entity));
+    if (filters?.userId) conditions.push(eq(auditLogs.userId, filters.userId));
+
+    const result = this.db.delete(auditLogs).where(and(...conditions)).run();
+    return result.changes;
+  }
+
+  public async exportAuditLogs(filters?: { action?: string; entity?: string; userId?: string; before?: string; after?: string }): Promise<AuditLogEntry[]> {
+    const conditions = [];
+    if (filters?.action) conditions.push(eq(auditLogs.action, filters.action));
+    if (filters?.entity) conditions.push(eq(auditLogs.entity, filters.entity));
+    if (filters?.userId) conditions.push(eq(auditLogs.userId, filters.userId));
+    if (filters?.before) conditions.push(lt(auditLogs.createdAt, filters.before));
+    if (filters?.after) {
+      // gt is not imported, use sql for after filter
+      conditions.push(sql`${auditLogs.createdAt} > ${filters.after}`);
+    }
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+    const rows = this.db.select().from(auditLogs)
+      .where(whereClause)
+      .orderBy(desc(auditLogs.createdAt))
+      .all();
+
+    return rows.map(row => ({
+      ...row,
+      details: (row.details ?? null) as Record<string, unknown> | null,
+    }));
   }
 
   // ─── Lifecycle ───────────────────────────────────────────────────────────────
