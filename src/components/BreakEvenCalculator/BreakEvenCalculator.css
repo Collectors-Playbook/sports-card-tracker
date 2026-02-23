@@ -1,0 +1,290 @@
+.break-even-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1001;
+  padding: 20px;
+}
+
+.break-even-container {
+  background: white;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 800px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.break-even-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 20px 24px;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.break-even-header h2 {
+  margin: 0;
+  color: #333;
+  font-size: 22px;
+}
+
+.break-even-card-name {
+  margin: 4px 0 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.break-even-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #666;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.break-even-close:hover {
+  background: #f0f0f0;
+  color: #333;
+}
+
+.break-even-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.break-even-inputs h3,
+.be-breakdown h3 {
+  margin: 0 0 16px;
+  font-size: 16px;
+  color: #333;
+  font-weight: 600;
+}
+
+.be-field {
+  margin-bottom: 16px;
+}
+
+.be-field label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #555;
+}
+
+.be-loading {
+  font-weight: normal;
+  color: #999;
+  font-style: italic;
+}
+
+.be-input-wrapper {
+  display: flex;
+  align-items: center;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.be-input-wrapper:focus-within {
+  border-color: #007bff;
+}
+
+.be-input-prefix {
+  padding: 8px 10px;
+  background: #f8f9fa;
+  color: #666;
+  font-weight: 600;
+  font-size: 14px;
+  border-right: 1px solid #e0e0e0;
+}
+
+.be-input-wrapper input {
+  flex: 1;
+  padding: 8px 10px;
+  border: none;
+  outline: none;
+  font-size: 14px;
+  width: 100%;
+}
+
+.be-field select {
+  width: 100%;
+  padding: 10px;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: border-color 0.2s;
+  background: white;
+}
+
+.be-field select:focus {
+  outline: none;
+  border-color: #007bff;
+}
+
+.be-divider {
+  height: 1px;
+  background: #e0e0e0;
+  margin: 20px 0;
+}
+
+/* Results */
+.be-break-even-price {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.be-break-even-price .be-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.be-break-even-price .be-price {
+  font-size: 32px;
+  font-weight: 700;
+  color: #333;
+}
+
+.be-value-comparison {
+  padding: 12px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.be-value-comparison.above {
+  background: #d4edda;
+  color: #155724;
+}
+
+.be-value-comparison.below {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+/* Cost breakdown table */
+.be-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.be-table td {
+  padding: 8px 0;
+  color: #555;
+}
+
+.be-table td:last-child {
+  text-align: right;
+  font-weight: 500;
+  color: #333;
+}
+
+.be-table tr.be-subtotal td {
+  border-top: 1px solid #e0e0e0;
+  font-weight: 600;
+  color: #333;
+  padding-top: 10px;
+}
+
+/* Profit result */
+.be-profit-result {
+  margin-top: 16px;
+  padding: 16px;
+  border-radius: 8px;
+}
+
+.be-profit-result.profit {
+  background: #d4edda;
+  border: 1px solid #c3e6cb;
+}
+
+.be-profit-result.loss {
+  background: #f8d7da;
+  border: 1px solid #f5c6cb;
+}
+
+.be-profit-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: 14px;
+  color: #555;
+}
+
+.be-profit-row span:last-child {
+  font-weight: 500;
+}
+
+.be-profit-net {
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  margin-top: 6px;
+  padding-top: 8px;
+  font-weight: 600;
+}
+
+.be-profit-net span {
+  color: #333;
+  font-size: 16px;
+}
+
+.be-profit-result.profit .be-profit-net span:last-child {
+  color: #155724;
+}
+
+.be-profit-result.loss .be-profit-net span:last-child {
+  color: #721c24;
+}
+
+@media (max-width: 768px) {
+  .break-even-modal {
+    padding: 10px;
+  }
+
+  .break-even-container {
+    max-height: 100vh;
+    border-radius: 0;
+  }
+
+  .break-even-body {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    padding: 16px;
+  }
+
+  .be-break-even-price .be-price {
+    font-size: 26px;
+  }
+}
