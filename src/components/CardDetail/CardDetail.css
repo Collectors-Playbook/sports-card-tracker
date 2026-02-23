@@ -95,6 +95,24 @@
   background: #0547a0;
 }
 
+.break-even-btn {
+  padding: 8px 12px;
+  background: #6f42c1;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.break-even-btn:hover {
+  background: #5a32a3;
+}
+
 .close-btn {
   background: none;
   border: none;
