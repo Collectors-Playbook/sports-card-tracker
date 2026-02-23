@@ -307,6 +307,55 @@ export interface DetectionConfidence {
   missingFields?: string[];
 }
 
+// ─── Grading Submissions ────────────────────────────────────────────────────
+
+export type GradingStatus = 'Submitted' | 'Received' | 'Grading' | 'Shipped' | 'Complete';
+export type GradingCompany = 'PSA' | 'BGS' | 'SGC' | 'CGC' | 'HGA' | 'Other';
+export type GradingTier = 'Economy' | 'Regular' | 'Express' | 'Super Express' | 'Walk-Through';
+
+export interface GradingSubmission {
+  id: string;
+  userId: string;
+  cardId: string;
+  gradingCompany: GradingCompany;
+  submissionNumber: string;
+  status: GradingStatus;
+  tier: GradingTier;
+  cost: number;
+  declaredValue: number;
+  submittedAt: string;
+  receivedAt: string | null;
+  gradingAt: string | null;
+  shippedAt: string | null;
+  completedAt: string | null;
+  estimatedReturnDate: string | null;
+  grade: string | null;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GradingSubmissionInput {
+  cardId: string;
+  gradingCompany: GradingCompany;
+  submissionNumber: string;
+  tier: GradingTier;
+  cost: number;
+  declaredValue?: number;
+  submittedAt: string;
+  estimatedReturnDate?: string;
+  notes?: string;
+}
+
+export interface GradingStats {
+  totalSubmissions: number;
+  pending: number;
+  complete: number;
+  totalCost: number;
+  avgTurnaroundDays: number | null;
+  avgGrade: number | null;
+}
+
 // ─── Audit Log ──────────────────────────────────────────────────────────────
 
 export interface AuditLogEntry {
@@ -385,6 +434,10 @@ export interface AuditDetailsMap {
   'admin.user_toggle_status': { userId: string; newStatus: boolean };
   'admin.user_change_role': { userId: string; oldRole: string; newRole: string };
   'admin.user_reset_password': { userId: string };
+  'grading.create': { cardId: string; gradingCompany: string; submissionNumber: string };
+  'grading.update_status': { submissionId: string; oldStatus: string; newStatus: string; grade?: string };
+  'grading.update': { submissionId: string; fields: string[] };
+  'grading.delete': { submissionId: string; cardId: string };
 }
 
 export type AuditAction = keyof AuditDetailsMap;

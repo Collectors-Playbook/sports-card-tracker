@@ -44,7 +44,8 @@ export type AuditAction =
   | 'vision.api_call'
   | 'audit.delete' | 'audit.delete_bulk' | 'audit.purge' | 'audit.export'
   | 'admin.user_create' | 'admin.user_update' | 'admin.user_delete'
-  | 'admin.user_toggle_status' | 'admin.user_change_role' | 'admin.user_reset_password';
+  | 'admin.user_toggle_status' | 'admin.user_change_role' | 'admin.user_reset_password'
+  | 'grading.create' | 'grading.update_status' | 'grading.update' | 'grading.delete';
 
 export interface AuditLogEntry {
   id: string;
@@ -698,6 +699,51 @@ class ApiService {
       method: 'DELETE',
     });
   }
+
+  // ─── Grading Submissions ──────────────────────────────────────────────────
+
+  public async getGradingSubmissions(filters?: { status?: string; cardId?: string }): Promise<GradingSubmission[]> {
+    const query = new URLSearchParams();
+    if (filters?.status) query.append('status', filters.status);
+    if (filters?.cardId) query.append('cardId', filters.cardId);
+    const qs = query.toString();
+    return this.request(`/grading-submissions${qs ? `?${qs}` : ''}`);
+  }
+
+  public async getGradingSubmission(id: string): Promise<GradingSubmission> {
+    return this.request(`/grading-submissions/${id}`);
+  }
+
+  public async getGradingStats(): Promise<GradingStats> {
+    return this.request('/grading-submissions/stats');
+  }
+
+  public async createGradingSubmission(data: GradingSubmissionInput): Promise<GradingSubmission> {
+    return this.request('/grading-submissions', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  public async updateGradingSubmission(id: string, data: Partial<GradingSubmissionInput>): Promise<GradingSubmission> {
+    return this.request(`/grading-submissions/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  public async updateGradingSubmissionStatus(id: string, status: string, grade?: string): Promise<GradingSubmission> {
+    return this.request(`/grading-submissions/${id}/status`, {
+      method: 'POST',
+      body: JSON.stringify({ status, ...(grade ? { grade } : {}) }),
+    });
+  }
+
+  public async deleteGradingSubmission(id: string): Promise<void> {
+    await this.request<void>(`/grading-submissions/${id}`, {
+      method: 'DELETE',
+    });
+  }
 }
 
 export interface AdminUser {
@@ -709,6 +755,49 @@ export interface AdminUser {
   profilePhoto: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface GradingSubmission {
+  id: string;
+  userId: string;
+  cardId: string;
+  gradingCompany: string;
+  submissionNumber: string;
+  status: string;
+  tier: string;
+  cost: number;
+  declaredValue: number;
+  submittedAt: string;
+  receivedAt: string | null;
+  gradingAt: string | null;
+  shippedAt: string | null;
+  completedAt: string | null;
+  estimatedReturnDate: string | null;
+  grade: string | null;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GradingSubmissionInput {
+  cardId: string;
+  gradingCompany: string;
+  submissionNumber: string;
+  tier: string;
+  cost: number;
+  declaredValue?: number;
+  submittedAt: string;
+  estimatedReturnDate?: string;
+  notes?: string;
+}
+
+export interface GradingStats {
+  totalSubmissions: number;
+  pending: number;
+  complete: number;
+  totalCost: number;
+  avgTurnaroundDays: number | null;
+  avgGrade: number | null;
 }
 
 export const apiService = new ApiService();
