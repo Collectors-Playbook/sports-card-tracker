@@ -5,11 +5,70 @@ import { exportCardsAsJSON, exportCardsAsCSV } from '../../utils/exportUtils';
 import { exportCardsToPDF } from '../../utils/pdfExport';
 import './Layout.css';
 
+type View = 'dashboard' | 'inventory' | 'add-card' | 'holding-pen' | 'processed' | 'admin' | 'profile' | 'reports' | 'ebay' | 'backup' | 'users' | 'collections' | 'about' | 'audit-log' | 'grading' | 'grading-roi' | 'heatmap';
+
 interface LayoutProps {
   children: React.ReactNode;
-  currentView: 'dashboard' | 'inventory' | 'add-card' | 'holding-pen' | 'processed' | 'admin' | 'profile' | 'reports' | 'ebay' | 'backup' | 'users' | 'collections' | 'about' | 'audit-log' | 'grading' | 'grading-roi' | 'heatmap';
-  onViewChange: (view: 'dashboard' | 'inventory' | 'add-card' | 'holding-pen' | 'processed' | 'admin' | 'profile' | 'reports' | 'ebay' | 'backup' | 'users' | 'collections' | 'about' | 'audit-log' | 'grading' | 'grading-roi' | 'heatmap') => void;
+  currentView: View;
+  onViewChange: (view: View) => void;
 }
+
+const NavGroup: React.FC<{
+  label: string;
+  items: { view: View; label: string }[];
+  currentView: View;
+  onViewChange: (view: View) => void;
+  onCloseMobile: () => void;
+}> = ({ label, items, currentView, onViewChange, onCloseMobile }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
+
+  const isActive = items.some(item => item.view === currentView);
+
+  return (
+    <div ref={ref} className={`nav-group ${isOpen ? 'open' : ''} ${isActive ? 'active' : ''}`}>
+      <button
+        className={`nav-item nav-group-trigger ${isActive ? 'active' : ''}`}
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        {label}
+        <svg className="nav-group-arrow" width="10" height="6" viewBox="0 0 10 6" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M1 1l4 4 4-4" />
+        </svg>
+      </button>
+      {isOpen && (
+        <div className="nav-group-dropdown">
+          <div className="nav-group-dropdown-inner">
+            {items.map(item => (
+              <button
+                key={item.view}
+                className={`nav-group-item ${currentView === item.view ? 'active' : ''}`}
+                onClick={() => {
+                  onViewChange(item.view);
+                  setIsOpen(false);
+                  onCloseMobile();
+                }}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const Layout: React.FC<LayoutProps> = ({ children, currentView, onViewChange }) => {
   const { state: authState, logout } = useAuth();
@@ -192,47 +251,19 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, onViewChange }) 
           >
             Dashboard
           </button>
-          
-          <button
-            className={`nav-item ${currentView === 'heatmap' ? 'active' : ''}`}
-            onClick={() => {
-              onViewChange('heatmap');
-              setIsMobileMenuOpen(false);
-            }}
-          >
-            Heatmap
-          </button>
 
-          <button
-            className={`nav-item ${currentView === 'collections' ? 'active' : ''}`}
-            onClick={() => {
-              onViewChange('collections');
-              setIsMobileMenuOpen(false);
-            }}
-          >
-            Collections
-          </button>
-          
-          <button
-            className={`nav-item ${currentView === 'inventory' ? 'active' : ''}`}
-            onClick={() => {
-              onViewChange('inventory');
-              setIsMobileMenuOpen(false);
-            }}
-          >
-            Inventory
-          </button>
-          
-          <button
-            className={`nav-item ${currentView === 'add-card' ? 'active' : ''}`}
-            onClick={() => {
-              onViewChange('add-card');
-              setIsMobileMenuOpen(false);
-            }}
-          >
-            Add Card
-          </button>
-          
+          <NavGroup
+            label="Collection"
+            items={[
+              { view: 'inventory', label: 'Inventory' },
+              { view: 'collections', label: 'Collections' },
+              { view: 'add-card', label: 'Add Card' },
+            ]}
+            currentView={currentView}
+            onViewChange={onViewChange}
+            onCloseMobile={() => setIsMobileMenuOpen(false)}
+          />
+
           <div ref={ingestionRef} className={`nav-group ${isIngestionOpen ? 'open' : ''} ${currentView === 'holding-pen' || currentView === 'processed' ? 'active' : ''}`}>
             <button
               className={`nav-item nav-group-trigger ${currentView === 'holding-pen' || currentView === 'processed' ? 'active' : ''}`}
@@ -271,16 +302,17 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, onViewChange }) 
             )}
           </div>
 
-          <button
-            className={`nav-item ${currentView === 'reports' ? 'active' : ''}`}
-            onClick={() => {
-              onViewChange('reports');
-              setIsMobileMenuOpen(false);
-            }}
-          >
-            Reports
-          </button>
-          
+          <NavGroup
+            label="Analytics"
+            items={[
+              { view: 'heatmap', label: 'Heatmap' },
+              { view: 'reports', label: 'Reports' },
+            ]}
+            currentView={currentView}
+            onViewChange={onViewChange}
+            onCloseMobile={() => setIsMobileMenuOpen(false)}
+          />
+
           <button
             className={`nav-item ${currentView === 'ebay' ? 'active' : ''}`}
             onClick={() => {
@@ -290,87 +322,42 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, onViewChange }) 
           >
             eBay Listings
           </button>
-          
-          <button
-            className={`nav-item ${currentView === 'grading' ? 'active' : ''}`}
-            onClick={() => {
-              onViewChange('grading');
-              setIsMobileMenuOpen(false);
-            }}
-          >
-            Grading
-          </button>
 
-          <button
-            className={`nav-item ${currentView === 'grading-roi' ? 'active' : ''}`}
-            onClick={() => {
-              onViewChange('grading-roi');
-              setIsMobileMenuOpen(false);
-            }}
-          >
-            Grade ROI
-          </button>
+          <NavGroup
+            label="Grading"
+            items={[
+              { view: 'grading', label: 'Grading Tracker' },
+              { view: 'grading-roi', label: 'Grade ROI' },
+            ]}
+            currentView={currentView}
+            onViewChange={onViewChange}
+            onCloseMobile={() => setIsMobileMenuOpen(false)}
+          />
 
-          <button
-            className={`nav-item ${currentView === 'profile' ? 'active' : ''}`}
-            onClick={() => {
-              onViewChange('profile');
-              setIsMobileMenuOpen(false);
-            }}
-          >
-            Profile
-          </button>
-          
-          <button
-            className={`nav-item ${currentView === 'backup' ? 'active' : ''}`}
-            onClick={() => {
-              onViewChange('backup');
-              setIsMobileMenuOpen(false);
-            }}
-          >
-            Backup
-          </button>
-          
-          <button
-            className={`nav-item ${currentView === 'about' ? 'active' : ''}`}
-            onClick={() => {
-              onViewChange('about');
-              setIsMobileMenuOpen(false);
-            }}
-          >
-            About
-          </button>
-          
+          <NavGroup
+            label="Account"
+            items={[
+              { view: 'profile', label: 'Profile' },
+              { view: 'backup', label: 'Backup' },
+              { view: 'about', label: 'About' },
+            ]}
+            currentView={currentView}
+            onViewChange={onViewChange}
+            onCloseMobile={() => setIsMobileMenuOpen(false)}
+          />
+
           {authState.user?.role === 'admin' && (
-            <>
-              <button
-                className={`nav-item ${currentView === 'admin' ? 'active' : ''}`}
-                onClick={() => {
-                  onViewChange('admin');
-                  setIsMobileMenuOpen(false);
-                }}
-              >
-                Admin
-              </button>
-              <button
-                className={`nav-item ${currentView === 'users' ? 'active' : ''}`}
-                onClick={() => {
-                  onViewChange('users');
-                  setIsMobileMenuOpen(false);
-                }}
-              >
-                Users
-              </button>
-              <button
-                className={`nav-item ${currentView === 'audit-log' ? 'active' : ''}`}
-                onClick={() => {
-                  onViewChange('audit-log');
-                  setIsMobileMenuOpen(false);
-                }}
-              >
-                Audit Log
-              </button>
-            </>
+            <NavGroup
+              label="Admin"
+              items={[
+                { view: 'admin', label: 'Admin' },
+                { view: 'users', label: 'Users' },
+                { view: 'audit-log', label: 'Audit Log' },
+              ]}
+              currentView={currentView}
+              onViewChange={onViewChange}
+              onCloseMobile={() => setIsMobileMenuOpen(false)}
+            />
           )}
         </div>
       </nav>
