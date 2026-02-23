@@ -111,6 +111,25 @@
   white-space: nowrap;
 }
 
+.audit-sortable-th {
+  cursor: pointer;
+  user-select: none;
+}
+
+.audit-sortable-th:hover {
+  background: #444;
+}
+
+.audit-sort-arrow {
+  margin-left: 4px;
+  font-size: 10px;
+  opacity: 0.4;
+}
+
+.audit-sort-arrow.active {
+  opacity: 1;
+}
+
 .audit-table td {
   padding: 10px 16px;
   text-align: left;

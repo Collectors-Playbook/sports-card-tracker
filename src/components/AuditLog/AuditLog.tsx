@@ -10,6 +10,13 @@ interface Filters {
   offset: number;
 }
 
+type SortableColumn = 'createdAt' | 'action' | 'entity' | 'entityId';
+
+interface SortState {
+  column: SortableColumn;
+  direction: 'asc' | 'desc';
+}
+
 const ENTITY_OPTIONS = ['', 'card', 'user', 'file', 'job', 'export', 'log'];
 
 const getActionBadgeClass = (action: string): string => {
@@ -41,6 +48,7 @@ const AuditLog: React.FC = () => {
   const [filters, setFilters] = useState<Filters>({ action: '', entity: '', limit: 25, offset: 0 });
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [refreshInterval, setRefreshInterval] = useState(0);
+  const [sort, setSort] = useState<SortState>({ column: 'createdAt', direction: 'desc' });
 
   const fetchEntries = useCallback(async () => {
     try {
@@ -49,6 +57,8 @@ const AuditLog: React.FC = () => {
         entity: filters.entity || undefined,
         limit: filters.limit,
         offset: filters.offset,
+        sortBy: sort.column,
+        sortDirection: sort.direction,
       });
       setEntries(data.entries);
       setTotal(data.total);
@@ -58,7 +68,7 @@ const AuditLog: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, [filters, sort]);
 
   // Fetch entries when filters change
   useEffect(() => {
@@ -79,6 +89,33 @@ const AuditLog: React.FC = () => {
     const id = setInterval(fetchEntries, refreshInterval);
     return () => clearInterval(id);
   }, [refreshInterval, fetchEntries]);
+
+  const handleSort = (column: SortableColumn) => {
+    setSort(prev => {
+      if (prev.column === column) {
+        return { column, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+      }
+      return { column, direction: column === 'createdAt' ? 'desc' : 'asc' };
+    });
+    setFilters(prev => ({ ...prev, offset: 0 }));
+  };
+
+  const renderSortableHeader = (label: string, column: SortableColumn) => {
+    const isActive = sort.column === column;
+    const arrow = sort.direction === 'asc' ? '\u25B2' : '\u25BC';
+    return (
+      <th
+        className="audit-sortable-th"
+        onClick={() => handleSort(column)}
+        aria-sort={isActive ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}
+      >
+        {label}
+        <span className={`audit-sort-arrow ${isActive ? 'active' : ''}`}>
+          {isActive ? arrow : '\u25B2'}
+        </span>
+      </th>
+    );
+  };
 
   if (authState.user?.role !== 'admin') {
     return (
@@ -164,10 +201,10 @@ const AuditLog: React.FC = () => {
             <table className="audit-table">
               <thead>
                 <tr>
-                  <th>Timestamp</th>
-                  <th>Action</th>
-                  <th>Entity</th>
-                  <th>Entity ID</th>
+                  {renderSortableHeader('Timestamp', 'createdAt')}
+                  {renderSortableHeader('Action', 'action')}
+                  {renderSortableHeader('Entity', 'entity')}
+                  {renderSortableHeader('Entity ID', 'entityId')}
                   <th>Details</th>
                   <th>IP</th>
                 </tr>

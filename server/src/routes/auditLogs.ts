@@ -9,7 +9,7 @@ export function createAuditLogRoutes(auditService: AuditService): Router {
   // GET /api/audit-logs — query audit logs (admin only)
   router.get('/', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const { userId, action, entity, entityId, limit, offset } = req.query;
+      const { userId, action, entity, entityId, limit, offset, sortBy, sortDirection } = req.query;
 
       const result = await auditService.query({
         userId: userId as string | undefined,
@@ -18,6 +18,8 @@ export function createAuditLogRoutes(auditService: AuditService): Router {
         entityId: entityId as string | undefined,
         limit: limit ? parseInt(limit as string, 10) : undefined,
         offset: offset ? parseInt(offset as string, 10) : undefined,
+        sortBy: sortBy as 'createdAt' | 'action' | 'entity' | 'entityId' | undefined,
+        sortDirection: sortDirection as 'asc' | 'desc' | undefined,
       });
 
       res.json(result);
