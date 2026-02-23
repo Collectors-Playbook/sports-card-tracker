@@ -622,7 +622,10 @@ class Database {
     const countRow = await this.getAsync<{ count: number }>(`SELECT COUNT(*) as count FROM audit_logs${whereClause}`, params);
     const total = countRow?.count ?? 0;
 
-    let sql = `SELECT * FROM audit_logs${whereClause} ORDER BY createdAt DESC`;
+    const allowedSortColumns = ['createdAt', 'action', 'entity', 'entityId'];
+    const sortCol = query.sortBy && allowedSortColumns.includes(query.sortBy) ? query.sortBy : 'createdAt';
+    const sortDir = query.sortDirection === 'asc' ? 'ASC' : 'DESC';
+    let sql = `SELECT * FROM audit_logs${whereClause} ORDER BY ${sortCol} ${sortDir}`;
     const queryParams = [...params];
 
     const limit = query.limit ?? 50;
