@@ -112,10 +112,11 @@ describe('Image Processing Routes', () => {
     });
 
     it('includes recent errors', async () => {
-      ctx.fileService.appendLog('image-error.log', {
-        timestamp: '2023-01-01 12:00:00',
-        filename: 'bad.jpg',
-        reason: 'OCR failed',
+      await ctx.db.insertAuditLog({
+        action: 'image.process_failed',
+        entity: 'file',
+        entityId: 'bad.jpg',
+        details: { reason: 'OCR failed' },
       });
 
       const res = await request(ctx.app)
@@ -124,6 +125,7 @@ describe('Image Processing Routes', () => {
 
       expect(res.body.recentErrors).toHaveLength(1);
       expect(res.body.recentErrors[0].filename).toBe('bad.jpg');
+      expect(res.body.recentErrors[0].reason).toBe('OCR failed');
     });
   });
 });

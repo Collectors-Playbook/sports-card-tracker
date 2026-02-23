@@ -84,7 +84,7 @@ describe('File Routes', () => {
         .post('/api/files/raw/upload')
         .attach('files', textFile);
 
-      expect(res.status).toBe(500); // multer error
+      expect(res.status).toBe(400); // multer file filter rejection
     });
   });
 
@@ -106,27 +106,32 @@ describe('File Routes', () => {
 
   describe('GET /api/files/logs/:logname', () => {
     it('returns empty array for non-existent log', async () => {
-      const res = await request(ctx.app).get('/api/files/logs/image-error.log');
+      const res = await request(ctx.app).get('/api/files/logs/comp-error.log');
       expect(res.status).toBe(200);
       expect(res.body).toEqual([]);
     });
 
     it('parses log entries correctly', async () => {
       fs.writeFileSync(
-        path.join(ctx.tempDir, 'image-error.log'),
-        '[2024-01-15 10:30:00] card.jpg: Could not identify card\n'
+        path.join(ctx.tempDir, 'comp-error.log'),
+        '[2024-01-15 10:30:00] card.jpg: Could not fetch comps\n'
       );
 
-      const res = await request(ctx.app).get('/api/files/logs/image-error.log');
+      const res = await request(ctx.app).get('/api/files/logs/comp-error.log');
       expect(res.status).toBe(200);
       expect(res.body.length).toBe(1);
       expect(res.body[0].timestamp).toBe('2024-01-15 10:30:00');
       expect(res.body[0].filename).toBe('card.jpg');
-      expect(res.body[0].reason).toBe('Could not identify card');
+      expect(res.body[0].reason).toBe('Could not fetch comps');
     });
 
     it('returns 400 for invalid log name', async () => {
       const res = await request(ctx.app).get('/api/files/logs/invalid.log');
+      expect(res.status).toBe(400);
+    });
+
+    it('returns 400 for image-error.log (now in audit DB)', async () => {
+      const res = await request(ctx.app).get('/api/files/logs/image-error.log');
       expect(res.status).toBe(400);
     });
   });
