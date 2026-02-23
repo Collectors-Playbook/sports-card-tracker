@@ -42,7 +42,9 @@ export type AuditAction =
   | 'image.process_batch' | 'image.process_sync' | 'image.pair_detected' | 'image.identify' | 'image.identify_failed'
   | 'image.user_modifications' | 'image.confirm'
   | 'vision.api_call'
-  | 'audit.delete' | 'audit.delete_bulk' | 'audit.purge' | 'audit.export';
+  | 'audit.delete' | 'audit.delete_bulk' | 'audit.purge' | 'audit.export'
+  | 'admin.user_create' | 'admin.user_update' | 'admin.user_delete'
+  | 'admin.user_toggle_status' | 'admin.user_change_role' | 'admin.user_reset_password';
 
 export interface AuditLogEntry {
   id: string;
@@ -638,6 +640,75 @@ class ApiService {
       method: 'POST',
     });
   }
+
+  // ─── Admin User Management ─────────────────────────────────────────────
+
+  public async getAdminUsers(): Promise<AdminUser[]> {
+    return this.request('/admin/users');
+  }
+
+  public async getAdminUser(id: string): Promise<AdminUser> {
+    return this.request(`/admin/users/${id}`);
+  }
+
+  public async createAdminUser(data: {
+    username: string;
+    email: string;
+    password: string;
+    role?: 'admin' | 'user';
+  }): Promise<AdminUser> {
+    return this.request('/admin/users', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  public async updateAdminUser(id: string, data: {
+    username?: string;
+    email?: string;
+  }): Promise<AdminUser> {
+    return this.request(`/admin/users/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  public async resetAdminUserPassword(id: string, password: string): Promise<{ message: string }> {
+    return this.request(`/admin/users/${id}/reset-password`, {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    });
+  }
+
+  public async toggleAdminUserStatus(id: string): Promise<AdminUser> {
+    return this.request(`/admin/users/${id}/toggle-status`, {
+      method: 'POST',
+    });
+  }
+
+  public async changeAdminUserRole(id: string, role: 'admin' | 'user'): Promise<AdminUser> {
+    return this.request(`/admin/users/${id}/change-role`, {
+      method: 'POST',
+      body: JSON.stringify({ role }),
+    });
+  }
+
+  public async deleteAdminUser(id: string): Promise<void> {
+    await this.request<void>(`/admin/users/${id}`, {
+      method: 'DELETE',
+    });
+  }
+}
+
+export interface AdminUser {
+  id: string;
+  username: string;
+  email: string;
+  role: 'admin' | 'user';
+  isActive: boolean;
+  profilePhoto: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export const apiService = new ApiService();

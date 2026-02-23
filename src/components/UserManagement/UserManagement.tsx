@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { userService, UserData } from '../../services/userService';
-import { apiService } from '../../services/api';
+import { apiService, AdminUser } from '../../services/api';
 import './UserManagement.css';
 
 interface EditingUser {
@@ -12,7 +11,7 @@ interface EditingUser {
 
 const UserManagement: React.FC = () => {
   const { state: authState } = useAuth();
-  const [users, setUsers] = useState<UserData[]>([]);
+  const [users, setUsers] = useState<AdminUser[]>([]);
   const [userStats, setUserStats] = useState<{ [userId: string]: { cardCount: number; totalValue: number } }>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +36,7 @@ const UserManagement: React.FC = () => {
   const loadUsers = async () => {
     try {
       setLoading(true);
-      const allUsers = userService.getAllUsers();
+      const allUsers = await apiService.getAdminUsers();
       setUsers(allUsers);
 
       // Compute card statistics from API cards
@@ -64,14 +63,10 @@ const UserManagement: React.FC = () => {
     if (!editingUser || editingUser.id !== userId) return;
 
     try {
-      const updates: Partial<UserData> = {
-        [editingUser.field]: editingUser.value
-      };
-
       if (editingUser.field === 'password') {
-        userService.resetUserPassword(userId, editingUser.value);
+        await apiService.resetAdminUserPassword(userId, editingUser.value);
       } else {
-        userService.updateUser(userId, updates);
+        await apiService.updateAdminUser(userId, { [editingUser.field]: editingUser.value });
       }
 
       setEditingUser(null);
@@ -83,7 +78,7 @@ const UserManagement: React.FC = () => {
 
   const handleToggleUserStatus = async (userId: string) => {
     try {
-      userService.toggleUserStatus(userId);
+      await apiService.toggleAdminUserStatus(userId);
       loadUsers();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to toggle user status');
@@ -92,7 +87,7 @@ const UserManagement: React.FC = () => {
 
   const handleChangeUserRole = async (userId: string, newRole: 'admin' | 'user') => {
     try {
-      userService.changeUserRole(userId, newRole);
+      await apiService.changeAdminUserRole(userId, newRole);
       loadUsers();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to change user role');
@@ -105,7 +100,7 @@ const UserManagement: React.FC = () => {
     }
 
     try {
-      userService.deleteUser(userId);
+      await apiService.deleteAdminUser(userId);
       loadUsers();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete user');
@@ -114,14 +109,13 @@ const UserManagement: React.FC = () => {
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     try {
-      userService.createUser({
+      await apiService.createAdminUser({
         username: newUser.username,
         email: newUser.email,
         password: newUser.password,
         role: newUser.role,
-        isActive: true
       });
       
       setShowNewUserForm(false);
