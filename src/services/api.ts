@@ -31,10 +31,23 @@ export interface ExtractedCardData {
   };
 }
 
+export type AuditAction =
+  | 'user.register' | 'user.login' | 'user.login_failed' | 'user.password_change' | 'user.profile_update'
+  | 'file.upload' | 'file.upload_rejected' | 'file.replace' | 'file.delete_raw' | 'file.delete_processed'
+  | 'log.clear'
+  | 'card.create' | 'card.update' | 'card.delete'
+  | 'job.create' | 'job.cancel'
+  | 'collection.create' | 'collection.update' | 'collection.delete' | 'collection.set-default' | 'collection.move-cards'
+  | 'ebay.generate' | 'ebay.generate_async' | 'ebay.download'
+  | 'image.process_batch' | 'image.process_sync' | 'image.pair_detected' | 'image.identify' | 'image.identify_failed'
+  | 'image.user_modifications' | 'image.confirm'
+  | 'vision.api_call'
+  | 'audit.delete' | 'audit.delete_bulk' | 'audit.purge' | 'audit.export';
+
 export interface AuditLogEntry {
   id: string;
   userId: string | null;
-  action: string;
+  action: AuditAction;
   entity: string;
   entityId: string | null;
   details: Record<string, unknown> | null;
@@ -499,6 +512,55 @@ class ApiService {
 
   public async getAuditLogActions(): Promise<string[]> {
     return this.request('/audit-logs/actions');
+  }
+
+  public async deleteAuditLog(id: string): Promise<void> {
+    await this.request<void>(`/audit-logs/${id}`, { method: 'DELETE' });
+  }
+
+  public async deleteAuditLogsBulk(ids: string[]): Promise<{ deletedCount: number }> {
+    return this.request('/audit-logs/delete-bulk', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    });
+  }
+
+  public async purgeAuditLogs(before: string, filters?: { action?: string; entity?: string; userId?: string }): Promise<{ deletedCount: number }> {
+    return this.request('/audit-logs/purge', {
+      method: 'POST',
+      body: JSON.stringify({ before, ...filters }),
+    });
+  }
+
+  public async exportAuditLogs(format: 'csv' | 'json', filters?: Record<string, string>): Promise<void> {
+    const query = new URLSearchParams({ format });
+    if (filters) {
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value) query.append(key, value);
+      });
+    }
+    const url = `${API_BASE_URL}/audit-logs/export?${query.toString()}`;
+    const token = localStorage.getItem('token');
+    const response = await fetch(url, {
+      headers: {
+        ...(token && { 'Authorization': `Bearer ${token}` }),
+      },
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Export failed' }));
+      throw new Error(errorData.error || `HTTP ${response.status}`);
+    }
+    const blob = await response.blob();
+    const disposition = response.headers.get('Content-Disposition') || '';
+    const filenameMatch = disposition.match(/filename="?(.+?)"?$/);
+    const filename = filenameMatch ? filenameMatch[1] : `audit-logs.${format}`;
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
   }
 
   // ─── Collections ──────────────────────────────────────────────────────────
