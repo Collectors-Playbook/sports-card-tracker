@@ -27,6 +27,7 @@ import { createEbayRoutes } from './routes/ebay';
 import { createAuditLogRoutes } from './routes/auditLogs';
 import { createCollectionRoutes } from './routes/collections';
 import { createAdminUserRoutes } from './routes/adminUsers';
+import { createGradingSubmissionRoutes } from './routes/gradingSubmissions';
 import { EbayExportOptions } from './types';
 
 dotenv.config();
@@ -71,6 +72,7 @@ app.use('/api/ebay', createEbayRoutes(db, ebayExportService, auditService));
 app.use('/api/audit-logs', createAuditLogRoutes(auditService));
 app.use('/api/collections', createCollectionRoutes(db, auditService));
 app.use('/api/admin/users', createAdminUserRoutes(db, auditService));
+app.use('/api/grading-submissions', createGradingSubmissionRoutes(db, auditService));
 
 // Error handling
 app.use(errorHandler);

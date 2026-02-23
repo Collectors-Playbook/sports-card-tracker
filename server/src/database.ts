@@ -1,7 +1,7 @@
 import BetterSqlite3 from 'better-sqlite3';
 import { drizzle, BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { eq, and, like, desc, asc, sql, count, lt, inArray } from 'drizzle-orm';
-import { Card, CardInput, User, UserInput, Collection, CollectionInput, CollectionStats, Job, JobInput, JobStatus, AuditLogEntry, AuditLogInput, AuditLogQuery } from './types';
+import { Card, CardInput, User, UserInput, Collection, CollectionInput, CollectionStats, Job, JobInput, JobStatus, AuditLogEntry, AuditLogInput, AuditLogQuery, GradingSubmission, GradingSubmissionInput, GradingStatus, GradingStats } from './types';
 import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
 import * as schema from './db/schema';
@@ -10,7 +10,7 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 
-const { users, collections, cards, jobs, auditLogs } = schema;
+const { users, collections, cards, jobs, gradingSubmissions, auditLogs } = schema;
 
 // Baseline SQL executed for in-memory databases (no migration journal needed)
 const BASELINE_SQL = `
@@ -89,6 +89,33 @@ CREATE TABLE IF NOT EXISTS jobs (
   createdAt text NOT NULL,
   updatedAt text NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS grading_submissions (
+  id text PRIMARY KEY NOT NULL,
+  userId text NOT NULL,
+  cardId text NOT NULL,
+  gradingCompany text NOT NULL,
+  submissionNumber text NOT NULL,
+  status text DEFAULT 'Submitted' NOT NULL,
+  tier text DEFAULT 'Regular' NOT NULL,
+  cost real DEFAULT 0 NOT NULL,
+  declaredValue real DEFAULT 0 NOT NULL,
+  submittedAt text NOT NULL,
+  receivedAt text,
+  gradingAt text,
+  shippedAt text,
+  completedAt text,
+  estimatedReturnDate text,
+  grade text,
+  notes text DEFAULT '' NOT NULL,
+  createdAt text NOT NULL,
+  updatedAt text NOT NULL,
+  FOREIGN KEY (userId) REFERENCES users(id) ON UPDATE no action ON DELETE no action,
+  FOREIGN KEY (cardId) REFERENCES cards(id) ON UPDATE no action ON DELETE no action
+);
+CREATE INDEX IF NOT EXISTS idx_grading_userId ON grading_submissions (userId);
+CREATE INDEX IF NOT EXISTS idx_grading_cardId ON grading_submissions (cardId);
+CREATE INDEX IF NOT EXISTS idx_grading_status ON grading_submissions (status);
 
 CREATE TABLE IF NOT EXISTS audit_logs (
   id text PRIMARY KEY NOT NULL,
@@ -848,6 +875,162 @@ class Database {
       ...row,
       details: (row.details ?? null) as Record<string, unknown> | null,
     }));
+  }
+
+  // ─── Grading Submissions ─────────────────────────────────────────────────────
+
+  private mapGradingSubmissionRow(row: typeof gradingSubmissions.$inferSelect): GradingSubmission {
+    return {
+      ...row,
+      gradingCompany: row.gradingCompany as GradingSubmission['gradingCompany'],
+      status: row.status as GradingSubmission['status'],
+      tier: row.tier as GradingSubmission['tier'],
+      receivedAt: row.receivedAt ?? null,
+      gradingAt: row.gradingAt ?? null,
+      shippedAt: row.shippedAt ?? null,
+      completedAt: row.completedAt ?? null,
+      estimatedReturnDate: row.estimatedReturnDate ?? null,
+      grade: row.grade ?? null,
+      notes: row.notes || '',
+    };
+  }
+
+  public async getAllGradingSubmissions(filters?: { userId?: string; status?: GradingStatus; cardId?: string }): Promise<GradingSubmission[]> {
+    const conditions = [];
+    if (filters?.userId) conditions.push(eq(gradingSubmissions.userId, filters.userId));
+    if (filters?.status) conditions.push(eq(gradingSubmissions.status, filters.status));
+    if (filters?.cardId) conditions.push(eq(gradingSubmissions.cardId, filters.cardId));
+
+    const rows = this.db.select().from(gradingSubmissions)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(gradingSubmissions.createdAt))
+      .all();
+
+    return rows.map(row => this.mapGradingSubmissionRow(row));
+  }
+
+  public async getGradingSubmissionById(id: string): Promise<GradingSubmission | undefined> {
+    const row = this.db.select().from(gradingSubmissions).where(eq(gradingSubmissions.id, id)).get();
+    if (!row) return undefined;
+    return this.mapGradingSubmissionRow(row);
+  }
+
+  public async createGradingSubmission(userId: string, input: GradingSubmissionInput): Promise<GradingSubmission> {
+    const id = uuidv4();
+    const now = new Date().toISOString();
+
+    const submission: GradingSubmission = {
+      id,
+      userId,
+      cardId: input.cardId,
+      gradingCompany: input.gradingCompany,
+      submissionNumber: input.submissionNumber,
+      status: 'Submitted',
+      tier: input.tier,
+      cost: input.cost,
+      declaredValue: input.declaredValue ?? 0,
+      submittedAt: input.submittedAt,
+      receivedAt: null,
+      gradingAt: null,
+      shippedAt: null,
+      completedAt: null,
+      estimatedReturnDate: input.estimatedReturnDate ?? null,
+      grade: null,
+      notes: input.notes ?? '',
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    this.db.insert(gradingSubmissions).values({
+      id: submission.id,
+      userId: submission.userId,
+      cardId: submission.cardId,
+      gradingCompany: submission.gradingCompany,
+      submissionNumber: submission.submissionNumber,
+      status: submission.status,
+      tier: submission.tier,
+      cost: submission.cost,
+      declaredValue: submission.declaredValue,
+      submittedAt: submission.submittedAt,
+      receivedAt: null,
+      gradingAt: null,
+      shippedAt: null,
+      completedAt: null,
+      estimatedReturnDate: submission.estimatedReturnDate,
+      grade: null,
+      notes: submission.notes,
+      createdAt: submission.createdAt,
+      updatedAt: submission.updatedAt,
+    }).run();
+
+    return submission;
+  }
+
+  public async updateGradingSubmission(id: string, updates: Partial<Omit<GradingSubmission, 'id' | 'userId' | 'createdAt'>>): Promise<GradingSubmission | undefined> {
+    const existing = await this.getGradingSubmissionById(id);
+    if (!existing) return undefined;
+
+    const updatedAt = new Date().toISOString();
+    const updated: GradingSubmission = { ...existing, ...updates, updatedAt };
+
+    this.db.update(gradingSubmissions).set({
+      cardId: updated.cardId,
+      gradingCompany: updated.gradingCompany,
+      submissionNumber: updated.submissionNumber,
+      status: updated.status,
+      tier: updated.tier,
+      cost: updated.cost,
+      declaredValue: updated.declaredValue,
+      submittedAt: updated.submittedAt,
+      receivedAt: updated.receivedAt,
+      gradingAt: updated.gradingAt,
+      shippedAt: updated.shippedAt,
+      completedAt: updated.completedAt,
+      estimatedReturnDate: updated.estimatedReturnDate,
+      grade: updated.grade,
+      notes: updated.notes,
+      updatedAt,
+    }).where(eq(gradingSubmissions.id, id)).run();
+
+    return updated;
+  }
+
+  public async deleteGradingSubmission(id: string): Promise<boolean> {
+    const result = this.db.delete(gradingSubmissions).where(eq(gradingSubmissions.id, id)).run();
+    return result.changes > 0;
+  }
+
+  public async getGradingStats(userId: string): Promise<GradingStats> {
+    const rows = this.db.select().from(gradingSubmissions)
+      .where(eq(gradingSubmissions.userId, userId))
+      .all();
+
+    const total = rows.length;
+    const complete = rows.filter(r => r.status === 'Complete').length;
+    const pending = total - complete;
+    const totalCost = rows.reduce((sum, r) => sum + r.cost, 0);
+
+    // Average turnaround for completed submissions
+    const completedRows = rows.filter(r => r.status === 'Complete' && r.completedAt);
+    let avgTurnaroundDays: number | null = null;
+    if (completedRows.length > 0) {
+      const totalDays = completedRows.reduce((sum, r) => {
+        const submitted = new Date(r.submittedAt).getTime();
+        const completed = new Date(r.completedAt!).getTime();
+        return sum + (completed - submitted) / (1000 * 60 * 60 * 24);
+      }, 0);
+      avgTurnaroundDays = Math.round((totalDays / completedRows.length) * 10) / 10;
+    }
+
+    // Average grade for completed submissions with numeric grades
+    const gradedRows = completedRows.filter(r => r.grade != null);
+    let avgGrade: number | null = null;
+    if (gradedRows.length > 0) {
+      const totalGrade = gradedRows.reduce((sum, r) => sum + parseFloat(r.grade!), 0);
+      avgGrade = Math.round((totalGrade / gradedRows.length) * 10) / 10;
+    }
+
+    return { totalSubmissions: total, pending, complete, totalCost, avgTurnaroundDays, avgGrade };
   }
 
   // ─── Lifecycle ───────────────────────────────────────────────────────────────

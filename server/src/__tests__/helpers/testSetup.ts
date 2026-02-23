@@ -24,6 +24,7 @@ import { createImageProcessingRoutes } from '../../routes/imageProcessing';
 import { createEbayRoutes } from '../../routes/ebay';
 import { createAuditLogRoutes } from '../../routes/auditLogs';
 import { createAdminUserRoutes } from '../../routes/adminUsers';
+import { createGradingSubmissionRoutes } from '../../routes/gradingSubmissions';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
@@ -89,6 +90,7 @@ export async function createTestApp(): Promise<TestContext> {
   app.use('/api/ebay', createEbayRoutes(db, ebayExportService, auditService));
   app.use('/api/audit-logs', createAuditLogRoutes(auditService));
   app.use('/api/admin/users', createAdminUserRoutes(db, auditService));
+  app.use('/api/grading-submissions', createGradingSubmissionRoutes(db, auditService));
 
   app.use(errorHandler);
 

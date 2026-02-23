@@ -81,6 +81,34 @@ export const jobs = sqliteTable('jobs', {
   updatedAt: text('updatedAt').notNull(),
 });
 
+// ─── Grading Submissions ────────────────────────────────────────────────────
+
+export const gradingSubmissions = sqliteTable('grading_submissions', {
+  id: text('id').primaryKey(),
+  userId: text('userId').notNull().references(() => users.id),
+  cardId: text('cardId').notNull().references(() => cards.id),
+  gradingCompany: text('gradingCompany').notNull(),
+  submissionNumber: text('submissionNumber').notNull(),
+  status: text('status').notNull().default('Submitted'),
+  tier: text('tier').notNull().default('Regular'),
+  cost: real('cost').notNull().default(0),
+  declaredValue: real('declaredValue').notNull().default(0),
+  submittedAt: text('submittedAt').notNull(),
+  receivedAt: text('receivedAt'),
+  gradingAt: text('gradingAt'),
+  shippedAt: text('shippedAt'),
+  completedAt: text('completedAt'),
+  estimatedReturnDate: text('estimatedReturnDate'),
+  grade: text('grade'),
+  notes: text('notes').notNull().default(''),
+  createdAt: text('createdAt').notNull(),
+  updatedAt: text('updatedAt').notNull(),
+}, (table) => [
+  index('idx_grading_userId').on(table.userId),
+  index('idx_grading_cardId').on(table.cardId),
+  index('idx_grading_status').on(table.status),
+]);
+
 // ─── Audit Logs ─────────────────────────────────────────────────────────────
 
 export const auditLogs = sqliteTable('audit_logs', {

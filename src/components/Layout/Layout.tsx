@@ -7,8 +7,8 @@ import './Layout.css';
 
 interface LayoutProps {
   children: React.ReactNode;
-  currentView: 'dashboard' | 'inventory' | 'add-card' | 'holding-pen' | 'processed' | 'admin' | 'profile' | 'reports' | 'ebay' | 'backup' | 'users' | 'collections' | 'about' | 'audit-log';
-  onViewChange: (view: 'dashboard' | 'inventory' | 'add-card' | 'holding-pen' | 'processed' | 'admin' | 'profile' | 'reports' | 'ebay' | 'backup' | 'users' | 'collections' | 'about' | 'audit-log') => void;
+  currentView: 'dashboard' | 'inventory' | 'add-card' | 'holding-pen' | 'processed' | 'admin' | 'profile' | 'reports' | 'ebay' | 'backup' | 'users' | 'collections' | 'about' | 'audit-log' | 'grading';
+  onViewChange: (view: 'dashboard' | 'inventory' | 'add-card' | 'holding-pen' | 'processed' | 'admin' | 'profile' | 'reports' | 'ebay' | 'backup' | 'users' | 'collections' | 'about' | 'audit-log' | 'grading') => void;
 }
 
 const Layout: React.FC<LayoutProps> = ({ children, currentView, onViewChange }) => {
@@ -281,6 +281,16 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, onViewChange }) 
             eBay Listings
           </button>
           
+          <button
+            className={`nav-item ${currentView === 'grading' ? 'active' : ''}`}
+            onClick={() => {
+              onViewChange('grading');
+              setIsMobileMenuOpen(false);
+            }}
+          >
+            Grading
+          </button>
+
           <button
             className={`nav-item ${currentView === 'profile' ? 'active' : ''}`}
             onClick={() => {
