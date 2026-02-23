@@ -1,7 +1,8 @@
 import path from 'path';
 import FileService from './fileService';
 import AnthropicVisionService from './anthropicVisionService';
-import ImageCropService from './imageCropService';
+import ImageCropService, { CropResult } from './imageCropService';
+import AuditService from './auditService';
 import Database from '../database';
 import {
   ImageProcessingPayload,
@@ -17,29 +18,46 @@ class ImageProcessingService {
     private fileService: FileService,
     private db: Database,
     private visionService: AnthropicVisionService,
-    private cropService?: ImageCropService
+    private cropService?: ImageCropService,
+    _auditSvc?: AuditService
   ) {}
+
+  private logAudit(action: string, entity: string, entityId: string | null, details: Record<string, unknown>): void {
+    this.db.insertAuditLog({ action, entity, entityId, details }).catch(err => {
+      console.error('Audit log write failed:', err);
+    });
+  }
 
   private async copyOrCropFile(
     srcDir: string,
     srcFilename: string,
     destDir: string,
     destFilename: string
-  ): Promise<boolean> {
+  ): Promise<CropResult> {
     if (this.cropService) {
       const srcPath = this.fileService.getFilePath(srcDir, srcFilename);
       const destPath = this.fileService.getFilePath(destDir, destFilename);
-      if (!srcPath || !destPath) return false;
+      if (!srcPath || !destPath) return { success: false, cropped: false, error: 'Invalid file path' };
       const result = await this.cropService.cropAndSave(srcPath, destPath);
-      return result.success;
+      this.logAudit('image.auto_crop', 'file', srcFilename, {
+        success: result.success,
+        cropped: result.cropped,
+        originalSize: result.originalSize,
+        croppedSize: result.croppedSize,
+        error: result.error,
+        destination: destFilename,
+      });
+      return result;
     }
-    return this.fileService.copyFile(srcDir, srcFilename, destDir, destFilename);
+    const copied = this.fileService.copyFile(srcDir, srcFilename, destDir, destFilename);
+    return { success: copied, cropped: false };
   }
 
   async processImages(
     payload: ImageProcessingPayload,
     onProgress?: (progress: number, completedItems: number) => Promise<void>
   ): Promise<ImageProcessingResult> {
+    const startTime = Date.now();
     const { filenames, skipExisting = true, confidenceThreshold = 40 } = payload;
     const result: ImageProcessingResult = {
       totalFiles: filenames.length,
@@ -104,6 +122,15 @@ class ImageProcessingService {
       }
     }
 
+    this.logAudit('image.batch_completed', 'job', null, {
+      totalFiles: result.totalFiles,
+      processed: result.processed,
+      skipped: result.skipped,
+      duplicates: result.duplicates,
+      failed: result.failed,
+      durationMs: Date.now() - startTime,
+    });
+
     return result;
   }
 
@@ -144,13 +171,34 @@ class ImageProcessingService {
 
       const duplicate = await this.checkDuplicate(cardData);
       if (duplicate) {
+        this.logAudit('image.duplicate_detected', 'card', duplicate.id, {
+          filename,
+          duplicatePlayer: duplicate.player,
+          duplicateYear: duplicate.year,
+          duplicateBrand: duplicate.brand,
+          duplicateCardNumber: duplicate.cardNumber,
+        });
         const error = `Duplicate of card ${duplicate.id}`;
         this.logError(filename, error);
         return { filename, status: 'duplicate', confidence: cardData.confidence?.score, error };
       }
 
-      await this.copyOrCropFile(rawDir, filename, processedDir, processedFront);
-      await this.copyOrCropFile(rawDir, backFile, processedDir, processedBack);
+      const frontResult = await this.copyOrCropFile(rawDir, filename, processedDir, processedFront);
+      if (!frontResult.success) {
+        this.logAudit('image.copy_failed', 'file', filename, {
+          source: filename,
+          destination: processedFront,
+          error: frontResult.error,
+        });
+      }
+      const backResult = await this.copyOrCropFile(rawDir, backFile, processedDir, processedBack);
+      if (!backResult.success) {
+        this.logAudit('image.copy_failed', 'file', backFile, {
+          source: backFile,
+          destination: processedBack,
+          error: backResult.error,
+        });
+      }
 
       const card = await this.db.createCard(
         this.buildCardInput(cardData, [processedFront, processedBack])
@@ -175,16 +223,28 @@ class ImageProcessingService {
 
     const duplicate = await this.checkDuplicate(cardData);
     if (duplicate) {
+      this.logAudit('image.duplicate_detected', 'card', duplicate.id, {
+        filename,
+        duplicatePlayer: duplicate.player,
+        duplicateYear: duplicate.year,
+        duplicateBrand: duplicate.brand,
+        duplicateCardNumber: duplicate.cardNumber,
+      });
       const error = `Duplicate of card ${duplicate.id} (${duplicate.player} ${duplicate.year} ${duplicate.brand} #${duplicate.cardNumber})`;
       this.logError(filename, error);
       return { filename, status: 'duplicate', confidence: cardData.confidence?.score, error };
     }
 
-    const copied = await this.copyOrCropFile(
+    const copyResult = await this.copyOrCropFile(
       rawDir, filename,
       processedDir, processedFilename
     );
-    if (!copied) {
+    if (!copyResult.success) {
+      this.logAudit('image.copy_failed', 'file', filename, {
+        source: filename,
+        destination: processedFilename,
+        error: copyResult.error,
+      });
       const error = 'Failed to copy file to processed directory';
       this.logError(filename, error);
       return { filename, status: 'failed', error };
@@ -234,17 +294,29 @@ class ImageProcessingService {
     // Duplicate detection
     const duplicate = await this.checkDuplicate(data);
     if (duplicate) {
+      this.logAudit('image.duplicate_detected', 'card', duplicate.id, {
+        filename,
+        duplicatePlayer: duplicate.player,
+        duplicateYear: duplicate.year,
+        duplicateBrand: duplicate.brand,
+        duplicateCardNumber: duplicate.cardNumber,
+      });
       const error = `Duplicate of card ${duplicate.id} (${duplicate.player} ${duplicate.year} ${duplicate.brand} #${duplicate.cardNumber})`;
       this.logError(filename, error);
       return { filename, status: 'duplicate', confidence, error };
     }
 
     // Copy (with auto-crop) to processed directory
-    const copied = await this.copyOrCropFile(
+    const singleCopyResult = await this.copyOrCropFile(
       rawDir, filename,
       this.fileService.getProcessedDir(), processedFilename
     );
-    if (!copied) {
+    if (!singleCopyResult.success) {
+      this.logAudit('image.copy_failed', 'file', filename, {
+        source: filename,
+        destination: processedFilename,
+        error: singleCopyResult.error,
+      });
       const error = 'Failed to copy file to processed directory';
       this.logError(filename, error);
       return { filename, status: 'failed', error };
@@ -298,14 +370,35 @@ class ImageProcessingService {
 
     const duplicate = await this.checkDuplicate(data);
     if (duplicate) {
+      this.logAudit('image.duplicate_detected', 'card', duplicate.id, {
+        filename: frontFile,
+        duplicatePlayer: duplicate.player,
+        duplicateYear: duplicate.year,
+        duplicateBrand: duplicate.brand,
+        duplicateCardNumber: duplicate.cardNumber,
+      });
       const error = `Duplicate of card ${duplicate.id}`;
       this.logError(frontFile, error);
       return { filename: frontFile, status: 'duplicate', confidence, error };
     }
 
     const processedDir = this.fileService.getProcessedDir();
-    await this.copyOrCropFile(rawDir, frontFile, processedDir, processedFront);
-    await this.copyOrCropFile(rawDir, backFile, processedDir, processedBack);
+    const pairFrontResult = await this.copyOrCropFile(rawDir, frontFile, processedDir, processedFront);
+    if (!pairFrontResult.success) {
+      this.logAudit('image.copy_failed', 'file', frontFile, {
+        source: frontFile,
+        destination: processedFront,
+        error: pairFrontResult.error,
+      });
+    }
+    const pairBackResult = await this.copyOrCropFile(rawDir, backFile, processedDir, processedBack);
+    if (!pairBackResult.success) {
+      this.logAudit('image.copy_failed', 'file', backFile, {
+        source: backFile,
+        destination: processedBack,
+        error: pairBackResult.error,
+      });
+    }
 
     const card = await this.db.createCard(
       this.buildCardInput(data, [processedFront, processedBack])
@@ -381,6 +474,13 @@ class ImageProcessingService {
       this.fileService.fileExists(this.fileService.getProcessedDir(), img)
     );
     if (!hasFiles) {
+      this.logAudit('image.orphan_cleanup', 'card', match.id, {
+        player: match.player,
+        year: match.year,
+        brand: match.brand,
+        cardNumber: match.cardNumber,
+        orphanedImages: match.images,
+      });
       await this.db.deleteCard(match.id);
       return null;
     }
@@ -450,10 +550,13 @@ class ImageProcessingService {
   }
 
   private logError(filename: string, reason: string): void {
-    this.fileService.appendLog('image-error.log', {
-      timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
-      filename,
-      reason,
+    this.db.insertAuditLog({
+      action: 'image.process_failed',
+      entity: 'file',
+      entityId: filename,
+      details: { reason },
+    }).catch(err => {
+      console.error('Audit log write failed:', err);
     });
   }
 }

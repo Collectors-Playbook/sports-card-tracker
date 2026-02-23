@@ -39,9 +39,9 @@ const jobService = new JobService(db, eventService);
 const compService = new CompService(fileService);
 const visionService = new AnthropicVisionService();
 const imageCropService = new ImageCropService();
-const imageProcessingService = new ImageProcessingService(fileService, db, visionService, imageCropService);
-const ebayExportService = new EbayExportService(db, fileService);
 const auditService = new AuditService(db);
+const imageProcessingService = new ImageProcessingService(fileService, db, visionService, imageCropService, auditService);
+const ebayExportService = new EbayExportService(db, fileService);
 
 // Create Express app
 const app = express();
