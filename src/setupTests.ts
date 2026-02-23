@@ -1,12 +1,5 @@
 // jest-dom adds custom jest matchers for asserting on DOM nodes.
 import '@testing-library/jest-dom';
-import 'fake-indexeddb/auto';
-
-// ---- structuredClone polyfill for fake-indexeddb ----
-if (typeof globalThis.structuredClone === 'undefined') {
-  globalThis.structuredClone = <T>(obj: T): T => JSON.parse(JSON.stringify(obj));
-}
-
 // ---- localStorage / sessionStorage mock (resettable) ----
 // Uses plain functions (NOT jest.fn) so that jest.restoreAllMocks() does not wipe them.
 const createStorageMock = (): Storage => {

@@ -3,26 +3,13 @@ import { render, screen } from '@testing-library/react';
 import App from './App';
 
 // Mock heavy dependencies that cause issues in test env
-jest.mock('./utils/debugDatabase', () => ({}));
 jest.mock('./utils/debugEnhancedCards', () => ({}));
-jest.mock('./utils/testCollectionMove', () => ({}));
-jest.mock('./utils/testCardSave', () => ({}));
-jest.mock('./db/simpleDatabase', () => ({
-  cardDatabase: {
+jest.mock('./services/api', () => ({
+  apiService: {
     getAllCards: jest.fn().mockResolvedValue([]),
-    subscribeToChanges: jest.fn(() => jest.fn()),
+    getMe: jest.fn().mockRejectedValue(new Error('No token')),
+    initializeCollections: jest.fn().mockResolvedValue(undefined),
   },
-  migrateFromLocalStorage: jest.fn(),
-}));
-jest.mock('./db/collectionsDatabase', () => ({
-  collectionsDatabase: {
-    initializeUserCollections: jest.fn().mockResolvedValue(undefined),
-    getUserCollections: jest.fn().mockResolvedValue([]),
-    getDefaultCollection: jest.fn().mockResolvedValue(null),
-  },
-}));
-jest.mock('./utils/backupRestore', () => ({
-  createAutoBackup: jest.fn().mockResolvedValue(undefined),
 }));
 
 describe('App', () => {

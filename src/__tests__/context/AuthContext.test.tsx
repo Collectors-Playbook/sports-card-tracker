@@ -17,12 +17,7 @@ jest.mock('../../services/api', () => ({
     login: (...args: any[]) => mockLogin(...args),
     register: (...args: any[]) => mockRegister(...args),
     getMe: (...args: any[]) => mockGetMe(...args),
-  },
-}));
-
-jest.mock('../../db/collectionsDatabase', () => ({
-  collectionsDatabase: {
-    initializeUserCollections: (...args: any[]) => mockInitializeUserCollections(...args),
+    initializeCollections: (...args: any[]) => mockInitializeUserCollections(...args),
   },
 }));
 
