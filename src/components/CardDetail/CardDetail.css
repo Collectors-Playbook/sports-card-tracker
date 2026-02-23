@@ -113,6 +113,24 @@
   background: #5a32a3;
 }
 
+.grading-roi-btn {
+  padding: 8px 12px;
+  background: #e67e22;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.grading-roi-btn:hover {
+  background: #d35400;
+}
+
 .close-btn {
   background: none;
   border: none;

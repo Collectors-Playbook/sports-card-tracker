@@ -3,6 +3,7 @@ import { Card } from '../../types';
 import { exportDetailedCardReport } from '../../utils/pdfExport';
 import { EbayListingPreview } from '../EbayListing/EbayListingPreview';
 import { BreakEvenCalculator } from '../BreakEvenCalculator/BreakEvenCalculator';
+import { GradingRoiAnalyzer } from '../GradingRoiAnalyzer/GradingRoiAnalyzer';
 import './CardDetail.css';
 
 interface CardDetailProps {
@@ -15,6 +16,7 @@ const CardDetail: React.FC<CardDetailProps> = ({ card, onEdit, onClose }) => {
   const [imageIndex, setImageIndex] = useState(0);
   const [showEbayListing, setShowEbayListing] = useState(false);
   const [showBreakEven, setShowBreakEven] = useState(false);
+  const [showGradingRoi, setShowGradingRoi] = useState(false);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -71,6 +73,11 @@ const CardDetail: React.FC<CardDetailProps> = ({ card, onEdit, onClose }) => {
             <button onClick={() => setShowBreakEven(true)} className="break-even-btn" title="Break-Even Calculator">
               Break-Even
             </button>
+            {!card.isGraded && (
+              <button onClick={() => setShowGradingRoi(true)} className="grading-roi-btn" title="Grading ROI Analysis">
+                Grade ROI
+              </button>
+            )}
             {onEdit && (
               <button onClick={() => onEdit(card)} className="edit-btn">
                 Edit Card
@@ -236,6 +243,12 @@ const CardDetail: React.FC<CardDetailProps> = ({ card, onEdit, onClose }) => {
         <BreakEvenCalculator
           card={card}
           onClose={() => setShowBreakEven(false)}
+        />
+      )}
+      {showGradingRoi && (
+        <GradingRoiAnalyzer
+          card={card}
+          onClose={() => setShowGradingRoi(false)}
         />
       )}
     </div>
