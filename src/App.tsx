@@ -20,13 +20,14 @@ import About from './components/About/About';
 import AuditLog from './components/AuditLog/AuditLog';
 import HoldingPen from './components/HoldingPen/HoldingPen';
 import ProcessedGallery from './components/ProcessedGallery/ProcessedGallery';
+import GradingTracker from './components/GradingTracker/GradingTracker';
 import ErrorBoundary from './components/ErrorBoundary/ErrorBoundary';
 import { Card } from './types';
 import { saveEnhancedCard, mergeCardWithEnhanced } from './utils/enhancedCardIntegration';
 import { logInfo } from './utils/logger';
 import './App.css';
 
-type View = 'dashboard' | 'inventory' | 'add-card' | 'holding-pen' | 'processed' | 'admin' | 'profile' | 'reports' | 'ebay' | 'backup' | 'users' | 'collections' | 'about' | 'audit-log';
+type View = 'dashboard' | 'inventory' | 'add-card' | 'holding-pen' | 'processed' | 'admin' | 'profile' | 'reports' | 'ebay' | 'backup' | 'users' | 'collections' | 'about' | 'audit-log' | 'grading';
 type FormType = 'classic' | 'enhanced' | 'photo';
 
 const AppContent: React.FC = () => {
@@ -234,6 +235,8 @@ const AppContent: React.FC = () => {
         return <AuditLog />;
       case 'collections':
         return <Collections />;
+      case 'grading':
+        return <GradingTracker />;
       case 'about':
         return <About />;
       default:

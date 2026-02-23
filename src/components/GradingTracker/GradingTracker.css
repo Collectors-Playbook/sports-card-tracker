@@ -1,0 +1,297 @@
+.grading-tracker {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.grading-tracker h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1a2b45;
+  margin-bottom: 1.5rem;
+}
+
+/* Stats Bar */
+.grading-stats-bar {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.grading-stat-card {
+  flex: 1;
+  min-width: 140px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 1rem;
+  text-align: center;
+}
+
+.grading-stat-card .stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1a2b45;
+}
+
+.grading-stat-card .stat-label {
+  font-size: 0.75rem;
+  color: #718096;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 0.25rem;
+}
+
+/* Filter Tabs */
+.grading-filter-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.grading-filter-tab {
+  padding: 0.5rem 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  color: #4a5568;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.grading-filter-tab:hover {
+  background: #f7fafc;
+}
+
+.grading-filter-tab.active {
+  background: #1a2b45;
+  color: #fff;
+  border-color: #1a2b45;
+}
+
+/* Actions Bar */
+.grading-actions-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 1rem;
+}
+
+.grading-new-btn {
+  padding: 0.625rem 1.25rem;
+  background: #f5a623;
+  color: #1a2b45;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.grading-new-btn:hover {
+  background: #e09500;
+}
+
+/* Table */
+.grading-table-wrapper {
+  overflow-x: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.grading-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.grading-table th {
+  background: #f7fafc;
+  text-align: left;
+  padding: 0.75rem 1rem;
+  font-weight: 600;
+  color: #4a5568;
+  border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.grading-table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #f0f0f0;
+  color: #2d3748;
+}
+
+.grading-table tr:last-child td {
+  border-bottom: none;
+}
+
+.grading-table tr:hover {
+  background: #fafbfc;
+}
+
+/* Status Badge */
+.grading-status-badge {
+  display: inline-block;
+  padding: 0.25rem 0.625rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.grading-status-badge.Submitted {
+  background: #ebf8ff;
+  color: #2b6cb0;
+}
+
+.grading-status-badge.Received {
+  background: #fefcbf;
+  color: #975a16;
+}
+
+.grading-status-badge.Grading {
+  background: #e9d8fd;
+  color: #6b46c1;
+}
+
+.grading-status-badge.Shipped {
+  background: #fed7e2;
+  color: #97266d;
+}
+
+.grading-status-badge.Complete {
+  background: #c6f6d5;
+  color: #276749;
+}
+
+/* Row Actions */
+.grading-row-actions {
+  display: flex;
+  gap: 0.375rem;
+}
+
+.grading-action-btn {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+  color: #4a5568;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.grading-action-btn:hover {
+  background: #f7fafc;
+  border-color: #cbd5e0;
+}
+
+.grading-action-btn.advance {
+  background: #ebf8ff;
+  color: #2b6cb0;
+  border-color: #bee3f8;
+}
+
+.grading-action-btn.advance:hover {
+  background: #bee3f8;
+}
+
+.grading-action-btn.delete {
+  color: #e53e3e;
+  border-color: #fed7d7;
+}
+
+.grading-action-btn.delete:hover {
+  background: #fed7d7;
+}
+
+/* Empty State */
+.grading-empty {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: #718096;
+}
+
+.grading-empty p {
+  margin-bottom: 1rem;
+}
+
+/* Grade Input Modal */
+.grading-grade-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.grading-grade-modal {
+  background: #fff;
+  border-radius: 12px;
+  padding: 2rem;
+  max-width: 400px;
+  width: 90%;
+}
+
+.grading-grade-modal h3 {
+  margin: 0 0 1rem;
+  font-size: 1.125rem;
+  color: #1a2b45;
+}
+
+.grading-grade-modal label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #4a5568;
+}
+
+.grading-grade-modal input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+  box-sizing: border-box;
+}
+
+.grading-grade-modal-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.grading-grade-modal-actions button {
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #4a5568;
+}
+
+.grading-grade-modal-actions button.confirm {
+  background: #f5a623;
+  color: #1a2b45;
+  border-color: #f5a623;
+  font-weight: 600;
+}
+
+/* Loading */
+.grading-loading {
+  text-align: center;
+  padding: 3rem;
+  color: #718096;
+}
