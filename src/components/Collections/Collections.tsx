@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Collection, CollectionStats } from '../../types/collection';
-import { collectionsDatabase } from '../../db/collectionsDatabase';
+import { apiService } from '../../services/api';
 import CollectionForm from './CollectionForm';
 import CollectionCard from './CollectionCard';
 import CollectionDiagnostic from '../CollectionDiagnostic/CollectionDiagnostic';
@@ -25,18 +25,18 @@ const Collections: React.FC = () => {
   const loadCollections = async () => {
     try {
       setLoading(true);
-      const userCollections = await collectionsDatabase.getUserCollections();
+      const userCollections = await apiService.getCollections();
       setCollections(userCollections);
-      
+
       // Load stats for each collection
       const stats: { [id: string]: CollectionStats } = {};
       for (const collection of userCollections) {
-        const collectionStats = await collectionsDatabase.getCollectionStats(collection.id);
+        const collStats = await apiService.getCollectionStats(collection.id);
         stats[collection.id] = {
-          cardCount: collectionStats.cardCount,
-          totalValue: collectionStats.totalValue,
-          totalCost: collectionStats.totalCost,
-          categoryBreakdown: collectionStats.categoryBreakdown
+          cardCount: collStats.cardCount,
+          totalValue: collStats.totalValue,
+          totalCost: collStats.totalCost,
+          categoryBreakdown: collStats.categoryBreakdown
         };
       }
       setCollectionStats(stats);
@@ -50,12 +50,14 @@ const Collections: React.FC = () => {
 
   const handleCreateCollection = async (data: Omit<Collection, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => {
     try {
-      // Ensure isDefault is not included in new collections
-      const dataWithoutDefault = { ...data };
-      if ('isDefault' in dataWithoutDefault) {
-        delete (dataWithoutDefault as any).isDefault;
-      }
-      await collectionsDatabase.createCollection(dataWithoutDefault);
+      await apiService.createCollection({
+        name: data.name,
+        description: data.description,
+        icon: data.icon,
+        color: data.color,
+        visibility: data.visibility,
+        tags: data.tags,
+      });
       setShowForm(false);
       loadCollections();
     } catch (err) {
@@ -65,9 +67,15 @@ const Collections: React.FC = () => {
 
   const handleUpdateCollection = async (id: string, data: Partial<Collection>) => {
     try {
-      // Remove isDefault from updates to prevent accidental changes
       const { isDefault, ...updateData } = data;
-      await collectionsDatabase.updateCollection(id, updateData);
+      await apiService.updateCollection(id, {
+        name: updateData.name,
+        description: updateData.description,
+        icon: updateData.icon,
+        color: updateData.color,
+        visibility: updateData.visibility,
+        tags: updateData.tags,
+      });
       setEditingCollection(null);
       loadCollections();
     } catch (err) {
@@ -89,7 +97,7 @@ const Collections: React.FC = () => {
     }
 
     try {
-      await collectionsDatabase.deleteCollection(id);
+      await apiService.deleteCollection(id);
       loadCollections();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete collection');
@@ -98,7 +106,7 @@ const Collections: React.FC = () => {
 
   const handleSetAsDefault = async (id: string) => {
     try {
-      await collectionsDatabase.setCollectionAsDefault(id);
+      await apiService.setCollectionAsDefault(id);
       loadCollections();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to set collection as default');
@@ -156,7 +164,7 @@ const Collections: React.FC = () => {
     
     for (const collectionId of selectedForDelete) {
       try {
-        await collectionsDatabase.deleteCollection(collectionId);
+        await apiService.deleteCollection(collectionId);
         successCount++;
       } catch (err) {
         const collection = collections.find(c => c.id === collectionId);

@@ -1,6 +1,5 @@
 import { Card } from '../types';
-import { cardDatabase } from '../db/simpleDatabase';
-import { backupDatabase } from '../db/backupDatabase';
+import { apiService } from '../services/api';
 
 export interface BackupData {
   version: string;
@@ -16,15 +15,15 @@ export interface BackupData {
   };
 }
 
-// Get current user info from auth state
+// Get current user info from localStorage
 function getCurrentUserInfo(): { id: string; username: string } {
-  const authDataStr = localStorage.getItem('auth-state');
-  if (authDataStr) {
+  const userStr = localStorage.getItem('user');
+  if (userStr) {
     try {
-      const authData = JSON.parse(authDataStr);
+      const user = JSON.parse(userStr);
       return {
-        id: authData.user?.id || 'anonymous',
-        username: authData.user?.username || 'Anonymous User'
+        id: user.id || 'anonymous',
+        username: user.username || 'Anonymous User'
       };
     } catch {
       return { id: 'anonymous', username: 'Anonymous User' };
@@ -34,15 +33,15 @@ function getCurrentUserInfo(): { id: string; username: string } {
 }
 
 /**
- * Create a backup of all cards in the database for the current user
+ * Create a backup of all cards from the API
  */
 export async function createBackup(exportedBy?: string): Promise<BackupData> {
   try {
-    const cards = await cardDatabase.getAllCards(); // This already filters by current user
+    const cards = await apiService.getAllCards();
     const userInfo = getCurrentUserInfo();
-    
+
     const backup: BackupData = {
-      version: '2.0', // Version 2.0 includes userId
+      version: '2.0',
       timestamp: new Date().toISOString(),
       appName: 'Sports Card Tracker',
       userId: userInfo.id,
@@ -54,7 +53,7 @@ export async function createBackup(exportedBy?: string): Promise<BackupData> {
         userName: userInfo.username
       }
     };
-    
+
     return backup;
   } catch (error) {
     console.error('Error creating backup:', error);
@@ -71,7 +70,7 @@ export async function downloadBackup(exportedBy?: string): Promise<void> {
     const json = JSON.stringify(backup, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
-    
+
     const link = document.createElement('a');
     link.href = url;
     link.download = `sports-cards-backup-${new Date().toISOString().split('T')[0]}.json`;
@@ -79,7 +78,7 @@ export async function downloadBackup(exportedBy?: string): Promise<void> {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    
+
     console.log(`Backup downloaded: ${backup.metadata.totalCards} cards`);
   } catch (error) {
     console.error('Error downloading backup:', error);
@@ -95,26 +94,25 @@ function validateBackup(data: any): data is BackupData {
   if (!data.version || !data.timestamp || !data.appName) return false;
   if (!Array.isArray(data.cards)) return false;
   if (!data.metadata || typeof data.metadata !== 'object') return false;
-  
+
   // Version 2.0 requires userId
   if (data.version === '2.0' && !data.userId) return false;
-  
+
   // Validate each card has required fields
   for (const card of data.cards) {
     if (!card.id || !card.player || !card.year || !card.brand) {
       return false;
     }
-    // Version 2.0 cards should have userId
     if (data.version === '2.0' && !card.userId) {
       return false;
     }
   }
-  
+
   return true;
 }
 
 /**
- * Restore cards from backup data
+ * Restore cards from backup data via API
  */
 export async function restoreFromBackup(
   backupData: BackupData,
@@ -134,42 +132,44 @@ export async function restoreFromBackup(
     skipped: 0,
     errors: [] as string[]
   };
-  
+
   try {
     // Clear existing data if requested
     if (clearExisting) {
-      await cardDatabase.clearAllCards();
-      console.log('Cleared existing cards');
+      const existingCards = await apiService.getAllCards();
+      for (const card of existingCards) {
+        await apiService.deleteCard(card.id);
+      }
     }
-    
+
     // Get existing card IDs if skipping duplicates
     const existingIds = new Set<string>();
     if (skipDuplicates && !clearExisting) {
-      const existingCards = await cardDatabase.getAllCards();
+      const existingCards = await apiService.getAllCards();
       existingCards.forEach(card => existingIds.add(card.id));
     }
-    
+
     // Import cards
     const totalCards = backupData.cards.length;
+    const currentUserId = getCurrentUserInfo().id;
+
     for (let i = 0; i < totalCards; i++) {
       const card = backupData.cards[i];
-      
+
       try {
-        // Skip if duplicate and skipDuplicates is true
         if (skipDuplicates && existingIds.has(card.id)) {
           results.skipped++;
           continue;
         }
-        
-        // Ensure dates are Date objects and handle userId
-        const currentUserId = getCurrentUserInfo().id;
+
+        // Ensure dates are Date objects
         const cardToImport: Card = {
           ...card,
-          userId: card.userId || currentUserId, // Use current user if not present (for old backups)
-          purchaseDate: card.purchaseDate instanceof Date 
-            ? card.purchaseDate 
+          userId: card.userId || currentUserId,
+          purchaseDate: card.purchaseDate instanceof Date
+            ? card.purchaseDate
             : new Date(card.purchaseDate),
-          sellDate: card.sellDate 
+          sellDate: card.sellDate
             ? (card.sellDate instanceof Date ? card.sellDate : new Date(card.sellDate))
             : undefined,
           createdAt: card.createdAt instanceof Date
@@ -179,11 +179,10 @@ export async function restoreFromBackup(
             ? card.updatedAt
             : new Date(card.updatedAt)
         };
-        
-        await cardDatabase.addCard(cardToImport);
+
+        await apiService.createCard(cardToImport);
         results.imported++;
-        
-        // Report progress
+
         if (onProgress) {
           onProgress(i + 1, totalCards);
         }
@@ -193,7 +192,7 @@ export async function restoreFromBackup(
         results.errors.push(errorMsg);
       }
     }
-    
+
     console.log(`Restore complete: ${results.imported} imported, ${results.skipped} skipped`);
     return results;
   } catch (error) {
@@ -208,119 +207,57 @@ export async function restoreFromBackup(
 export function loadBackupFile(file: File): Promise<BackupData> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    
+
     reader.onload = (e) => {
       try {
         const content = e.target?.result as string;
         const data = JSON.parse(content);
-        
+
         if (!validateBackup(data)) {
           reject(new Error('Invalid backup file format'));
           return;
         }
-        
+
         resolve(data);
       } catch (error) {
         reject(new Error('Failed to parse backup file'));
       }
     };
-    
+
     reader.onerror = () => {
       reject(new Error('Failed to read backup file'));
     };
-    
+
     reader.readAsText(file);
   });
 }
 
 /**
- * Create automatic backup (can be scheduled)
+ * Create automatic backup (no-op stub — auto-backup is removed)
  */
 export async function createAutoBackup(): Promise<void> {
-  try {
-    const backup = await createBackup('auto');
-    
-    // Save to IndexedDB instead of localStorage
-    await backupDatabase.saveBackup(backup, 'auto');
-    
-    const backupJson = JSON.stringify(backup);
-    const sizeInMB = new Blob([backupJson]).size / (1024 * 1024);
-    console.log(`Auto-backup created: ${backup.metadata.totalCards} cards (${sizeInMB.toFixed(2)} MB)`);
-    
-    // Clean up old localStorage entries if they exist
-    try {
-      localStorage.removeItem('sports-cards-auto-backup');
-      localStorage.removeItem('sports-cards-auto-backup-meta');
-    } catch (e) {
-      // Ignore errors when cleaning up
-    }
-  } catch (error) {
-    console.error('Auto-backup failed:', error);
-    throw error;
-  }
+  // Auto-backup removed — backups are now explicit JSON downloads
 }
 
 /**
- * Get list of automatic backups
+ * Get list of automatic backups (returns empty — auto-backup is removed)
  */
 export async function getAutoBackups(): Promise<BackupData[]> {
-  try {
-    const autoBackup = await backupDatabase.getAutoBackup();
-    return autoBackup ? [autoBackup] : [];
-  } catch (error) {
-    console.error('Failed to get auto-backups:', error);
-    return [];
-  }
+  return [];
 }
 
 /**
- * Clear auto-backup data
+ * Clear auto-backup data (no-op stub)
  */
 export async function clearAutoBackup(): Promise<void> {
-  try {
-    // Clear from IndexedDB
-    await backupDatabase.clearAutoBackup();
-    
-    // Also clear any legacy localStorage entries
-    try {
-      localStorage.removeItem('sports-cards-auto-backup');
-      localStorage.removeItem('sports-cards-auto-backup-meta');
-    } catch (e) {
-      // Ignore errors when cleaning up legacy data
-    }
-    
-    console.log('Auto-backup data cleared');
-  } catch (error) {
-    console.error('Failed to clear auto-backup:', error);
-    throw error;
-  }
+  // No-op — auto-backup storage removed
 }
 
 /**
- * Get auto-backup storage size
+ * Get auto-backup storage size (always zero)
  */
 export async function getAutoBackupSize(): Promise<{ sizeInMB: number; exists: boolean }> {
-  try {
-    const stats = await backupDatabase.getBackupStats();
-    
-    if (stats.autoBackups === 0) {
-      return { sizeInMB: 0, exists: false };
-    }
-    
-    // Get the actual backup to calculate size
-    const autoBackup = await backupDatabase.getAutoBackup();
-    if (!autoBackup) {
-      return { sizeInMB: 0, exists: false };
-    }
-    
-    const backupJson = JSON.stringify(autoBackup);
-    const sizeInMB = new Blob([backupJson]).size / (1024 * 1024);
-    
-    return { sizeInMB, exists: true };
-  } catch (error) {
-    console.error('Failed to get auto-backup size:', error);
-    return { sizeInMB: 0, exists: false };
-  }
+  return { sizeInMB: 0, exists: false };
 }
 
 /**
@@ -328,21 +265,19 @@ export async function getAutoBackupSize(): Promise<{ sizeInMB: number; exists: b
  */
 export async function exportBackupAsCSV(): Promise<void> {
   try {
-    const cards = await cardDatabase.getAllCards();
-    
+    const cards = await apiService.getAllCards();
+
     if (cards.length === 0) {
       throw new Error('No cards to export');
     }
-    
-    // Define headers
+
     const headers = [
-      'ID', 'Player', 'Team', 'Year', 'Brand', 'Category', 
+      'ID', 'Player', 'Team', 'Year', 'Brand', 'Category',
       'Card Number', 'Parallel', 'Condition', 'Grading Company',
-      'Purchase Price', 'Purchase Date', 'Current Value', 
+      'Purchase Price', 'Purchase Date', 'Current Value',
       'Sell Price', 'Sell Date', 'Notes', 'Created At', 'Updated At'
     ];
-    
-    // Convert cards to CSV rows
+
     const rows = cards.map(card => [
       card.id,
       card.player,
@@ -363,8 +298,7 @@ export async function exportBackupAsCSV(): Promise<void> {
       card.createdAt instanceof Date ? card.createdAt.toISOString() : card.createdAt,
       card.updatedAt instanceof Date ? card.updatedAt.toISOString() : card.updatedAt
     ]);
-    
-    // Combine headers and rows
+
     const csv = [
       headers.join(','),
       ...rows.map(row => row.map(cell => {
@@ -375,8 +309,7 @@ export async function exportBackupAsCSV(): Promise<void> {
         return cellStr;
       }).join(','))
     ].join('\n');
-    
-    // Download file
+
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -386,7 +319,7 @@ export async function exportBackupAsCSV(): Promise<void> {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    
+
     console.log(`CSV backup exported: ${cards.length} cards`);
   } catch (error) {
     console.error('Error exporting CSV backup:', error);

@@ -1,5 +1,5 @@
 import React, { memo, useMemo, useState } from 'react';
-import { useCards } from '../../context/DexieCardContext';
+import { useCards } from '../../context/ApiCardContext';
 import { CollectionType } from '../../types';
 import './Dashboard.css';
 

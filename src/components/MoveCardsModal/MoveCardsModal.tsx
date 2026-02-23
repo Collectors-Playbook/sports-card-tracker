@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card } from '../../types';
 import { Collection } from '../../types/collection';
-import { collectionsDatabase } from '../../db/collectionsDatabase';
+import { apiService } from '../../services/api';
 import './MoveCardsModal.css';
 
 interface MoveCardsModalProps {
@@ -22,7 +22,7 @@ const MoveCardsModal: React.FC<MoveCardsModalProps> = ({ cards, onClose, onMove 
 
   const loadCollections = async () => {
     try {
-      const userCollections = await collectionsDatabase.getUserCollections();
+      const userCollections = await apiService.getCollections();
       setCollections(userCollections);
     } catch (err) {
       setError('Failed to load collections');

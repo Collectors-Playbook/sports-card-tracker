@@ -1,10 +1,10 @@
 import React, { useState, useMemo, memo, useCallback } from 'react';
-import { useCards } from '../../context/DexieCardContext';
+import { useCards } from '../../context/ApiCardContext';
 import { Card, FilterOptions, SortOption, COLLECTION_TYPES } from '../../types';
 import { BulkEbayExport } from '../EbayListing/BulkEbayExport';
 import LoadingSkeleton from '../LoadingSkeleton/LoadingSkeleton';
 import MoveCardsModal from '../MoveCardsModal/MoveCardsModal';
-import { collectionsDatabase } from '../../db/collectionsDatabase';
+import { apiService } from '../../services/api';
 import './CardList.css';
 
 interface CardListProps {
@@ -26,10 +26,10 @@ const CardList: React.FC<CardListProps> = ({ onCardSelect, onEditCard, selectedC
   // Load collection info when selectedCollectionId changes
   React.useEffect(() => {
     if (selectedCollectionId) {
-      import('../../db/collectionsDatabase').then(({ collectionsDatabase }) => {
-        collectionsDatabase.getCollectionById(selectedCollectionId).then(collection => {
-          setSelectedCollection(collection);
-        });
+      apiService.getCollection(selectedCollectionId).then(collection => {
+        setSelectedCollection(collection);
+      }).catch(() => {
+        setSelectedCollection(null);
       });
     } else {
       setSelectedCollection(null);
@@ -127,27 +127,22 @@ const CardList: React.FC<CardListProps> = ({ onCardSelect, onEditCard, selectedC
 
   const handleMoveCards = useCallback(async (cardIds: string[], targetCollectionId: string) => {
     try {
-      // Move cards to the target collection - this updates the database
-      await collectionsDatabase.moveCardsToCollection(cardIds, targetCollectionId);
-      
-      // Reload from database to ensure we have the latest state
-      const { cardDatabase } = await import('../../db/simpleDatabase');
-      const freshCards = await cardDatabase.getAllCards();
-      console.log('[handleMoveCards] Fresh cards from database after move:', freshCards.filter(c => cardIds.includes(c.id)).map(c => ({ id: c.id, collectionId: c.collectionId })));
-      
+      await apiService.moveCardsToCollection(cardIds, targetCollectionId);
+
+      // Reload cards from API to get the latest state
+      const freshCards = await apiService.getAllCards();
       setCards(freshCards);
-      
+
       clearSelection();
       setShowMoveModal(false);
     } catch (error) {
       console.error('Error moving cards:', error);
-      // If there's an error, reload from database to ensure consistency
-      const { cardDatabase } = await import('../../db/simpleDatabase');
-      const freshCards = await cardDatabase.getAllCards();
+      // Reload from API to ensure consistency
+      const freshCards = await apiService.getAllCards();
       setCards(freshCards);
       throw error;
     }
-  }, [state.cards, clearSelection, setCards]);
+  }, [clearSelection, setCards]);
 
   const uniqueValues = useMemo(() => ({
     teams: [...new Set(state.cards.map(card => card.team))].sort(),

@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { apiService } from '../services/api';
-import { collectionsDatabase } from '../db/collectionsDatabase';
 import { User } from '../types';
 
 interface AuthState {
@@ -134,8 +133,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         payload: { user, token }
       });
 
-      // Initialize user collections
-      await collectionsDatabase.initializeUserCollections(user.id);
+      // Initialize user collections via API
+      await apiService.initializeCollections().catch(() => {
+        // Non-critical - collections will be initialized on first access
+      });
     } catch (error) {
       dispatch({
         type: 'LOGIN_FAILURE',
@@ -156,8 +157,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         payload: { user, token }
       });
 
-      // Initialize user collections
-      await collectionsDatabase.initializeUserCollections(user.id);
+      // Initialize user collections via API
+      await apiService.initializeCollections().catch(() => {
+        // Non-critical - collections will be initialized on first access
+      });
     } catch (error) {
       dispatch({
         type: 'LOGIN_FAILURE',

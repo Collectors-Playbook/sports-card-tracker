@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { useCards } from '../../context/DexieCardContext';
+import { useCards } from '../../context/ApiCardContext';
 import { Card } from '../../types/index';
 import { cardDetectionService } from '../../services/cardDetectionService';
 import { ExtractedCardData } from '../../types/detection';

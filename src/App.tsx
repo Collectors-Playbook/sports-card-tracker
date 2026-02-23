@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { CardProvider, useCards } from './context/DexieCardContext'; // Use Dexie context
-import { useApi } from './hooks/useApi';
+import { CardProvider, useCards } from './context/ApiCardContext';
 import Layout from './components/Layout/Layout';
 import Dashboard from './components/Dashboard/Dashboard';
 import CardList from './components/CardList/CardList';
@@ -39,8 +38,6 @@ const AppContent: React.FC = () => {
   const [editingCard, setEditingCard] = useState<Card | null>(null);
   const [formType, setFormType] = useState<FormType>('enhanced'); // Form type selection
   const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
-  
-  useApi();
   
   logInfo('App', 'Application initialized');
 

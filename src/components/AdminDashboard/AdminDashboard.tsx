@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { useCards } from '../../context/DexieCardContext';
-import { cardDatabase } from '../../db/simpleDatabase';
-import { getAutoBackups } from '../../utils/backupRestore';
-import { backupDatabase } from '../../db/backupDatabase';
+import { useCards } from '../../context/ApiCardContext';
+import { apiService } from '../../services/api';
 import './AdminDashboard.css';
 
 interface AdminStats {
@@ -62,22 +60,8 @@ const AdminDashboard: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      // Get all cards for admin view
-      const allCards = await cardDatabase.getAllCardsAdmin();
-      const userStatistics = await cardDatabase.getUserStatistics();
-      const autoBackups = await getAutoBackups();
-      
-      // Get all backups from IndexedDB
-      const allBackups = await backupDatabase.getAllBackups();
-      const backupInfos: BackupInfo[] = allBackups.map(b => ({
-        id: b.id,
-        timestamp: b.timestamp,
-        type: b.type,
-        sizeInMB: b.sizeInMB,
-        totalCards: b.backup.metadata.totalCards,
-        totalValue: b.backup.metadata.totalValue,
-        userName: b.backup.metadata.userName
-      }));
+      // Get all cards from API
+      const allCards = await apiService.getAllCards();
 
       // Calculate statistics
       const totalCards = allCards.length;
@@ -86,7 +70,7 @@ const AdminDashboard: React.FC = () => {
       const averageCardValue = totalCards > 0 ? totalValue / totalCards : 0;
 
       // Find most valuable card
-      const mostValuableCard = allCards.reduce((prev, current) => 
+      const mostValuableCard = allCards.reduce((prev, current) =>
         current.currentValue > (prev?.currentValue || 0) ? current : prev
       , allCards[0]);
 
@@ -102,8 +86,23 @@ const AdminDashboard: React.FC = () => {
         yearBreakdown[card.year] = (yearBreakdown[card.year] || 0) + 1;
       });
 
-      // Backup info
-      const lastBackup = autoBackups.length > 0 ? autoBackups[0] : null;
+      // User stats computed from cards
+      const userStatsMap: { [userId: string]: { count: number; value: number } } = {};
+      allCards.forEach(card => {
+        if (!userStatsMap[card.userId]) {
+          userStatsMap[card.userId] = { count: 0, value: 0 };
+        }
+        userStatsMap[card.userId].count++;
+        userStatsMap[card.userId].value += card.currentValue;
+      });
+
+      const userStatistics: UserStats[] = Object.entries(userStatsMap).map(([userId, stats]) => ({
+        userId,
+        username: userId,
+        cardCount: stats.count,
+        totalValue: stats.value,
+        avgValue: stats.count > 0 ? stats.value / stats.count : 0
+      }));
 
       setStats({
         totalCards,
@@ -111,14 +110,14 @@ const AdminDashboard: React.FC = () => {
         totalValue,
         averageCardValue,
         mostValuableCard: mostValuableCard ? `${mostValuableCard.player} (${mostValuableCard.year})` : 'N/A',
-        totalBackups: allBackups.length,
-        lastBackupDate: lastBackup ? new Date(lastBackup.timestamp).toLocaleString() : null,
+        totalBackups: 0,
+        lastBackupDate: null,
         categoriesBreakdown,
         yearBreakdown
       });
 
       setUserStats(userStatistics);
-      setBackups(backupInfos.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
+      setBackups([]);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to calculate stats');
     } finally {
@@ -128,23 +127,16 @@ const AdminDashboard: React.FC = () => {
 
   const handleClearDatabase = async () => {
     try {
-      if (selectedUserId) {
-        // Clear specific user's cards
-        const allCards = await cardDatabase.getAllCardsAdmin();
-        const userCards = allCards.filter(card => card.userId === selectedUserId);
-        for (const card of userCards) {
-          await cardDatabase.deleteCard(card.id);
-        }
-      } else {
-        // Clear all cards
-        const allCards = await cardDatabase.getAllCardsAdmin();
-        for (const card of allCards) {
-          await cardDatabase.deleteCard(card.id);
-        }
+      const allCards = await apiService.getAllCards();
+      const cardsToDelete = selectedUserId
+        ? allCards.filter(card => card.userId === selectedUserId)
+        : allCards;
+
+      for (const card of cardsToDelete) {
+        await apiService.deleteCard(card.id);
       }
       setShowClearConfirm(false);
       setSelectedUserId(null);
-      // Refresh stats
       calculateStats();
     } catch (error) {
       setError('Failed to clear database');
@@ -154,7 +146,7 @@ const AdminDashboard: React.FC = () => {
   const exportDatabaseInfo = () => {
     const dbInfo = {
       appVersion: '1.0.0',
-      databaseType: 'Dexie (IndexedDB)',
+      databaseType: 'SQLite (Server)',
       timestamp: new Date().toISOString(),
       stats,
       userStats,
@@ -379,7 +371,7 @@ const AdminDashboard: React.FC = () => {
             <h2>ℹ️ System Information</h2>
             <div className="system-info">
               <p><strong>App Version:</strong> 1.0.0</p>
-              <p><strong>Database:</strong> Dexie (IndexedDB)</p>
+              <p><strong>Database:</strong> SQLite (Server)</p>
               <p><strong>Browser:</strong> {navigator.userAgent.split(' ').slice(-2).join(' ')}</p>
               <p><strong>Platform:</strong> {navigator.userAgent.includes('Mac') ? 'macOS' : navigator.userAgent.includes('Win') ? 'Windows' : navigator.userAgent.includes('Linux') ? 'Linux' : 'Unknown'}</p>
               <p><strong>Language:</strong> {navigator.language}</p>

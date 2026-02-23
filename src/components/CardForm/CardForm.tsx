@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
-import { useCards } from '../../context/DexieCardContext';
-import { Card, CardFormData, CONDITIONS, CATEGORIES, GRADING_COMPANIES, COLLECTION_TYPES } from '../../types';
+import { useCards } from '../../context/ApiCardContext';
+import { Card, CardFormData, CollectionType, CONDITIONS, CATEGORIES, GRADING_COMPANIES, COLLECTION_TYPES } from '../../types';
 import ImageUpload from '../ImageUpload/ImageUpload';
 import { logDebug, logInfo, logWarn, logError } from '../../utils/logger';
 import './CardForm.css';
@@ -57,8 +57,8 @@ const CardForm: React.FC<CardFormProps> = ({ card, onSuccess, onCancel }) => {
   useEffect(() => {
     const loadCollections = async () => {
       try {
-        const { collectionsDatabase } = await import('../../db/collectionsDatabase');
-        const userCollections = await collectionsDatabase.getUserCollections();
+        const { apiService } = await import('../../services/api');
+        const userCollections = await apiService.getCollections();
         setCollections(userCollections);
       } catch (error) {
         console.error('Error loading collections:', error);

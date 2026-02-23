@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { userService, UserData } from '../../services/userService';
-import { cardDatabase } from '../../db/simpleDatabase';
+import { apiService } from '../../services/api';
 import './UserManagement.css';
 
 interface EditingUser {
@@ -40,17 +40,17 @@ const UserManagement: React.FC = () => {
       const allUsers = userService.getAllUsers();
       setUsers(allUsers);
 
-      // Load card statistics for each user
-      const userStatsData = await cardDatabase.getUserStatistics();
+      // Compute card statistics from API cards
+      const allCards = await apiService.getAllCards();
       const stats: { [userId: string]: { cardCount: number; totalValue: number } } = {};
-      
-      userStatsData.forEach(stat => {
-        stats[stat.userId] = {
-          cardCount: stat.cardCount,
-          totalValue: stat.totalValue
-        };
+      allCards.forEach(card => {
+        if (!stats[card.userId]) {
+          stats[card.userId] = { cardCount: 0, totalValue: 0 };
+        }
+        stats[card.userId].cardCount++;
+        stats[card.userId].totalValue += card.currentValue;
       });
-      
+
       setUserStats(stats);
     } catch (err) {
       setError('Failed to load users');

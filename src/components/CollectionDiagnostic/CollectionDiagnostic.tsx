@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collectionsDatabase } from '../../db/collectionsDatabase';
-import { cardDatabase } from '../../db/simpleDatabase';
+import { apiService } from '../../services/api';
 import './CollectionDiagnostic.css';
 
 const CollectionDiagnostic: React.FC = () => {
@@ -16,33 +15,22 @@ const CollectionDiagnostic: React.FC = () => {
   const loadDiagnosticData = async () => {
     try {
       setLoading(true);
-      
+
       // Get all collections
-      const allCollections = await collectionsDatabase.getUserCollections();
+      const allCollections = await apiService.getCollections();
       setCollections(allCollections);
-      
+
       // Get all cards
-      const allCards = await cardDatabase.getAllCards();
+      const allCards = await apiService.getAllCards();
       setCards(allCards);
-      
+
       // Find orphaned cards (cards with collectionId that doesn't exist)
-      const collectionIds = new Set(allCollections.map(c => c.id));
-      const orphaned = allCards.filter(card => 
+      const collectionIds = new Set(allCollections.map((c: any) => c.id));
+      const orphaned = allCards.filter((card: any) =>
         card.collectionId && !collectionIds.has(card.collectionId)
       );
       setOrphanedCards(orphaned);
-      
-      console.log('Diagnostic Data:', {
-        collections: allCollections,
-        totalCards: allCards.length,
-        orphanedCards: orphaned,
-        cardsByCollection: allCards.reduce((acc, card) => {
-          const key = card.collectionId || 'no-collection';
-          acc[key] = (acc[key] || 0) + 1;
-          return acc;
-        }, {} as Record<string, number>)
-      });
-      
+
     } catch (error) {
       console.error('Error loading diagnostic data:', error);
     } finally {
@@ -52,25 +40,21 @@ const CollectionDiagnostic: React.FC = () => {
 
   const fixOrphanedCards = async () => {
     if (orphanedCards.length === 0) return;
-    
+
     if (!window.confirm(`Found ${orphanedCards.length} orphaned cards. Move them to your default collection?`)) {
       return;
     }
-    
+
     try {
-      const defaultCollection = await collectionsDatabase.getDefaultCollection();
+      const defaultCollection = await apiService.getDefaultCollection();
       if (!defaultCollection) {
         alert('No default collection found!');
         return;
       }
-      
-      for (const card of orphanedCards) {
-        await cardDatabase.updateCard({
-          ...card,
-          collectionId: defaultCollection.id
-        });
-      }
-      
+
+      const cardIds = orphanedCards.map((c: any) => c.id);
+      await apiService.moveCardsToCollection(cardIds, defaultCollection.id);
+
       alert(`Successfully moved ${orphanedCards.length} cards to your default collection.`);
       loadDiagnosticData();
     } catch (error) {
@@ -80,27 +64,23 @@ const CollectionDiagnostic: React.FC = () => {
   };
 
   const moveAllCardsToDefault = async (fromCollectionId: string) => {
-    const collection = collections.find(c => c.id === fromCollectionId);
-    const collectionCards = cards.filter(c => c.collectionId === fromCollectionId);
-    
+    const collection = collections.find((c: any) => c.id === fromCollectionId);
+    const collectionCards = cards.filter((c: any) => c.collectionId === fromCollectionId);
+
     if (!window.confirm(`Move all ${collectionCards.length} cards from "${collection?.name}" to your default collection?`)) {
       return;
     }
-    
+
     try {
-      const defaultCollection = await collectionsDatabase.getDefaultCollection();
+      const defaultCollection = await apiService.getDefaultCollection();
       if (!defaultCollection) {
         alert('No default collection found!');
         return;
       }
-      
-      for (const card of collectionCards) {
-        await cardDatabase.updateCard({
-          ...card,
-          collectionId: defaultCollection.id
-        });
-      }
-      
+
+      const cardIds = collectionCards.map((c: any) => c.id);
+      await apiService.moveCardsToCollection(cardIds, defaultCollection.id);
+
       alert(`Successfully moved ${collectionCards.length} cards to your default collection.`);
       loadDiagnosticData();
     } catch (error) {
