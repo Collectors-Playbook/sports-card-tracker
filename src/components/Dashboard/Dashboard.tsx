@@ -3,7 +3,7 @@ import { useCards } from '../../context/DexieCardContext';
 import { CollectionType } from '../../types';
 import './Dashboard.css';
 
-type DashboardView = 'all' | 'Inventory' | 'PC';
+type DashboardView = 'all' | 'Inventory' | 'PC' | 'Pending';
 
 const Dashboard: React.FC = () => {
   const { state, getPortfolioStats } = useCards();
@@ -88,6 +88,17 @@ const Dashboard: React.FC = () => {
           onClick={() => setActiveView('PC')}
         >
           Personal Collection
+        </button>
+        <button
+          className={`view-tab ${activeView === 'Pending' ? 'active' : ''}`}
+          onClick={() => setActiveView('Pending')}
+        >
+          Pending
+          {state.cards.filter(c => c.collectionType === 'Pending').length > 0 && (
+            <span className="pending-badge">
+              {state.cards.filter(c => c.collectionType === 'Pending').length}
+            </span>
+          )}
         </button>
       </div>
 

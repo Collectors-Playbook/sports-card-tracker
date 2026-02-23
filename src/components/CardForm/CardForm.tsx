@@ -213,7 +213,7 @@ const CardForm: React.FC<CardFormProps> = ({ card, onSuccess, onCancel }) => {
         id: card?.id || `card-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         userId: card?.userId || '', // Will be set by the database
         collectionId: data.collectionId || undefined, // Will use default if not specified
-        collectionType: (data.collectionType as 'PC' | 'Inventory') || 'Inventory',
+        collectionType: (data.collectionType as CollectionType) || 'Inventory',
         player: data.player.trim(),
         team: data.team.trim(),
         year: year,

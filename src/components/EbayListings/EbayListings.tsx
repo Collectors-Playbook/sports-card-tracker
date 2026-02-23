@@ -30,8 +30,8 @@ const EbayListings: React.FC = () => {
   // Removed automatic export functionality
 
   const evaluateCard = (card: Card): ListingRecommendation | null => {
-    // Skip Personal Collection cards - they are never for sale
-    if (card.collectionType === 'PC') return null;
+    // Only recommend Inventory cards for eBay listing
+    if (card.collectionType !== 'Inventory') return null;
 
     // Skip already sold cards if filter is on
     if (showOnlyUnsold && card.sellDate) return null;
@@ -306,7 +306,7 @@ const EbayListings: React.FC = () => {
               }
             }}
           >
-            ⚡ INSTANT Export ALL Unsold Cards ({state.cards.filter(c => !c.sellDate && c.collectionType !== 'PC').length})
+            ⚡ INSTANT Export ALL Unsold Cards ({state.cards.filter(c => !c.sellDate && c.collectionType === 'Inventory').length})
           </button>
           <button 
             className="btn-quick-export"

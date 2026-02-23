@@ -3,7 +3,7 @@ import { Card } from '../types';
 // Instant export function - exports ALL unsold cards immediately
 export const instantExportAllUnsoldCards = (cards: Card[]) => {
   // Get all unsold, non-PC cards
-  const unsoldCards = cards.filter(card => !card.sellDate && card.collectionType !== 'PC');
+  const unsoldCards = cards.filter(card => !card.sellDate && card.collectionType === 'Inventory');
   
   if (unsoldCards.length === 0) {
     console.log('No unsold cards to export');
