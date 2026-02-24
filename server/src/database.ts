@@ -1,7 +1,7 @@
 import BetterSqlite3 from 'better-sqlite3';
 import { drizzle, BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { eq, and, like, desc, asc, sql, count, lt, lte, inArray } from 'drizzle-orm';
-import { Card, CardInput, User, UserInput, Collection, CollectionInput, CollectionStats, Job, JobInput, JobStatus, AuditLogEntry, AuditLogInput, AuditLogQuery, GradingSubmission, GradingSubmissionInput, GradingStatus, GradingStats, CompReport, CompSale, CompSource, CompResult, StoredCompReport } from './types';
+import { Card, CardInput, User, UserInput, Collection, CollectionInput, CollectionStats, Job, JobInput, JobStatus, AuditLogEntry, AuditLogInput, AuditLogQuery, GradingSubmission, GradingSubmissionInput, GradingStatus, GradingStats, CompReport, CompSale, CompSource, CompResult, StoredCompReport, PopulationData } from './types';
 import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
 import * as schema from './db/schema';
@@ -10,7 +10,7 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 
-const { users, collections, cards, jobs, gradingSubmissions, auditLogs, compCache, cardCompReports, cardCompSources } = schema;
+const { users, collections, cards, jobs, gradingSubmissions, auditLogs, compCache, cardCompReports, cardCompSources, popReportSnapshots } = schema;
 
 // Baseline SQL executed for in-memory databases (no migration journal needed)
 const BASELINE_SQL = `
@@ -147,6 +147,9 @@ CREATE TABLE IF NOT EXISTS card_comp_reports (
   aggregateAverage real,
   aggregateLow real,
   aggregateHigh real,
+  popMultiplier real,
+  popAdjustedAverage real,
+  popData text,
   generatedAt text NOT NULL,
   createdAt text NOT NULL,
   FOREIGN KEY (cardId) REFERENCES cards(id) ON UPDATE no action ON DELETE cascade
@@ -168,6 +171,24 @@ CREATE TABLE IF NOT EXISTS card_comp_sources (
   FOREIGN KEY (reportId) REFERENCES card_comp_reports(id) ON UPDATE no action ON DELETE cascade
 );
 CREATE INDEX IF NOT EXISTS idx_comp_sources_reportId ON card_comp_sources (reportId);
+
+CREATE TABLE IF NOT EXISTS pop_report_snapshots (
+  id text PRIMARY KEY NOT NULL,
+  cardId text NOT NULL,
+  gradingCompany text NOT NULL,
+  grade text NOT NULL,
+  totalGraded integer NOT NULL,
+  targetGradePop integer NOT NULL,
+  higherGradePop integer NOT NULL,
+  percentile real NOT NULL,
+  rarityTier text NOT NULL,
+  gradeBreakdown text DEFAULT '[]' NOT NULL,
+  fetchedAt text NOT NULL,
+  createdAt text NOT NULL,
+  FOREIGN KEY (cardId) REFERENCES cards(id) ON UPDATE no action ON DELETE cascade
+);
+CREATE INDEX IF NOT EXISTS idx_pop_snapshots_cardId ON pop_report_snapshots (cardId);
+CREATE INDEX IF NOT EXISTS idx_pop_snapshots_fetchedAt ON pop_report_snapshots (fetchedAt);
 `;
 
 class Database {
@@ -1109,6 +1130,9 @@ class Database {
       aggregateAverage: report.aggregateAverage,
       aggregateLow: report.aggregateLow,
       aggregateHigh: report.aggregateHigh,
+      popMultiplier: report.popMultiplier ?? null,
+      popAdjustedAverage: report.popAdjustedAverage ?? null,
+      popData: report.popData ? JSON.stringify(report.popData) : null,
       generatedAt: report.generatedAt,
       createdAt: now,
     }).run();
@@ -1131,11 +1155,12 @@ class Database {
       sourceRows.push(source);
     }
 
-    // Update card's currentValue if aggregate is non-null
-    if (report.aggregateAverage !== null) {
+    // Update card's currentValue — prefer pop-adjusted average, fall back to raw aggregate
+    const bestValue = report.popAdjustedAverage ?? report.aggregateAverage;
+    if (bestValue !== null && bestValue !== undefined) {
       const updatedAt = new Date().toISOString();
       this.db.update(cards).set({
-        currentValue: report.aggregateAverage,
+        currentValue: bestValue,
         updatedAt,
       }).where(eq(cards.id, cardId)).run();
     }
@@ -1148,6 +1173,9 @@ class Database {
       aggregateAverage: report.aggregateAverage,
       aggregateLow: report.aggregateLow,
       aggregateHigh: report.aggregateHigh,
+      popData: report.popData,
+      popMultiplier: report.popMultiplier,
+      popAdjustedAverage: report.popAdjustedAverage,
       generatedAt: report.generatedAt,
       createdAt: now,
     };
@@ -1198,6 +1226,10 @@ class Database {
     row: typeof cardCompReports.$inferSelect,
     sourceRows: (typeof cardCompSources.$inferSelect)[]
   ): StoredCompReport {
+    let popData: PopulationData | null = null;
+    if (row.popData) {
+      try { popData = JSON.parse(row.popData) as PopulationData; } catch { /* ignore */ }
+    }
     return {
       id: row.id,
       cardId: row.cardId,
@@ -1214,9 +1246,84 @@ class Database {
       aggregateAverage: row.aggregateAverage,
       aggregateLow: row.aggregateLow,
       aggregateHigh: row.aggregateHigh,
+      popData,
+      popMultiplier: row.popMultiplier ?? undefined,
+      popAdjustedAverage: row.popAdjustedAverage ?? undefined,
       generatedAt: row.generatedAt,
       createdAt: row.createdAt,
     };
+  }
+
+  // ─── Pop Report Snapshots ───────────────────────────────────────────────────
+
+  public async savePopSnapshot(cardId: string, data: PopulationData): Promise<void> {
+    const id = uuidv4();
+    const now = new Date().toISOString();
+
+    this.db.insert(popReportSnapshots).values({
+      id,
+      cardId,
+      gradingCompany: data.gradingCompany,
+      grade: data.targetGrade,
+      totalGraded: data.totalGraded,
+      targetGradePop: data.targetGradePop,
+      higherGradePop: data.higherGradePop,
+      percentile: data.percentile,
+      rarityTier: data.rarityTier,
+      gradeBreakdown: data.gradeBreakdown as unknown as { grade: string; count: number }[],
+      fetchedAt: data.fetchedAt,
+      createdAt: now,
+    }).run();
+  }
+
+  public async getLatestPopSnapshot(
+    cardId: string,
+    gradingCompany: string,
+    grade: string
+  ): Promise<PopulationData | null> {
+    const row = this.db.select().from(popReportSnapshots)
+      .where(and(
+        eq(popReportSnapshots.cardId, cardId),
+        eq(popReportSnapshots.gradingCompany, gradingCompany),
+        eq(popReportSnapshots.grade, grade),
+      ))
+      .orderBy(desc(popReportSnapshots.fetchedAt))
+      .limit(1)
+      .get();
+
+    if (!row) return null;
+
+    return {
+      gradingCompany: row.gradingCompany,
+      totalGraded: row.totalGraded,
+      gradeBreakdown: (row.gradeBreakdown ?? []) as { grade: string; count: number }[],
+      targetGrade: row.grade,
+      targetGradePop: row.targetGradePop,
+      higherGradePop: row.higherGradePop,
+      percentile: row.percentile,
+      rarityTier: row.rarityTier as PopulationData['rarityTier'],
+      fetchedAt: row.fetchedAt,
+    };
+  }
+
+  public async getPopHistory(cardId: string, limit: number = 50): Promise<PopulationData[]> {
+    const rows = this.db.select().from(popReportSnapshots)
+      .where(eq(popReportSnapshots.cardId, cardId))
+      .orderBy(desc(popReportSnapshots.fetchedAt))
+      .limit(limit)
+      .all();
+
+    return rows.map(row => ({
+      gradingCompany: row.gradingCompany,
+      totalGraded: row.totalGraded,
+      gradeBreakdown: (row.gradeBreakdown ?? []) as { grade: string; count: number }[],
+      targetGrade: row.grade,
+      targetGradePop: row.targetGradePop,
+      higherGradePop: row.higherGradePop,
+      percentile: row.percentile,
+      rarityTier: row.rarityTier as PopulationData['rarityTier'],
+      fetchedAt: row.fetchedAt,
+    }));
   }
 
   // ─── Lifecycle ───────────────────────────────────────────────────────────────

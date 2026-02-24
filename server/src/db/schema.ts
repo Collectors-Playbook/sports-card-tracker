@@ -130,6 +130,9 @@ export const cardCompReports = sqliteTable('card_comp_reports', {
   aggregateAverage: real('aggregateAverage'),
   aggregateLow: real('aggregateLow'),
   aggregateHigh: real('aggregateHigh'),
+  popMultiplier: real('popMultiplier'),
+  popAdjustedAverage: real('popAdjustedAverage'),
+  popData: text('popData'),
   generatedAt: text('generatedAt').notNull(),
   createdAt: text('createdAt').notNull(),
 }, (table) => [
@@ -169,4 +172,24 @@ export const auditLogs = sqliteTable('audit_logs', {
   index('idx_audit_logs_entity').on(table.entity, table.entityId),
   index('idx_audit_logs_userId').on(table.userId),
   index('idx_audit_logs_createdAt').on(table.createdAt),
+]);
+
+// ─── Pop Report Snapshots ────────────────────────────────────────────────
+
+export const popReportSnapshots = sqliteTable('pop_report_snapshots', {
+  id: text('id').primaryKey(),
+  cardId: text('cardId').notNull().references(() => cards.id, { onDelete: 'cascade' }),
+  gradingCompany: text('gradingCompany').notNull(),
+  grade: text('grade').notNull(),
+  totalGraded: integer('totalGraded').notNull(),
+  targetGradePop: integer('targetGradePop').notNull(),
+  higherGradePop: integer('higherGradePop').notNull(),
+  percentile: real('percentile').notNull(),
+  rarityTier: text('rarityTier').notNull(),
+  gradeBreakdown: text('gradeBreakdown', { mode: 'json' }).$type<{ grade: string; count: number }[]>().notNull().default([]),
+  fetchedAt: text('fetchedAt').notNull(),
+  createdAt: text('createdAt').notNull(),
+}, (table) => [
+  index('idx_pop_snapshots_cardId').on(table.cardId),
+  index('idx_pop_snapshots_fetchedAt').on(table.fetchedAt),
 ]);
