@@ -11,7 +11,8 @@ import CompService, {
   NormalizedSale,
 } from '../../services/compService';
 import Database from '../../database';
-import { CompAdapter, CompRequest, CompResult, CompSource } from '../../types';
+import { CompAdapter, CompRequest, CompResult, CompSource, PopulationData } from '../../types';
+import PopulationReportService from '../../services/populationReportService';
 import { _resetRateLimitState as resetOneThirtyPointRateLimit } from '../../services/adapters/oneThirtyPoint';
 
 function createMockAdapter(source: string, result: Partial<CompResult> = {}): CompAdapter {
@@ -781,5 +782,134 @@ describe('CompService weighted aggregation integration', () => {
     expect(report.aggregateAverage).toBeCloseTo(100, 0);
     expect(report.aggregateLow).toBe(90);
     expect(report.aggregateHigh).toBe(110);
+  });
+
+  // ─── Pop Report Integration ──────────────────────────────────────────────
+
+  describe('pop report integration', () => {
+    const samplePopData: PopulationData = {
+      gradingCompany: 'PSA',
+      totalGraded: 1000,
+      gradeBreakdown: [
+        { grade: '10', count: 3 },
+        { grade: '9', count: 50 },
+      ],
+      targetGrade: '10',
+      targetGradePop: 3,
+      higherGradePop: 0,
+      percentile: 0.3,
+      rarityTier: 'ultra-low',
+      fetchedAt: new Date().toISOString(),
+    };
+
+    const gradedRequest: CompRequest = {
+      cardId: 'card-1',
+      player: 'Mike Trout',
+      year: 2023,
+      brand: 'Topps',
+      cardNumber: '1',
+      condition: 'PSA 10',
+      isGraded: true,
+      gradingCompany: 'PSA',
+      grade: '10',
+    };
+
+    it('applies pop multiplier for graded card', async () => {
+      const popScraper = { company: 'PSA', fetchPopulation: jest.fn().mockResolvedValue(samplePopData) };
+      const popService = new PopulationReportService([popScraper]);
+      const adapters = [
+        createMockAdapter('eBay', { averagePrice: 50, low: 40, high: 60, marketValue: 50 }),
+      ];
+      const service = new CompService(fileService, adapters, undefined, undefined, undefined, popService);
+      const report = await service.generateComps(gradedRequest);
+
+      expect(report.popData).toBeTruthy();
+      expect(report.popMultiplier).toBe(1.25);
+      expect(report.popAdjustedAverage).toBeCloseTo(50 * 1.25, 1);
+    });
+
+    it('does not include pop data for ungraded card', async () => {
+      const popScraper = { company: 'PSA', fetchPopulation: jest.fn().mockResolvedValue(samplePopData) };
+      const popService = new PopulationReportService([popScraper]);
+      const adapters = [
+        createMockAdapter('eBay', { averagePrice: 50, low: 40, high: 60, marketValue: 50 }),
+      ];
+      const service = new CompService(fileService, adapters, undefined, undefined, undefined, popService);
+      const report = await service.generateComps(sampleRequest);
+
+      expect(report.popData).toBeNull();
+      expect(report.popMultiplier).toBeUndefined();
+      expect(report.popAdjustedAverage).toBeUndefined();
+    });
+
+    it('does not break comps when pop service throws', async () => {
+      const popScraper = { company: 'PSA', fetchPopulation: jest.fn().mockRejectedValue(new Error('Pop failed')) };
+      const popService = new PopulationReportService([popScraper]);
+      const adapters = [
+        createMockAdapter('eBay', { averagePrice: 50, low: 40, high: 60, marketValue: 50 }),
+      ];
+      const service = new CompService(fileService, adapters, undefined, undefined, undefined, popService);
+      const report = await service.generateComps(gradedRequest);
+
+      // Comps still succeed
+      expect(report.aggregateAverage).toBeDefined();
+      expect(report.popData).toBeNull();
+      expect(report.popMultiplier).toBeUndefined();
+    });
+
+    it('does not compute popAdjustedAverage when aggregate is null', async () => {
+      const popScraper = { company: 'PSA', fetchPopulation: jest.fn().mockResolvedValue(samplePopData) };
+      const popService = new PopulationReportService([popScraper]);
+      const adapters = [
+        createMockAdapter('eBay', { error: 'No data' }),
+      ];
+      const service = new CompService(fileService, adapters, undefined, undefined, undefined, popService);
+      const report = await service.generateComps(gradedRequest);
+
+      expect(report.aggregateAverage).toBeNull();
+      expect(report.popData).toBeTruthy();
+      expect(report.popAdjustedAverage).toBeUndefined();
+    });
+
+    it('persists popAdjustedAverage as currentValue in DB', async () => {
+      const db = new Database(':memory:');
+      // Create a user + card first
+      const user = await db.createUser({ username: 'test', email: 'test@test.com', password: 'pass' });
+      const card = await db.createCard({
+        userId: user.id,
+        player: 'Mike Trout',
+        team: 'Angels',
+        year: 2023,
+        brand: 'Topps',
+        category: 'Baseball',
+        cardNumber: '1',
+        condition: 'PSA 10',
+        purchasePrice: 20,
+        purchaseDate: '2023-01-01',
+        currentValue: 20,
+        images: [],
+        notes: '',
+        isGraded: true,
+        gradingCompany: 'PSA',
+        grade: '10',
+      });
+
+      const popScraper = { company: 'PSA', fetchPopulation: jest.fn().mockResolvedValue(samplePopData) };
+      const popService = new PopulationReportService([popScraper]);
+      const adapters = [
+        createMockAdapter('eBay', { averagePrice: 50, low: 40, high: 60, marketValue: 50 }),
+      ];
+      const service = new CompService(fileService, adapters, undefined, undefined, db, popService);
+      const report = await service.generateAndWriteComps({
+        ...gradedRequest,
+        cardId: card.id,
+      });
+
+      // currentValue should use popAdjustedAverage
+      const updatedCard = await db.getCardById(card.id);
+      expect(updatedCard!.currentValue).toBeCloseTo(report.popAdjustedAverage!, 1);
+
+      await db.close();
+    });
   });
 });
