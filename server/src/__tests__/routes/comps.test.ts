@@ -1,16 +1,25 @@
 import request from 'supertest';
 import { createTestApp, cleanupTestContext, TestContext } from '../helpers/testSetup';
 import { createCardData } from '../helpers/factories';
+import { _resetRateLimitState as resetOneThirtyPointRateLimit } from '../../services/adapters/oneThirtyPoint';
 
 describe('Comp Routes', () => {
   let ctx: TestContext;
+  let fetchSpy: jest.SpyInstance;
 
   beforeAll(async () => {
+    // Mock fetch so 130Point adapter doesn't make real HTTP calls
+    fetchSpy = jest.spyOn(global, 'fetch').mockRejectedValue(new Error('Network disabled in test'));
     ctx = await createTestApp();
+  });
+
+  beforeEach(() => {
+    resetOneThirtyPointRateLimit();
   });
 
   afterAll(async () => {
     await cleanupTestContext(ctx);
+    fetchSpy.mockRestore();
   });
 
   describe('POST /api/comps/generate', () => {
