@@ -1,26 +1,20 @@
-import PsaPopScraper, { buildPopSearchUrl, parseGradeBreakdown, computeHigherGradePop } from '../../../services/adapters/psaPopScraper';
+import PsaPopScraper, {
+  buildSearchQueries,
+  buildPopSearchUrl,
+  parseGradeBreakdown,
+  parsePopJson,
+  computeHigherGradePop,
+  scoreMatch,
+  mapCategoryToSearchValue,
+  CATEGORY_MAP,
+} from '../../../services/adapters/psaPopScraper';
 import { PopGradeEntry, PopRequest } from '../../../types';
 
-// ─── buildPopSearchUrl ──────────────────────────────────────────────────────
+// ─── buildSearchQueries ─────────────────────────────────────────────────────
 
-describe('buildPopSearchUrl', () => {
-  it('builds URL with basic card info', () => {
-    const url = buildPopSearchUrl({
-      player: 'Mike Trout',
-      year: 2023,
-      brand: 'Topps',
-      cardNumber: '1',
-      grade: '10',
-    });
-    expect(url).toContain('psacard.com/pop/search');
-    expect(url).toContain('2023');
-    expect(url).toContain('Topps');
-    expect(url).toContain('Mike+Trout');
-    expect(url).toContain('%231'); // #1 url-encoded
-  });
-
-  it('includes setName and parallel when provided', () => {
-    const url = buildPopSearchUrl({
+describe('buildSearchQueries', () => {
+  it('builds progressively simpler queries using last name', () => {
+    const queries = buildSearchQueries({
       player: 'Mike Trout',
       year: 2023,
       brand: 'Topps',
@@ -29,12 +23,65 @@ describe('buildPopSearchUrl', () => {
       parallel: 'Refractor',
       grade: '10',
     });
-    expect(url).toContain('Chrome');
-    expect(url).toContain('Refractor');
+    expect(queries.length).toBeGreaterThanOrEqual(3);
+    // Most specific includes setName + last name + card number
+    expect(queries[0]).toContain('Chrome');
+    expect(queries[0]).toContain('Trout');
+    expect(queries[0]).toContain('1');
+    // Broadest is just year + brand + last name
+    expect(queries[queries.length - 1]).toBe('2023 Topps Trout');
+  });
+
+  it('deduplicates identical queries', () => {
+    const queries = buildSearchQueries({
+      player: 'Mike Trout',
+      year: 2023,
+      brand: 'Topps',
+      cardNumber: '1',
+      grade: '10',
+    });
+    const unique = new Set(queries);
+    expect(queries.length).toBe(unique.size);
+  });
+
+  it('includes card number in specific queries', () => {
+    const queries = buildSearchQueries({
+      player: 'Mike Trout',
+      year: 2023,
+      brand: 'Topps',
+      cardNumber: '1',
+      grade: '10',
+    });
+    expect(queries[0]).toContain('1');
+  });
+
+  it('strips dashes from card numbers', () => {
+    const queries = buildSearchQueries({
+      player: 'Stephen Curry',
+      year: 2021,
+      brand: 'Panini',
+      cardNumber: 'AUR-SCU',
+      setName: 'Obsidian Aurora',
+      grade: '9',
+    });
+    expect(queries[0]).toContain('AURSCU');
+    expect(queries[0]).not.toContain('AUR-SCU');
   });
 });
 
-// ─── parseGradeBreakdown ────────────────────────────────────────────────────
+// ─── buildPopSearchUrl ──────────────────────────────────────────────────────
+
+describe('buildPopSearchUrl', () => {
+  it('builds URL from query string', () => {
+    const url = buildPopSearchUrl('2023 Topps Mike Trout #1');
+    expect(url).toContain('psacard.com/pop/search');
+    expect(url).toContain('2023');
+    expect(url).toContain('Topps');
+    expect(url).toContain('Mike+Trout');
+  });
+});
+
+// ─── parseGradeBreakdown (legacy HTML parsing) ─────────────────────────────
 
 describe('parseGradeBreakdown', () => {
   it('parses grade/count rows', () => {
@@ -73,6 +120,111 @@ describe('parseGradeBreakdown', () => {
     const rows = [['', '50']];
     const result = parseGradeBreakdown(rows);
     expect(result).toEqual([]);
+  });
+});
+
+// ─── parsePopJson ───────────────────────────────────────────────────────────
+
+describe('parsePopJson', () => {
+  it('parses PSA JSON Counts object into PopGradeEntry[]', () => {
+    const counts = {
+      GradeN0: 0, Grade1: 0, Grade1_5: 0,
+      Grade2: 0, Grade2_5: 0, Grade3: 0, Grade3_5: 0,
+      Grade4: 0, Grade4_5: 0, Grade5: 0, Grade5_5: 0,
+      Grade6: 2, Grade6_5: 0, Grade7: 1, Grade7_5: 0,
+      Grade8: 1, Grade8_5: 1, Grade9: 3, Grade9_5: 0, Grade10: 0,
+    };
+    const result = parsePopJson(counts);
+    expect(result).toEqual([
+      { grade: '6', count: 2 },
+      { grade: '7', count: 1 },
+      { grade: '8', count: 1 },
+      { grade: '8.5', count: 1 },
+      { grade: '9', count: 3 },
+    ]);
+  });
+
+  it('skips grades with count 0', () => {
+    const counts = { Grade10: 5, Grade9: 0, Grade8: 3 };
+    const result = parsePopJson(counts);
+    expect(result).toEqual([
+      { grade: '8', count: 3 },
+      { grade: '10', count: 5 },
+    ]);
+  });
+
+  it('handles Auth grade', () => {
+    const counts = { GradeN0: 10, Grade10: 0 };
+    const result = parsePopJson(counts);
+    expect(result).toEqual([{ grade: 'Auth', count: 10 }]);
+  });
+
+  it('returns empty array for all-zero counts', () => {
+    const counts = { Grade10: 0, Grade9: 0 };
+    const result = parsePopJson(counts);
+    expect(result).toEqual([]);
+  });
+});
+
+// ─── scoreMatch ─────────────────────────────────────────────────────────────
+
+describe('scoreMatch', () => {
+  const baseRequest: PopRequest = {
+    player: 'Stephen Curry',
+    year: 2021,
+    brand: 'Panini',
+    cardNumber: 'AUR-SCU',
+    setName: 'Obsidian Aurora',
+    parallel: 'Orange',
+    grade: '9',
+  };
+
+  it('returns -1 when player last name not found', () => {
+    expect(scoreMatch('2021 Panini Obsidian Aurora Mike Trout', baseRequest)).toBe(-1);
+  });
+
+  it('scores higher for full player name match', () => {
+    const fullMatch = scoreMatch('2021 Panini Obsidian Aurora Autographs Aurscu Stephen Curry', baseRequest);
+    const partialMatch = scoreMatch('2021 Panini Obsidian Aurora Autographs Aurscu Curry', baseRequest);
+    expect(fullMatch).toBeGreaterThan(partialMatch);
+  });
+
+  it('scores higher for card number match', () => {
+    const withNum = scoreMatch('2021 Panini Obsidian Aurora Autographs Aurscu Stephen Curry', baseRequest);
+    const withoutNum = scoreMatch('2021 Panini Obsidian Aurora Autographs Stephen Curry', baseRequest);
+    expect(withNum).toBeGreaterThan(withoutNum);
+  });
+
+  it('scores higher for parallel match', () => {
+    const withParallel = scoreMatch('2021 Panini Obsidian Aurora Autographs Aurscu Stephen Curry Electric Etch Orange', baseRequest);
+    const withoutParallel = scoreMatch('2021 Panini Obsidian Aurora Autographs Aurscu Stephen Curry', baseRequest);
+    expect(withParallel).toBeGreaterThan(withoutParallel);
+  });
+
+  it('prefers base card when no parallel specified', () => {
+    const requestNoParallel = { ...baseRequest, parallel: undefined };
+    const base = scoreMatch('2021 Panini Obsidian Aurora Autographs Aurscu Stephen Curry', requestNoParallel);
+    const parallel = scoreMatch('2021 Panini Obsidian Aurora Autographs Aurscu Stephen Curry Electric Etch Orange', requestNoParallel);
+    expect(base).toBeGreaterThan(parallel);
+  });
+});
+
+// ─── mapCategoryToSearchValue ───────────────────────────────────────────────
+
+describe('mapCategoryToSearchValue', () => {
+  it('maps common sports to PSA category values', () => {
+    expect(mapCategoryToSearchValue('Basketball')).toBe('basketball cards');
+    expect(mapCategoryToSearchValue('baseball')).toBe('baseball cards');
+    expect(mapCategoryToSearchValue('Football')).toBe('football cards');
+  });
+
+  it('returns empty string for unknown categories', () => {
+    expect(mapCategoryToSearchValue('Other')).toBe('');
+    expect(mapCategoryToSearchValue(undefined)).toBe('');
+  });
+
+  it('maps Pokemon to TCG cards', () => {
+    expect(mapCategoryToSearchValue('Pokemon')).toBe('tcg cards');
   });
 });
 
@@ -127,9 +279,11 @@ describe('PsaPopScraper', () => {
     expect(result).toBeNull();
   });
 
-  it('returns null when search finds no detail link', async () => {
+  it('returns null when search finds no results', async () => {
+    // First evaluate: form search returns empty results
+    // Second evaluate: another query, also empty
     const mockPage = {
-      evaluate: jest.fn().mockResolvedValue(null),
+      evaluate: jest.fn().mockResolvedValue([]),
       close: jest.fn().mockResolvedValue(undefined),
     };
     const mockBrowser = {
@@ -146,30 +300,41 @@ describe('PsaPopScraper', () => {
       grade: '10',
     });
     expect(result).toBeNull();
-    expect(mockPage.close).toHaveBeenCalled();
+    // One navigateWithThrottle call for the search page
+    expect(mockBrowser.navigateWithThrottle).toHaveBeenCalledTimes(1);
   });
 
   it('returns PopulationData when scraping succeeds', async () => {
-    const searchPage = {
-      evaluate: jest.fn().mockResolvedValue('https://www.psacard.com/pop/baseball/2023/topps/123'),
-      close: jest.fn().mockResolvedValue(undefined),
+    const searchResults = [
+      { description: '2023 Topps Chrome 1 Mike Trout', specId: '12345' },
+      { description: '2023 Topps Chrome 1 Mike Trout Refractor', specId: '12346' },
+    ];
+
+    const popJsonResponse = {
+      DNAData: {
+        SpecID: 12345,
+        Total: 253,
+        Counts: {
+          GradeN0: 0, Grade1: 0, Grade2: 0, Grade3: 0, Grade4: 0,
+          Grade5: 0, Grade6: 0, Grade7: 0, Grade8: 200, Grade9: 50, Grade10: 3,
+        },
+      },
     };
-    const popPage = {
-      evaluate: jest.fn().mockResolvedValue([
-        ['10', '3'],
-        ['9', '50'],
-        ['8', '200'],
-      ]),
+
+    let evalCallCount = 0;
+    const mockPage = {
+      evaluate: jest.fn().mockImplementation(() => {
+        evalCallCount++;
+        if (evalCallCount === 1) return Promise.resolve(searchResults);
+        if (evalCallCount === 2) return Promise.resolve(popJsonResponse);
+        return Promise.resolve(null);
+      }),
       close: jest.fn().mockResolvedValue(undefined),
     };
 
-    let callCount = 0;
     const mockBrowser = {
       isRunning: () => true,
-      navigateWithThrottle: jest.fn().mockImplementation(() => {
-        callCount++;
-        return callCount === 1 ? searchPage : popPage;
-      }),
+      navigateWithThrottle: jest.fn().mockResolvedValue(mockPage),
     } as any;
 
     const scraper = new PsaPopScraper(mockBrowser);
@@ -191,14 +356,14 @@ describe('PsaPopScraper', () => {
     expect(result!.gradeBreakdown).toHaveLength(3);
   });
 
-  it('returns null and cleans up pages on error', async () => {
-    const searchPage = {
+  it('returns null and cleans up page on error', async () => {
+    const mockPage = {
       evaluate: jest.fn().mockRejectedValue(new Error('Navigation failed')),
       close: jest.fn().mockResolvedValue(undefined),
     };
     const mockBrowser = {
       isRunning: () => true,
-      navigateWithThrottle: jest.fn().mockResolvedValue(searchPage),
+      navigateWithThrottle: jest.fn().mockResolvedValue(mockPage),
     } as any;
 
     const scraper = new PsaPopScraper(mockBrowser);
@@ -210,6 +375,6 @@ describe('PsaPopScraper', () => {
       grade: '10',
     });
     expect(result).toBeNull();
-    expect(searchPage.close).toHaveBeenCalled();
+    expect(mockPage.close).toHaveBeenCalled();
   });
 });
