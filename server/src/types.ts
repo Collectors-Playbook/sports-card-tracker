@@ -174,7 +174,7 @@ export interface AuthenticatedRequest extends Request {
 
 // ─── Comps ───────────────────────────────────────────────────────────────────
 
-export type CompSource = 'SportsCardsPro' | 'eBay' | 'CardLadder' | 'MarketMovers';
+export type CompSource = 'SportsCardsPro' | 'eBay' | 'CardLadder' | 'MarketMovers' | '130Point';
 
 export interface CompSale {
   date: string;
