@@ -288,8 +288,8 @@ class CompService {
           popMultiplier = getMultiplier(popData);
           popAdjustedAverage = Math.round(aggregateAverage * popMultiplier * 100) / 100;
         }
-      } catch {
-        // Pop report failures are non-fatal
+      } catch (err) {
+        console.error('[Pop] Error fetching pop data:', err);
       }
     }
 

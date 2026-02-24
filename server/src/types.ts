@@ -217,6 +217,7 @@ export interface CompRequest {
   brand: string;
   cardNumber: string;
   condition?: string;
+  category?: string;
   setName?: string;
   parallel?: string;
   isGraded?: boolean;
