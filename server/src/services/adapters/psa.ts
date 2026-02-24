@@ -48,21 +48,44 @@ interface ParsedSale {
 
 /**
  * Parse sale rows extracted from PSA detail page table.
- * Sale rows have 7 cells: [image, date, auctionHouse, saleType, certNo, grade, price]
- * Grade summary rows have 5 cells and are skipped.
+ * Dynamically finds grade and price cells to handle column shifts.
+ * Grade summary rows (< 6 cells) are skipped.
  */
 function parseSaleRows(rows: string[][]): ParsedSale[] {
   const results: ParsedSale[] = [];
-  for (const cells of rows) {
-    // Sale rows have 7 cells; skip grade summary rows (5 cells)
-    if (cells.length < 7) continue;
+  const GRADE_REGEX = /^(\d{1,2}(?:\.\d+)?|Auth(?:entic)?)$/i;
 
+  for (const cells of rows) {
+    if (cells.length < 6) continue;
+
+    // Find price: last cell that looks like a price ($XX.XX)
+    let price: number | null = null;
+    let priceIdx = -1;
+    for (let i = cells.length - 1; i >= 0; i--) {
+      const priceText = cells[i].replace(/[^0-9.]/g, '');
+      const p = parseFloat(priceText);
+      if (!isNaN(p) && p > 0 && /\$/.test(cells[i])) {
+        price = p;
+        priceIdx = i;
+        break;
+      }
+    }
+    if (price === null || priceIdx < 0) continue;
+
+    // Find grade: scan backward from price for a cell matching the grade pattern
+    let grade = '';
+    for (let i = priceIdx - 1; i >= 0; i--) {
+      if (GRADE_REGEX.test(cells[i].trim())) {
+        grade = cells[i].trim();
+        if (/^auth/i.test(grade)) grade = 'Auth';
+        break;
+      }
+    }
+
+    // Date: cells[1] (typically stable as 2nd column)
     const date = cells[1] || '';
+    // Auction house: cells[2] (typically 3rd column)
     const auctionHouse = cells[2] || 'PSA';
-    const grade = cells[5] || '';
-    const priceText = (cells[6] || '').replace(/[^0-9.]/g, '');
-    const price = parseFloat(priceText);
-    if (isNaN(price) || price <= 0) continue;
 
     results.push({ price, date, grade, auctionHouse });
   }
