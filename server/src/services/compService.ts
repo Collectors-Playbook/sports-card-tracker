@@ -8,6 +8,7 @@ import EbayAdapter from './adapters/ebay';
 import CardLadderAdapter from './adapters/cardLadder';
 import MarketMoversAdapter from './adapters/marketMovers';
 import OneThirtyPointAdapter from './adapters/oneThirtyPoint';
+import PsaAdapter from './adapters/psa';
 import { CompAdapter, CompRequest, CompReport, CompResult, CompSource, StoredCompReport } from '../types';
 import Database from '../database';
 
@@ -21,6 +22,7 @@ const UNKNOWN_DATE_WEIGHT = 0.25;
 const MIN_SALES_FOR_TRIM = 5;
 const SOURCE_RELIABILITY: Record<CompSource, number> = {
   'eBay': 1.0,
+  'PSA': 0.95,
   '130Point': 0.9,
   'MarketMovers': 0.85,
   'CardLadder': 0.8,
@@ -239,6 +241,7 @@ class CompService {
       new CardLadderAdapter(browserService, cacheService),
       new MarketMoversAdapter(browserService, cacheService),
       new OneThirtyPointAdapter(browserService, cacheService),
+      new PsaAdapter(browserService, cacheService),
     ];
   }
 
