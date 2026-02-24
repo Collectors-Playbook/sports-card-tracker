@@ -505,6 +505,11 @@ class ApiService {
     return this.request<CompReport>(`/comps/${cardId}?refresh=true`);
   }
 
+  public async getPopHistory(cardId: string, limit?: number): Promise<PopulationData[]> {
+    const query = limit ? `?limit=${limit}` : '';
+    return this.request<PopulationData[]>(`/comps/${cardId}/pop-history${query}`);
+  }
+
   public async generateBulkComps(cardIds: string[]): Promise<{ id: string; type: string; status: string }> {
     return this.request('/jobs', {
       method: 'POST',
@@ -862,7 +867,24 @@ export interface CompReport {
   aggregateAverage: number | null;
   aggregateLow: number | null;
   aggregateHigh: number | null;
+  popData?: PopulationData | null;
+  popMultiplier?: number;
+  popAdjustedAverage?: number | null;
   generatedAt: string;
+}
+
+export type PopRarityTier = 'ultra-low' | 'low' | 'medium' | 'high' | 'very-high';
+
+export interface PopulationData {
+  gradingCompany: string;
+  totalGraded: number;
+  gradeBreakdown: { grade: string; count: number }[];
+  targetGrade: string;
+  targetGradePop: number;
+  higherGradePop: number;
+  percentile: number;
+  rarityTier: PopRarityTier;
+  fetchedAt: string;
 }
 
 export const apiService = new ApiService();

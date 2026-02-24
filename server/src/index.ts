@@ -20,6 +20,10 @@ import { createImageProcessingRoutes } from './routes/imageProcessing';
 import CompService from './services/compService';
 import BrowserService from './services/browserService';
 import CompCacheService from './services/compCacheService';
+import PopulationReportService from './services/populationReportService';
+import PsaPopScraper from './services/adapters/psaPopScraper';
+import BgsPopScraper from './services/adapters/bgsPopScraper';
+import SgcPopScraper from './services/adapters/sgcPopScraper';
 import AnthropicVisionService from './services/anthropicVisionService';
 import ImageProcessingService from './services/imageProcessingService';
 import ImageCropService from './services/imageCropService';
@@ -48,7 +52,10 @@ const browserService = config.puppeteerEnabled ? new BrowserService({
   rateLimits: config.rateLimits,
 }) : undefined;
 const compCacheService = config.puppeteerEnabled ? new CompCacheService(db, config.compCacheTtlMs) : undefined;
-const compService = new CompService(fileService, undefined, browserService, compCacheService, db);
+const popService = config.puppeteerEnabled
+  ? new PopulationReportService([new PsaPopScraper(browserService), new BgsPopScraper(), new SgcPopScraper()], db)
+  : undefined;
+const compService = new CompService(fileService, undefined, browserService, compCacheService, db, popService);
 
 const visionService = new AnthropicVisionService();
 const imageCropService = new ImageCropService();

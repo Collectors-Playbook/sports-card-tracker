@@ -87,6 +87,9 @@ export function createCompRoutes(db: Database, compService: CompService): Router
         aggregateAverage: stored.aggregateAverage,
         aggregateLow: stored.aggregateLow,
         aggregateHigh: stored.aggregateHigh,
+        popData: stored.popData,
+        popMultiplier: stored.popMultiplier,
+        popAdjustedAverage: stored.popAdjustedAverage,
         generatedAt: stored.generatedAt,
       };
 
@@ -121,6 +124,9 @@ export function createCompRoutes(db: Database, compService: CompService): Router
         aggregateAverage: stored.aggregateAverage,
         aggregateLow: stored.aggregateLow,
         aggregateHigh: stored.aggregateHigh,
+        popData: stored.popData,
+        popMultiplier: stored.popMultiplier,
+        popAdjustedAverage: stored.popAdjustedAverage,
         generatedAt: stored.generatedAt,
       }));
 
@@ -128,6 +134,24 @@ export function createCompRoutes(db: Database, compService: CompService): Router
     } catch (error) {
       console.error('Error getting comp history:', error);
       res.status(500).json({ error: 'Failed to get comp history' });
+    }
+  });
+
+  // GET /api/comps/:cardId/pop-history — returns historical pop report snapshots
+  router.get('/:cardId/pop-history', async (req: Request, res: Response) => {
+    try {
+      const card = await db.getCardById(req.params.cardId);
+      if (!card) {
+        res.status(404).json({ error: 'Card not found' });
+        return;
+      }
+
+      const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
+      const history = await db.getPopHistory(card.id, limit);
+      res.json(history);
+    } catch (error) {
+      console.error('Error getting pop history:', error);
+      res.status(500).json({ error: 'Failed to get pop history' });
     }
   });
 
@@ -157,6 +181,9 @@ export function createCompRoutes(db: Database, compService: CompService): Router
             aggregateAverage: stored.aggregateAverage,
             aggregateLow: stored.aggregateLow,
             aggregateHigh: stored.aggregateHigh,
+            popData: stored.popData,
+            popMultiplier: stored.popMultiplier,
+            popAdjustedAverage: stored.popAdjustedAverage,
             generatedAt: stored.generatedAt,
           };
           res.json(report);

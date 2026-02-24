@@ -204,6 +204,9 @@ export interface CompReport {
   aggregateAverage: number | null;
   aggregateLow: number | null;
   aggregateHigh: number | null;
+  popData?: PopulationData | null;
+  popMultiplier?: number;
+  popAdjustedAverage?: number | null;
   generatedAt: string;
 }
 
@@ -238,8 +241,44 @@ export interface StoredCompReport {
   aggregateAverage: number | null;
   aggregateLow: number | null;
   aggregateHigh: number | null;
+  popData?: PopulationData | null;
+  popMultiplier?: number;
+  popAdjustedAverage?: number | null;
   generatedAt: string;
   createdAt: string;
+}
+
+// ─── Population Report ─────────────────────────────────────────────────────
+
+export interface PopulationData {
+  gradingCompany: string;
+  totalGraded: number;
+  gradeBreakdown: PopGradeEntry[];
+  targetGrade: string;
+  targetGradePop: number;
+  higherGradePop: number;
+  percentile: number;
+  rarityTier: PopRarityTier;
+  fetchedAt: string;
+}
+
+export interface PopGradeEntry { grade: string; count: number; }
+export type PopRarityTier = 'ultra-low' | 'low' | 'medium' | 'high' | 'very-high';
+
+export interface PopScraper {
+  company: string;
+  fetchPopulation(request: PopRequest): Promise<PopulationData | null>;
+}
+
+export interface PopRequest {
+  player: string;
+  year: number;
+  brand: string;
+  cardNumber: string;
+  setName?: string;
+  parallel?: string;
+  grade: string;
+  category?: string;
 }
 
 // ─── eBay Export ────────────────────────────────────────────────────────────

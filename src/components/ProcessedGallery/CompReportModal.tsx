@@ -1,5 +1,5 @@
 import React, { useEffect, useCallback, useState } from 'react';
-import { CompReport, CompResult } from '../../services/api';
+import { CompReport, CompResult, PopRarityTier } from '../../services/api';
 
 interface CompReportModalProps {
   report: CompReport;
@@ -60,6 +60,19 @@ const SourceSection: React.FC<{ result: CompResult }> = ({ result }) => {
     </div>
   );
 };
+
+function getRarityBadgeClass(tier: PopRarityTier): string {
+  switch (tier) {
+    case 'ultra-low':
+    case 'low':
+      return 'rarity-low';
+    case 'medium':
+      return 'rarity-medium';
+    case 'high':
+    case 'very-high':
+      return 'rarity-high';
+  }
+}
 
 const CompReportModal: React.FC<CompReportModalProps> = ({ report, onClose, onRefresh }) => {
   const [refreshing, setRefreshing] = useState(false);
@@ -124,6 +137,31 @@ const CompReportModal: React.FC<CompReportModalProps> = ({ report, onClose, onRe
             <span className="comp-report-aggregate-value">{formatPrice(currentReport.aggregateHigh)}</span>
           </div>
         </div>
+
+        {/* Pop report section */}
+        {currentReport.popData && (
+          <div className="comp-report-pop-section">
+            <div className="comp-report-pop-header">
+              <span className="comp-report-pop-title">Population Report</span>
+              <span className={`comp-report-pop-rarity-badge ${getRarityBadgeClass(currentReport.popData.rarityTier)}`}>
+                {currentReport.popData.rarityTier}
+              </span>
+            </div>
+            <div className="comp-report-pop-stats">
+              <span>{currentReport.popData.gradingCompany} {currentReport.popData.targetGrade} Pop: {currentReport.popData.targetGradePop}</span>
+              <span>Total Graded: {currentReport.popData.totalGraded}</span>
+              <span>Top {currentReport.popData.percentile}%</span>
+            </div>
+            {currentReport.popAdjustedAverage !== null && currentReport.popAdjustedAverage !== undefined && currentReport.popMultiplier !== undefined && (
+              <div className="comp-report-pop-adjusted-value">
+                Pop-Adjusted: {formatPrice(currentReport.popAdjustedAverage)}
+                <span className="comp-report-pop-multiplier">
+                  ({currentReport.popMultiplier >= 1 ? '+' : ''}{Math.round((currentReport.popMultiplier - 1) * 100)}%)
+                </span>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Per-source sections */}
         <div className="comp-report-sources">

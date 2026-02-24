@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { apiService, ExtractedCardData, CompReport } from '../../services/api';
+import { apiService, ExtractedCardData, CompReport, PopRarityTier } from '../../services/api';
 import { Card } from '../../types';
 import ImageLightbox from '../HoldingPen/ImageLightbox';
 import CardReviewForm from '../CardReviewForm/CardReviewForm';
@@ -168,6 +168,7 @@ const ProcessedGallery: React.FC = () => {
   const [compLoadingId, setCompLoadingId] = useState<string | null>(null);
   const [compReport, setCompReport] = useState<CompReport | null>(null);
   const [bulkCompLoading, setBulkCompLoading] = useState(false);
+  const [lowPopIds, setLowPopIds] = useState<Set<string>>(new Set());
 
   const fetchFiles = useCallback(async () => {
     try {
@@ -270,6 +271,17 @@ const ProcessedGallery: React.FC = () => {
     }
   };
 
+  const trackLowPop = useCallback((pairId: string, report: CompReport) => {
+    const tier = report.popData?.rarityTier;
+    if (tier === 'ultra-low' || tier === 'low') {
+      setLowPopIds(prev => {
+        const next = new Set(prev);
+        next.add(pairId);
+        return next;
+      });
+    }
+  }, []);
+
   const handleGenerateComps = async (pair: CardPair) => {
     const filename = pair.front?.name || pair.back?.name;
     if (!filename) return;
@@ -277,6 +289,7 @@ const ProcessedGallery: React.FC = () => {
     try {
       const card = await apiService.getCardByImage(filename);
       const report = await apiService.generateComps(card.id);
+      trackLowPop(pair.id, report);
       setCompReport(report);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate comps');
@@ -450,6 +463,9 @@ const ProcessedGallery: React.FC = () => {
                   {[pair.front, pair.back].filter(Boolean).map(f => (
                     <span key={f!.name} className="processed-gallery-file-size">{formatFileSize(f!.size)}</span>
                   ))}
+                  {lowPopIds.has(pair.id) && (
+                    <span className="processed-gallery-low-pop-badge">Low Pop</span>
+                  )}
                 </div>
               </div>
 

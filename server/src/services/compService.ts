@@ -9,8 +9,9 @@ import CardLadderAdapter from './adapters/cardLadder';
 import MarketMoversAdapter from './adapters/marketMovers';
 import OneThirtyPointAdapter from './adapters/oneThirtyPoint';
 import PsaAdapter from './adapters/psa';
-import { CompAdapter, CompRequest, CompReport, CompResult, CompSource, StoredCompReport } from '../types';
+import { CompAdapter, CompRequest, CompReport, CompResult, CompSource, StoredCompReport, PopulationData } from '../types';
 import Database from '../database';
+import PopulationReportService, { getMultiplier } from './populationReportService';
 
 // ─── Aggregation Constants ──────────────────────────────────────────────────
 
@@ -225,16 +226,19 @@ class CompService {
   private fileService: FileService;
   private adapters: CompAdapter[];
   private db?: Database;
+  private popService?: PopulationReportService;
 
   constructor(
     fileService: FileService,
     adapters?: CompAdapter[],
     browserService?: BrowserService,
     cacheService?: CompCacheService,
-    db?: Database
+    db?: Database,
+    popService?: PopulationReportService
   ) {
     this.fileService = fileService;
     this.db = db;
+    this.popService = popService;
     this.adapters = adapters || [
       new SportsCardsProAdapter(browserService, cacheService),
       new EbayAdapter(browserService, cacheService),
@@ -272,6 +276,23 @@ class CompService {
     // Compute weighted aggregate from pooled sales (or fallback to market values)
     const { aggregateAverage, aggregateLow, aggregateHigh } = this.computeWeightedAggregate(results);
 
+    // Fetch pop data for graded cards (failures don't break comps)
+    let popData: PopulationData | null = null;
+    let popMultiplier: number | undefined;
+    let popAdjustedAverage: number | null | undefined;
+
+    if (this.popService) {
+      try {
+        popData = await this.popService.getPopulationData(request);
+        if (popData && aggregateAverage !== null) {
+          popMultiplier = getMultiplier(popData);
+          popAdjustedAverage = Math.round(aggregateAverage * popMultiplier * 100) / 100;
+        }
+      } catch {
+        // Pop report failures are non-fatal
+      }
+    }
+
     return {
       cardId: request.cardId,
       player: request.player,
@@ -283,6 +304,9 @@ class CompService {
       aggregateAverage,
       aggregateLow,
       aggregateHigh,
+      popData,
+      popMultiplier,
+      popAdjustedAverage,
       generatedAt: new Date().toISOString(),
     };
   }
@@ -421,6 +445,20 @@ class CompService {
       lines.push(`Average: $${report.aggregateAverage.toFixed(2)}`);
       if (report.aggregateLow !== null) lines.push(`Low: $${report.aggregateLow.toFixed(2)}`);
       if (report.aggregateHigh !== null) lines.push(`High: $${report.aggregateHigh.toFixed(2)}`);
+    }
+
+    if (report.popData) {
+      lines.push('');
+      lines.push('--- Population Report ---');
+      lines.push(`${report.popData.gradingCompany} ${report.popData.targetGrade} Pop: ${report.popData.targetGradePop}`);
+      lines.push(`Total Graded: ${report.popData.totalGraded}`);
+      lines.push(`Percentile: Top ${report.popData.percentile}%`);
+      lines.push(`Rarity Tier: ${report.popData.rarityTier}`);
+      if (report.popMultiplier !== undefined && report.popAdjustedAverage !== null && report.popAdjustedAverage !== undefined) {
+        const pctChange = Math.round((report.popMultiplier - 1) * 100);
+        const sign = pctChange >= 0 ? '+' : '';
+        lines.push(`Pop-Adjusted Average: $${report.popAdjustedAverage.toFixed(2)} (${sign}${pctChange}%)`);
+      }
     }
 
     return lines.join('\n') + '\n';

@@ -579,3 +579,84 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ─── Low Pop Badge ──────────────────────────────────────────────────────── */
+
+.processed-gallery-low-pop-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 600;
+  background: #d1fae5;
+  color: #065f46;
+}
+
+/* ─── Pop Report Section (CompReportModal) ─────────────────────────────── */
+
+.comp-report-pop-section {
+  padding: 12px 16px;
+  margin: 0 0 8px;
+  background: var(--surface-secondary, #f8f9fa);
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--border-color, #e5e7eb);
+}
+
+.comp-report-pop-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.comp-report-pop-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-primary, #1a1a2e);
+}
+
+.comp-report-pop-rarity-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm, 4px);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.comp-report-pop-rarity-badge.rarity-low {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.comp-report-pop-rarity-badge.rarity-medium {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.comp-report-pop-rarity-badge.rarity-high {
+  background: #e5e7eb;
+  color: #6b7280;
+}
+
+.comp-report-pop-stats {
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--text-secondary, #64748b);
+  margin-bottom: 6px;
+}
+
+.comp-report-pop-adjusted-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary, #1a1a2e);
+}
+
+.comp-report-pop-multiplier {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary, #64748b);
+  margin-left: 4px;
+}
