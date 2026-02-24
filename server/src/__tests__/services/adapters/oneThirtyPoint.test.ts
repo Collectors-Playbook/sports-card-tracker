@@ -187,6 +187,50 @@ describe('filterByRelevance', () => {
     const result = filterByRelevance(mixedCase, sampleRequest);
     expect(result).toHaveLength(3);
   });
+
+  it('filters by grade when 3+ matches exist', () => {
+    const graded = [
+      { price: 120, date: '01/15/2026', title: '2023 Topps Trout PSA 8', marketplace: 'eBay' },
+      { price: 125, date: '01/14/2026', title: '2023 Topps Trout PSA 8 NM', marketplace: 'eBay' },
+      { price: 130, date: '01/13/2026', title: '2023 Topps Trout PSA 8', marketplace: 'Goldin' },
+      { price: 300, date: '01/12/2026', title: '2023 Topps Trout PSA 10', marketplace: 'eBay' },
+    ];
+    const gradedRequest: CompRequest = {
+      ...sampleRequest,
+      isGraded: true,
+      gradingCompany: 'PSA',
+      grade: '8',
+    };
+    const result = filterByRelevance(graded, gradedRequest);
+    expect(result).toHaveLength(3);
+    expect(result.every(s => s.title.includes('PSA 8'))).toBe(true);
+  });
+
+  it('falls back to all when fewer than 3 grade matches', () => {
+    const mixed = [
+      { price: 120, date: '01/15/2026', title: '2023 Topps Trout PSA 8', marketplace: 'eBay' },
+      { price: 125, date: '01/14/2026', title: '2023 Topps Trout PSA 8', marketplace: 'eBay' },
+      { price: 300, date: '01/12/2026', title: '2023 Topps Trout PSA 10', marketplace: 'eBay' },
+    ];
+    const gradedRequest: CompRequest = {
+      ...sampleRequest,
+      isGraded: true,
+      gradingCompany: 'PSA',
+      grade: '8',
+    };
+    const result = filterByRelevance(mixed, gradedRequest);
+    expect(result).toHaveLength(3); // 2 PSA 8 < 3, all kept
+  });
+
+  it('does not grade-filter ungraded requests', () => {
+    const mixed = [
+      { price: 120, date: '01/15/2026', title: '2023 Topps Trout PSA 8', marketplace: 'eBay' },
+      { price: 300, date: '01/14/2026', title: '2023 Topps Trout PSA 10', marketplace: 'eBay' },
+      { price: 50, date: '01/13/2026', title: '2023 Topps Trout raw', marketplace: 'eBay' },
+    ];
+    const result = filterByRelevance(mixed, sampleRequest);
+    expect(result).toHaveLength(3);
+  });
 });
 
 describe('computeTrimmedMean', () => {
@@ -354,6 +398,55 @@ describe('OneThirtyPointAdapter', () => {
     const result = await adapter.fetchComps(sampleRequest);
 
     expect(result.error).toContain('130Point returned error');
+  });
+
+  it('populates CompSale.grade from title', async () => {
+    const html = buildSampleHtml([
+      { price: 120, title: '2023 Topps Mike Trout #1 PSA 10', date: '01/15/2026' },
+      { price: 50, title: '2023 Topps Mike Trout #1', date: '01/14/2026' },
+      { price: 130, title: '2023 Topps Mike Trout #1 BGS 9.5', date: '01/13/2026' },
+    ]);
+
+    jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => html,
+    } as Response);
+
+    const adapter = new OneThirtyPointAdapter(undefined, undefined, 0);
+    const result = await adapter.fetchComps(sampleRequest);
+
+    expect(result.sales![0].grade).toBe('PSA 10');
+    expect(result.sales![1].grade).toBeUndefined();
+    expect(result.sales![2].grade).toBe('BGS 9.5');
+  });
+
+  it('grade-filters at adapter level when 3+ matches', async () => {
+    const html = buildSampleHtml([
+      { price: 120, title: '2023 Topps Mike Trout #1 PSA 8', date: '01/15/2026' },
+      { price: 125, title: '2023 Topps Mike Trout #1 PSA 8 NM', date: '01/14/2026' },
+      { price: 130, title: '2023 Topps Mike Trout #1 PSA 8', date: '01/13/2026' },
+      { price: 300, title: '2023 Topps Mike Trout #1 PSA 10', date: '01/12/2026' },
+    ]);
+
+    jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => html,
+    } as Response);
+
+    const gradedRequest: CompRequest = {
+      ...sampleRequest,
+      isGraded: true,
+      gradingCompany: 'PSA',
+      grade: '8',
+    };
+
+    const adapter = new OneThirtyPointAdapter(undefined, undefined, 0);
+    const result = await adapter.fetchComps(gradedRequest);
+
+    expect(result.sales).toHaveLength(3);
+    expect(result.sales!.every(s => s.price <= 130)).toBe(true);
   });
 
   it('sends POST request with correct parameters', async () => {
