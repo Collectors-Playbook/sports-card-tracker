@@ -189,13 +189,14 @@ describe('CompService', () => {
       const service = new CompService(fileService);
       const report = await service.generateComps(sampleRequest);
 
-      expect(report.sources).toHaveLength(5);
+      expect(report.sources).toHaveLength(6);
       const sourceNames = report.sources.map(s => s.source);
       expect(sourceNames).toContain('SportsCardsPro');
       expect(sourceNames).toContain('eBay');
       expect(sourceNames).toContain('CardLadder');
       expect(sourceNames).toContain('MarketMovers');
       expect(sourceNames).toContain('130Point');
+      expect(sourceNames).toContain('PSA');
       // All default adapters return stub errors (no browser service / no network)
       expect(report.sources.every(s => s.error)).toBe(true);
     } finally {
@@ -231,7 +232,7 @@ describe('CompService', () => {
       );
       const report = await service.generateComps(sampleRequest);
 
-      expect(report.sources).toHaveLength(5);
+      expect(report.sources).toHaveLength(6);
       // Browser not running / no network so all should return stub errors
       expect(report.sources.every(s => s.error)).toBe(true);
     } finally {
