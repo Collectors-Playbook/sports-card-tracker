@@ -73,9 +73,13 @@ class PopulationReportService {
     const scraper = this.scrapers.find(
       s => s.company.toLowerCase() === request.gradingCompany!.toLowerCase()
     );
-    if (!scraper) return null;
+    if (!scraper) {
+      console.log(`[PopService] No scraper for company: ${request.gradingCompany}`);
+      return null;
+    }
 
     // Fetch from scraper
+    console.log(`[PopService] Fetching pop for ${request.player} ${request.year} ${request.brand} #${request.cardNumber} grade=${request.grade} via ${scraper.company}`);
     const popData = await scraper.fetchPopulation({
       player: request.player,
       year: request.year,
@@ -84,10 +88,14 @@ class PopulationReportService {
       setName: request.setName,
       parallel: request.parallel,
       grade: request.grade,
-      category: request.condition, // pass category if available
+      category: request.category,
     });
 
-    if (!popData) return null;
+    if (!popData) {
+      console.log(`[PopService] Scraper returned null for ${request.player}`);
+      return null;
+    }
+    console.log(`[PopService] Got pop data: targetGradePop=${popData.targetGradePop} totalGraded=${popData.totalGraded} tier=${popData.rarityTier}`);
 
     // Store snapshot
     if (this.db) {

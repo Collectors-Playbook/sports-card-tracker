@@ -10,7 +10,7 @@ export function createCompRoutes(db: Database, compService: CompService): Router
   router.post('/generate', async (req: Request, res: Response) => {
     try {
       const {
-        cardId, player, year, brand, cardNumber, condition,
+        cardId, player, year, brand, cardNumber, condition, category,
         setName, parallel, isGraded, gradingCompany, grade,
         isRookie, isAutograph, isRelic, isNumbered,
       } = req.body;
@@ -21,7 +21,7 @@ export function createCompRoutes(db: Database, compService: CompService): Router
       }
 
       const request: CompRequest = {
-        cardId, player, year, brand, cardNumber, condition,
+        cardId, player, year, brand, cardNumber, condition, category,
         setName, parallel, isGraded, gradingCompany, grade,
         isRookie, isAutograph, isRelic, isNumbered,
       };
@@ -37,7 +37,7 @@ export function createCompRoutes(db: Database, compService: CompService): Router
   router.post('/generate-and-save', async (req: Request, res: Response) => {
     try {
       const {
-        cardId, player, year, brand, cardNumber, condition,
+        cardId, player, year, brand, cardNumber, condition, category,
         setName, parallel, isGraded, gradingCompany, grade,
         isRookie, isAutograph, isRelic, isNumbered,
       } = req.body;
@@ -48,7 +48,7 @@ export function createCompRoutes(db: Database, compService: CompService): Router
       }
 
       const request: CompRequest = {
-        cardId, player, year, brand, cardNumber, condition,
+        cardId, player, year, brand, cardNumber, condition, category,
         setName, parallel, isGraded, gradingCompany, grade,
         isRookie, isAutograph, isRelic, isNumbered,
       };
@@ -199,6 +199,7 @@ export function createCompRoutes(db: Database, compService: CompService): Router
         brand: card.brand,
         cardNumber: card.cardNumber,
         condition: card.condition,
+        category: card.category,
         setName: card.setName,
         parallel: card.parallel,
         isGraded: card.isGraded,
