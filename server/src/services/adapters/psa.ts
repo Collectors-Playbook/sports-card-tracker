@@ -1,7 +1,10 @@
 import { CompAdapter, CompRequest, CompResult, CompSource, CompSale } from '../../types';
 import BrowserService from '../browserService';
 import CompCacheService from '../compCacheService';
-import { PSA_SELECTORS } from './selectors';
+
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+const PSA_SEARCH_URL = 'https://www.psacard.com/auctionprices';
 
 // ─── Category Mapping ────────────────────────────────────────────────────────
 
@@ -31,19 +34,56 @@ function buildSearchQuery(request: CompRequest): string {
 
 function buildSearchUrl(query: string): string {
   const params = new URLSearchParams({ q: query });
-  return `https://www.psacard.com/auctionprices?${params.toString()}`;
+  return `${PSA_SEARCH_URL}/search?${params.toString()}`;
+}
+
+// ─── Sale Parsing ────────────────────────────────────────────────────────────
+
+interface ParsedSale {
+  price: number;
+  date: string;
+  grade: string;
+  auctionHouse: string;
+}
+
+/**
+ * Parse sale rows extracted from PSA detail page table.
+ * Sale rows have 7 cells: [image, date, auctionHouse, saleType, certNo, grade, price]
+ * Grade summary rows have 5 cells and are skipped.
+ */
+function parseSaleRows(rows: string[][]): ParsedSale[] {
+  const results: ParsedSale[] = [];
+  for (const cells of rows) {
+    // Sale rows have 7 cells; skip grade summary rows (5 cells)
+    if (cells.length < 7) continue;
+
+    const date = cells[1] || '';
+    const auctionHouse = cells[2] || 'PSA';
+    const grade = cells[5] || '';
+    const priceText = (cells[6] || '').replace(/[^0-9.]/g, '');
+    const price = parseFloat(priceText);
+    if (isNaN(price) || price <= 0) continue;
+
+    results.push({ price, date, grade, auctionHouse });
+  }
+  return results;
+}
+
+// ─── Spec ID Extraction ──────────────────────────────────────────────────────
+
+function extractSpecId(url: string): string | null {
+  const valuesMatch = url.match(/\/values\/(\d+)/);
+  if (valuesMatch) return valuesMatch[1];
+  const segmentMatch = url.match(/\/(\d+)(?:[?#].*)?$/);
+  return segmentMatch ? segmentMatch[1] : null;
 }
 
 // ─── Relevance Filter ────────────────────────────────────────────────────────
 
 function filterByRelevance(
-  rawSales: { price: number; date: string; grade: string; auctionHouse: string }[],
-  request: CompRequest
-): { price: number; date: string; grade: string; auctionHouse: string }[] {
-  const lastName = request.player.split(' ').pop()?.toLowerCase() || '';
-  if (!lastName) return rawSales;
-  // PSA detail pages are card-specific so all sales should be relevant,
-  // but we still filter in case search landed on a wrong page.
+  rawSales: ParsedSale[],
+  _request: CompRequest
+): ParsedSale[] {
   return rawSales;
 }
 
@@ -73,13 +113,11 @@ class PsaAdapter implements CompAdapter {
   }
 
   async fetchComps(request: CompRequest): Promise<CompResult> {
-    // Check cache first
     if (this.cacheService) {
       const cached = this.cacheService.get(this.source, request);
       if (cached) return cached;
     }
 
-    // If no browser, return stub
     if (!this.browserService || !this.browserService.isRunning()) {
       return this.errorResult('PSA scraping not available (Puppeteer disabled)');
     }
@@ -90,22 +128,21 @@ class PsaAdapter implements CompAdapter {
     let searchPage;
     let detailPage;
     try {
-      // Step 1: Navigate to search page
+      // Step 1: Navigate to search results page
       searchPage = await this.browserService.navigateWithThrottle(this.source, url);
 
-      // Extract detail page URL from search results
-      const detailUrl = await searchPage.$$eval(
-        PSA_SELECTORS.resultLink,
-        (links) => {
+      const detailUrl = await searchPage.evaluate(`
+        (() => {
+          const links = document.querySelectorAll('a[href*="/auctionprices/"]');
           for (const link of links) {
-            const href = (link as any).href;
-            if (href && href.includes('/auctionprices/')) {
-              return href;
-            }
+            const href = link.href;
+            if (href.includes('/search')) continue;
+            const match = href.match(/\\/auctionprices\\/[^/]+\\/[^/]+\\/[^/]+\\/(\\d+)/);
+            if (match) return href;
           }
           return null;
-        }
-      );
+        })()
+      `) as string | null;
 
       await searchPage.close();
       searchPage = undefined;
@@ -114,64 +151,38 @@ class PsaAdapter implements CompAdapter {
         return this.errorResult(`No PSA auction results found for: ${query}`);
       }
 
-      // Step 2: Navigate to detail page
+      // Step 2: Navigate to the card detail page
       detailPage = await this.browserService.navigateWithThrottle(this.source, detailUrl);
 
-      // Extract sales from the detail page table
-      const rawSales = await detailPage.$$eval(
-        PSA_SELECTORS.salesTable,
-        (rows, selectors) => {
-          const results: { price: number; date: string; grade: string; auctionHouse: string }[] = [];
-
-          for (const row of rows) {
-            const dateEl = row.querySelector(selectors.saleDate);
-            const gradeEl = row.querySelector(selectors.saleGrade);
-            const priceEl = row.querySelector(selectors.salePrice);
-            const auctionHouseEl = row.querySelector(selectors.saleAuctionHouse);
-
-            if (!priceEl) continue;
-
-            const priceText = priceEl.textContent?.replace(/[^0-9.]/g, '') || '';
-            const price = parseFloat(priceText);
-            if (isNaN(price) || price <= 0) continue;
-
-            const date = dateEl?.textContent?.trim() || '';
-            const grade = gradeEl?.textContent?.trim() || '';
-            const auctionHouse = auctionHouseEl?.textContent?.trim() || 'PSA';
-
-            results.push({ price, date, grade, auctionHouse });
-
-            if (results.length >= 30) break;
-          }
-
-          return results;
-        },
-        {
-          saleDate: PSA_SELECTORS.saleDate,
-          saleGrade: PSA_SELECTORS.saleGrade,
-          salePrice: PSA_SELECTORS.salePrice,
-          saleAuctionHouse: PSA_SELECTORS.saleAuctionHouse,
-        }
-      );
+      // Extract table rows as arrays of cell text
+      // Sale rows: [image, date, auctionHouse, saleType, certNo, grade, price]
+      const tableRows = await detailPage.evaluate(`
+        (() => {
+          const trs = document.querySelectorAll('table tbody tr');
+          return Array.from(trs).map(tr => {
+            return Array.from(tr.querySelectorAll('td')).map(td => td.textContent.trim());
+          });
+        })()
+      `) as string[][];
 
       await detailPage.close();
       detailPage = undefined;
+
+      const rawSales = parseSaleRows(tableRows);
 
       if (rawSales.length === 0) {
         return this.errorResult(`No PSA sales data found for: ${query}`);
       }
 
-      // Grade filter: if the card is PSA-graded, only keep matching grade sales
+      // Grade filter: if PSA-graded, only keep matching grade
       let filteredSales = rawSales;
       if (request.isGraded && request.gradingCompany === 'PSA' && request.grade) {
         const gradeMatch = rawSales.filter(s => s.grade === request.grade);
         if (gradeMatch.length > 0) {
           filteredSales = gradeMatch;
         }
-        // If no exact grade matches, keep all sales as fallback
       }
 
-      // Relevance filter
       filteredSales = filterByRelevance(filteredSales, request);
 
       const compSales: CompSale[] = filteredSales.map(s => ({
@@ -195,7 +206,6 @@ class PsaAdapter implements CompAdapter {
         high: Math.round(high * 100) / 100,
       };
 
-      // Cache successful result
       if (this.cacheService) {
         this.cacheService.set(this.source, request, result);
       }
@@ -227,4 +237,4 @@ class PsaAdapter implements CompAdapter {
 }
 
 export default PsaAdapter;
-export { buildSearchQuery, buildSearchUrl, filterByRelevance, computeTrimmedMean, mapCategory };
+export { buildSearchQuery, buildSearchUrl, filterByRelevance, computeTrimmedMean, mapCategory, extractSpecId, parseSaleRows };
