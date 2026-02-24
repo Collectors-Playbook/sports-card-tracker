@@ -1,5 +1,6 @@
 import { CompAdapter, CompRequest, CompResult, CompSource, CompSale } from '../../types';
 import CompCacheService from '../compCacheService';
+import { extractGradeFromTitle, filterByGrade } from './gradeUtils';
 
 // ─── Rate Limiting ──────────────────────────────────────────────────────────
 
@@ -106,9 +107,13 @@ function filterByRelevance(
   request: CompRequest
 ): ParsedSale[] {
   const lastName = request.player.split(' ').pop()?.toLowerCase() || '';
-  if (!lastName) return rawSales;
-  const relevant = rawSales.filter(s => s.title.toLowerCase().includes(lastName));
-  return relevant.length >= 3 ? relevant : rawSales;
+  let filtered = rawSales;
+  if (lastName) {
+    const relevant = rawSales.filter(s => s.title.toLowerCase().includes(lastName));
+    filtered = relevant.length >= 3 ? relevant : rawSales;
+  }
+  filtered = filterByGrade(filtered, request);
+  return filtered;
 }
 
 // ─── Trimmed Mean ───────────────────────────────────────────────────────────
@@ -205,11 +210,15 @@ class OneThirtyPointAdapter implements CompAdapter {
 
       const filteredSales = filterByRelevance(rawSales, request);
 
-      const compSales: CompSale[] = filteredSales.map(s => ({
-        date: s.date,
-        price: s.price,
-        venue: s.marketplace,
-      }));
+      const compSales: CompSale[] = filteredSales.map(s => {
+        const gradeInfo = extractGradeFromTitle(s.title);
+        return {
+          date: s.date,
+          price: s.price,
+          venue: s.marketplace,
+          ...(gradeInfo ? { grade: `${gradeInfo.company} ${gradeInfo.grade}` } : {}),
+        };
+      });
 
       const prices = compSales.map(s => s.price);
       const avg = computeTrimmedMean(prices);

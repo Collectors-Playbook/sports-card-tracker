@@ -2,6 +2,7 @@ import { CompAdapter, CompRequest, CompResult, CompSource, CompSale } from '../.
 import BrowserService from '../browserService';
 import CompCacheService from '../compCacheService';
 import { EBAY_SELECTORS } from './selectors';
+import { extractGradeFromTitle, filterByGrade } from './gradeUtils';
 
 function buildSearchQuery(request: CompRequest): string {
   const parts: string[] = [String(request.year), request.brand];
@@ -21,9 +22,13 @@ function filterByRelevance(
   request: CompRequest
 ): { price: number; date: string; title: string }[] {
   const lastName = request.player.split(' ').pop()?.toLowerCase() || '';
-  if (!lastName) return rawSales;
-  const relevant = rawSales.filter(s => s.title.toLowerCase().includes(lastName));
-  return relevant.length >= 3 ? relevant : rawSales;
+  let filtered = rawSales;
+  if (lastName) {
+    const relevant = rawSales.filter(s => s.title.toLowerCase().includes(lastName));
+    filtered = relevant.length >= 3 ? relevant : rawSales;
+  }
+  filtered = filterByGrade(filtered, request);
+  return filtered;
 }
 
 function computeTrimmedMean(prices: number[]): number {
@@ -140,11 +145,15 @@ class EbayAdapter implements CompAdapter {
       // Filter by title relevance (must contain player's last name)
       const filteredSales = filterByRelevance(rawSales, request);
 
-      const compSales: CompSale[] = filteredSales.map(s => ({
-        date: s.date,
-        price: s.price,
-        venue: 'eBay',
-      }));
+      const compSales: CompSale[] = filteredSales.map(s => {
+        const gradeInfo = extractGradeFromTitle(s.title);
+        return {
+          date: s.date,
+          price: s.price,
+          venue: 'eBay',
+          ...(gradeInfo ? { grade: `${gradeInfo.company} ${gradeInfo.grade}` } : {}),
+        };
+      });
 
       const prices = compSales.map(s => s.price);
       const avg = computeTrimmedMean(prices);

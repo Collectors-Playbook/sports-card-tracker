@@ -249,6 +249,9 @@ class CompService {
     const results: CompResult[] = [];
 
     for (const adapter of this.adapters) {
+      if (adapter.source === 'PSA' && request.isGraded && request.gradingCompany && request.gradingCompany !== 'PSA') {
+        continue;
+      }
       try {
         const result = await adapter.fetchComps(request);
         results.push(result);

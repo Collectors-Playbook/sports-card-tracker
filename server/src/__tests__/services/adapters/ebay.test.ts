@@ -159,6 +159,90 @@ describe('EbayAdapter', () => {
     // Only 2 Trout listings < 3, so all are kept
     expect(result.sales).toHaveLength(3);
   });
+
+  it('filters by grade when 3+ matches exist', async () => {
+    const soldListings = [
+      { price: 120, date: 'Jan 15, 2026', title: '2023 Topps Mike Trout #1 PSA 8' },
+      { price: 125, date: 'Jan 14, 2026', title: '2023 Topps Mike Trout #1 PSA 8' },
+      { price: 130, date: 'Jan 13, 2026', title: '2023 Topps Mike Trout #1 PSA 8' },
+      { price: 300, date: 'Jan 12, 2026', title: '2023 Topps Mike Trout #1 PSA 10' },
+      { price: 280, date: 'Jan 11, 2026', title: '2023 Topps Mike Trout #1 PSA 9' },
+    ];
+
+    const { browserService, mockPage } = createMockBrowserService();
+    mockPage.$$eval.mockResolvedValue(soldListings);
+
+    const gradedRequest: CompRequest = {
+      ...sampleRequest,
+      isGraded: true,
+      gradingCompany: 'PSA',
+      grade: '8',
+    };
+
+    const adapter = new EbayAdapter(browserService as any);
+    const result = await adapter.fetchComps(gradedRequest);
+
+    expect(result.sales).toHaveLength(3);
+    expect(result.sales!.every(s => s.price <= 130)).toBe(true);
+  });
+
+  it('falls back to all listings when fewer than 3 grade matches', async () => {
+    const soldListings = [
+      { price: 120, date: 'Jan 15, 2026', title: '2023 Topps Mike Trout #1 PSA 8' },
+      { price: 125, date: 'Jan 14, 2026', title: '2023 Topps Mike Trout #1 PSA 8' },
+      { price: 300, date: 'Jan 12, 2026', title: '2023 Topps Mike Trout #1 PSA 10' },
+    ];
+
+    const { browserService, mockPage } = createMockBrowserService();
+    mockPage.$$eval.mockResolvedValue(soldListings);
+
+    const gradedRequest: CompRequest = {
+      ...sampleRequest,
+      isGraded: true,
+      gradingCompany: 'PSA',
+      grade: '8',
+    };
+
+    const adapter = new EbayAdapter(browserService as any);
+    const result = await adapter.fetchComps(gradedRequest);
+
+    // Only 2 PSA 8 matches < 3, so all 3 kept
+    expect(result.sales).toHaveLength(3);
+  });
+
+  it('does not grade-filter ungraded card requests', async () => {
+    const soldListings = [
+      { price: 120, date: 'Jan 15, 2026', title: '2023 Topps Mike Trout #1 PSA 8' },
+      { price: 300, date: 'Jan 14, 2026', title: '2023 Topps Mike Trout #1 PSA 10' },
+      { price: 50, date: 'Jan 13, 2026', title: '2023 Topps Mike Trout #1' },
+    ];
+
+    const { browserService, mockPage } = createMockBrowserService();
+    mockPage.$$eval.mockResolvedValue(soldListings);
+
+    const adapter = new EbayAdapter(browserService as any);
+    const result = await adapter.fetchComps(sampleRequest); // ungraded
+
+    expect(result.sales).toHaveLength(3);
+  });
+
+  it('populates CompSale.grade from title', async () => {
+    const soldListings = [
+      { price: 120, date: 'Jan 15, 2026', title: '2023 Topps Mike Trout #1 PSA 10' },
+      { price: 50, date: 'Jan 14, 2026', title: '2023 Topps Mike Trout #1' },
+      { price: 130, date: 'Jan 13, 2026', title: '2023 Topps Mike Trout #1 BGS 9.5' },
+    ];
+
+    const { browserService, mockPage } = createMockBrowserService();
+    mockPage.$$eval.mockResolvedValue(soldListings);
+
+    const adapter = new EbayAdapter(browserService as any);
+    const result = await adapter.fetchComps(sampleRequest);
+
+    expect(result.sales![0].grade).toBe('PSA 10');
+    expect(result.sales![1].grade).toBeUndefined();
+    expect(result.sales![2].grade).toBe('BGS 9.5');
+  });
 });
 
 describe('buildSearchQuery', () => {

@@ -204,6 +204,70 @@ describe('CompService', () => {
     }
   });
 
+  it('skips PSA adapter for BGS-graded card', async () => {
+    const psaAdapter = createMockAdapter('PSA', { averagePrice: 200, marketValue: 200 });
+    const fetchSpy = jest.spyOn(psaAdapter, 'fetchComps');
+    const ebayAdapter = createMockAdapter('eBay', { averagePrice: 50, marketValue: 50 });
+
+    const service = new CompService(fileService, [ebayAdapter, psaAdapter]);
+    const report = await service.generateComps({
+      ...sampleRequest,
+      isGraded: true,
+      gradingCompany: 'BGS',
+      grade: '9.5',
+    });
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(report.sources).toHaveLength(1);
+    expect(report.sources[0].source).toBe('eBay');
+  });
+
+  it('skips PSA adapter for CGC-graded card', async () => {
+    const psaAdapter = createMockAdapter('PSA', { averagePrice: 200, marketValue: 200 });
+    const fetchSpy = jest.spyOn(psaAdapter, 'fetchComps');
+    const ebayAdapter = createMockAdapter('eBay', { averagePrice: 50, marketValue: 50 });
+
+    const service = new CompService(fileService, [ebayAdapter, psaAdapter]);
+    const report = await service.generateComps({
+      ...sampleRequest,
+      isGraded: true,
+      gradingCompany: 'CGC',
+      grade: '9',
+    });
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(report.sources).toHaveLength(1);
+  });
+
+  it('keeps PSA adapter for PSA-graded card', async () => {
+    const psaAdapter = createMockAdapter('PSA', { averagePrice: 100, marketValue: 100 });
+    const fetchSpy = jest.spyOn(psaAdapter, 'fetchComps');
+    const ebayAdapter = createMockAdapter('eBay', { averagePrice: 50, marketValue: 50 });
+
+    const service = new CompService(fileService, [ebayAdapter, psaAdapter]);
+    const report = await service.generateComps({
+      ...sampleRequest,
+      isGraded: true,
+      gradingCompany: 'PSA',
+      grade: '10',
+    });
+
+    expect(fetchSpy).toHaveBeenCalled();
+    expect(report.sources).toHaveLength(2);
+  });
+
+  it('keeps PSA adapter for raw/ungraded card', async () => {
+    const psaAdapter = createMockAdapter('PSA', { averagePrice: 100, marketValue: 100 });
+    const fetchSpy = jest.spyOn(psaAdapter, 'fetchComps');
+    const ebayAdapter = createMockAdapter('eBay', { averagePrice: 50, marketValue: 50 });
+
+    const service = new CompService(fileService, [ebayAdapter, psaAdapter]);
+    const report = await service.generateComps(sampleRequest); // ungraded
+
+    expect(fetchSpy).toHaveBeenCalled();
+    expect(report.sources).toHaveLength(2);
+  });
+
   it('accepts optional browserService and cacheService in constructor', async () => {
     // Mock fetch so 130Point adapter doesn't make real HTTP calls
     const fetchSpy = jest.spyOn(global, 'fetch').mockRejectedValue(new Error('Network disabled in test'));
