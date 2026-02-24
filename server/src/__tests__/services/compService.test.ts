@@ -448,8 +448,8 @@ describe('recencyWeight', () => {
     expect(recencyWeight(sixtyDaysAgo, NOW)).toBeCloseTo(0.25, 5);
   });
 
-  it('returns 0.25 for null date (unknown)', () => {
-    expect(recencyWeight(null, NOW)).toBe(0.25);
+  it('returns 0.10 for null date (unknown)', () => {
+    expect(recencyWeight(null, NOW)).toBe(0.10);
   });
 
   it('returns 1.0 for future date (clamped to 0 age)', () => {

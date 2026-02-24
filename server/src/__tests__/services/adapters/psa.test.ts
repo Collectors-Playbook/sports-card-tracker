@@ -53,9 +53,23 @@ function createMockCacheService() {
 
 /**
  * Build mock table rows (string[][]) that parseSaleRows can extract.
- * Sale rows have 7 cells: [image, date, auctionHouse, saleType, certNo, grade, price]
+ * Default: 7 cells [image, date, auctionHouse, saleType, certNo, grade, price]
+ * Use cellCount=6 to simulate shifted columns (no image cell).
  */
-function buildTableRows(sales: { grade: string; venue: string; date: string; price: string }[]): string[][] {
+function buildTableRows(
+  sales: { grade: string; venue: string; date: string; price: string }[],
+  cellCount: 6 | 7 = 7
+): string[][] {
+  if (cellCount === 6) {
+    return sales.map(s => [
+      s.date,          // cell 0: date
+      s.venue,         // cell 1: auction house
+      'Auction',       // cell 2: sale type
+      '12345678',      // cell 3: cert number
+      s.grade,         // cell 4: grade
+      s.price,         // cell 5: price
+    ]);
+  }
   return sales.map(s => [
     '<img .../>',    // cell 0: image
     s.date,          // cell 1: date
@@ -338,6 +352,79 @@ describe('parseSaleRows', () => {
     expect(sales[0].price).toBe(135.83);
     expect(sales[1].price).toBe(1198);
     expect(sales[2].price).toBe(141.05);
+  });
+
+  it('extracts grade dynamically when columns shift (6 cells)', () => {
+    // 6-cell row: [date, venue, saleType, certNo, grade, price]
+    const rows: string[][] = [
+      ['Feb 3, 2026', 'eBay', 'Auction', '43036578', '10', '$135.83'],
+    ];
+    const sales = parseSaleRows(rows);
+    expect(sales).toHaveLength(1);
+    expect(sales[0].grade).toBe('10');
+    expect(sales[0].price).toBe(135.83);
+  });
+
+  it('finds grade at different cell positions', () => {
+    // Grade at cells[4] (shifted table)
+    const rows6: string[][] = [
+      ['Feb 3, 2026', 'eBay', 'Auction', '43036578', '9', '$231.07'],
+    ];
+    const sales6 = parseSaleRows(rows6);
+    expect(sales6[0].grade).toBe('9');
+
+    // Grade at cells[5] (standard table)
+    const rows7: string[][] = [
+      ['<img/>', 'Feb 3, 2026', 'eBay', 'Auction', '43036578', '9', '$231.07'],
+    ];
+    const sales7 = parseSaleRows(rows7);
+    expect(sales7[0].grade).toBe('9');
+  });
+
+  it('normalizes Auth/Authentic grade', () => {
+    const rows: string[][] = [
+      ['<img/>', 'Feb 3, 2026', 'eBay', 'Auction', '43036578', 'Authentic', '$50.00'],
+      ['<img/>', 'Feb 3, 2026', 'eBay', 'Auction', '43036578', 'Auth', '$45.00'],
+    ];
+    const sales = parseSaleRows(rows);
+    expect(sales).toHaveLength(2);
+    expect(sales[0].grade).toBe('Auth');
+    expect(sales[1].grade).toBe('Auth');
+  });
+
+  it('returns empty grade when no grade-like cell found', () => {
+    // Row with no grade-like value before price
+    const rows: string[][] = [
+      ['<img/>', 'Feb 3, 2026', 'eBay', 'Auction', 'some-text', 'N/A', '$100.00'],
+    ];
+    const sales = parseSaleRows(rows);
+    expect(sales).toHaveLength(1);
+    expect(sales[0].grade).toBe('');
+  });
+
+  it('finds price as rightmost $-containing cell', () => {
+    // Extra cells after standard layout — price is still the rightmost $-cell
+    const rows: string[][] = [
+      ['<img/>', 'Feb 3, 2026', 'eBay', 'Auction', '43036578', '10', '$135.83', 'extra'],
+    ];
+    const sales = parseSaleRows(rows);
+    expect(sales).toHaveLength(1);
+    expect(sales[0].price).toBe(135.83);
+  });
+
+  it('works with adapter-level grade filtering on shifted rows', () => {
+    // Simulate shifted table where grade is at cells[4] instead of cells[5]
+    const rows = buildTableRows([
+      { grade: '10', venue: 'eBay', date: 'Feb 3, 2026', price: '$500.00' },
+      { grade: '9', venue: 'eBay', date: 'Jan 5, 2026', price: '$50.00' },
+      { grade: '8', venue: 'Heritage', date: 'Jan 1, 2026', price: '$30.00' },
+    ], 6);
+    const sales = parseSaleRows(rows);
+    expect(sales).toHaveLength(3);
+    // Grade filter would work since grades are correctly extracted
+    const grade10 = sales.filter(s => s.grade === '10');
+    expect(grade10).toHaveLength(1);
+    expect(grade10[0].price).toBe(500);
   });
 });
 

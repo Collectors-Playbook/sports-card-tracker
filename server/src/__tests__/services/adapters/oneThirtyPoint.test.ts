@@ -156,6 +156,52 @@ describe('parseHtmlResponse', () => {
     expect(sales).toHaveLength(1);
     expect(sales[0].price).toBe(1234.56);
   });
+
+  it('caps results at 30 sales', () => {
+    const rows = Array.from({ length: 50 }, (_, i) => ({
+      price: 10 + i,
+      title: `Card Title ${i}`,
+      date: '01/15/2026',
+    }));
+    const html = buildSampleHtml(rows);
+    const sales = parseHtmlResponse(html);
+    expect(sales).toHaveLength(30);
+  });
+
+  it('extracts date from data-date attribute', () => {
+    const html = '<table><tr data-date="2026-02-15"><td>Card Title</td><td data-price="50">$50.00</td><td>some text</td></tr></table>';
+    const sales = parseHtmlResponse(html);
+    expect(sales).toHaveLength(1);
+    expect(sales[0].date).toBe('2026-02-15');
+  });
+
+  it('extracts ISO date format (YYYY-MM-DD) from cells', () => {
+    const html = '<table><tr><td>Card Title Here</td><td data-price="75">$75.00</td><td>2026-01-20</td></tr></table>';
+    const sales = parseHtmlResponse(html);
+    expect(sales).toHaveLength(1);
+    expect(sales[0].date).toBe('2026-01-20');
+  });
+
+  it('extracts natural language date (Mon DD, YYYY) from cells', () => {
+    const html = '<table><tr><td>Card Title Here</td><td data-price="60">$60.00</td><td>Feb 3, 2026</td></tr></table>';
+    const sales = parseHtmlResponse(html);
+    expect(sales).toHaveLength(1);
+    expect(sales[0].date).toBe('Feb 3, 2026');
+  });
+
+  it('prefers data-date attribute over cell text', () => {
+    const html = '<table><tr data-date="2026-02-20"><td>Card Title</td><td data-price="50">$50.00</td><td>01/01/2025</td></tr></table>';
+    const sales = parseHtmlResponse(html);
+    expect(sales).toHaveLength(1);
+    expect(sales[0].date).toBe('2026-02-20');
+  });
+
+  it('extracts MM/DD/YY short year format', () => {
+    const html = '<table><tr><td>Card Title Here</td><td data-price="40">$40.00</td><td>02/15/26</td></tr></table>';
+    const sales = parseHtmlResponse(html);
+    expect(sales).toHaveLength(1);
+    expect(sales[0].date).toBe('02/15/26');
+  });
 });
 
 describe('filterByRelevance', () => {

@@ -74,13 +74,22 @@ function parseHtmlResponse(html: string): ParsedSale[] {
     // Extract title — typically the first or second cell with meaningful text
     const title = cells.find(c => c.length > 5 && !/^\$/.test(c) && !/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(c)) || cells[0] || '';
 
-    // Extract date — look for date pattern in cells
+    // Extract date — check data-date attribute first, then cell text patterns
     let date = '';
-    for (const cell of cells) {
-      const dateMatch = cell.match(/(\d{1,2}\/\d{1,2}\/\d{2,4})/);
-      if (dateMatch) {
-        date = dateMatch[1];
-        break;
+    const dataDateMatch = row.match(/data-date=["']?([^"'\s>]+)["']?/i);
+    if (dataDateMatch) {
+      date = dataDateMatch[1];
+    } else {
+      for (const cell of cells) {
+        // MM/DD/YYYY or MM/DD/YY
+        const slashMatch = cell.match(/(\d{1,2}\/\d{1,2}\/\d{2,4})/);
+        if (slashMatch) { date = slashMatch[1]; break; }
+        // YYYY-MM-DD (ISO)
+        const isoMatch = cell.match(/(\d{4}-\d{2}-\d{2})/);
+        if (isoMatch) { date = isoMatch[1]; break; }
+        // "Mon DD, YYYY" (natural)
+        const naturalMatch = cell.match(/((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\.?\s+\d{1,2},?\s+\d{4})/i);
+        if (naturalMatch) { date = naturalMatch[1]; break; }
       }
     }
 
@@ -95,6 +104,7 @@ function parseHtmlResponse(html: string): ParsedSale[] {
     else if (rowLower.includes('ebay')) marketplace = 'eBay';
 
     results.push({ price, date, title, marketplace });
+    if (results.length >= 30) break;
   }
 
   return results;

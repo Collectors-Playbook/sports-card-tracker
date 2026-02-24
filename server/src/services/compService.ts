@@ -18,7 +18,7 @@ const RECENCY_HALF_LIFE_DAYS = 30;
 const DEDUP_PRICE_TOLERANCE = 0.50;       // dollars
 const DEDUP_DATE_TOLERANCE_MS = 2 * 86400000; // 2 days
 const TRIM_PERCENTAGE = 0.10;
-const UNKNOWN_DATE_WEIGHT = 0.25;
+const UNKNOWN_DATE_WEIGHT = 0.10;
 const MIN_SALES_FOR_TRIM = 5;
 const SOURCE_RELIABILITY: Record<CompSource, number> = {
   'eBay': 1.0,
