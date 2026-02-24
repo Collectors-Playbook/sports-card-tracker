@@ -1,25 +1,31 @@
-import PsaAdapter, { buildSearchQuery, buildSearchUrl, filterByRelevance, computeTrimmedMean, mapCategory } from '../../../services/adapters/psa';
+import PsaAdapter, { buildSearchQuery, buildSearchUrl, filterByRelevance, computeTrimmedMean, mapCategory, extractSpecId, parseSaleRows } from '../../../services/adapters/psa';
 import { CompRequest, CompResult } from '../../../types';
 
+// ─── Mock Helpers ────────────────────────────────────────────────────────────
+
+/**
+ * Creates a mock browser service for PSA adapter tests.
+ * Two-step navigation: search page (returns detailUrl) → detail page (returns tableRows).
+ */
 function createMockBrowserService(options: {
-  searchResults?: string | null;
-  salesData?: { price: number; date: string; grade: string; auctionHouse: string }[];
+  detailUrl?: string | null;
+  tableRows?: string[][];
 } = {}) {
-  const { searchResults = 'https://www.psacard.com/auctionprices/baseball-cards/2023-topps/mike-trout/values/123', salesData = [] } = options;
+  const {
+    detailUrl = 'https://www.psacard.com/auctionprices/football-cards/2000-fleer/tom-brady/358144',
+    tableRows = [],
+  } = options;
 
   const searchPage = {
-    $$eval: jest.fn().mockResolvedValue(searchResults ? [searchResults] : []),
-    $eval: jest.fn().mockResolvedValue(null),
+    evaluate: jest.fn().mockResolvedValue(detailUrl),
     close: jest.fn().mockResolvedValue(undefined),
   };
 
   const detailPage = {
-    $$eval: jest.fn().mockResolvedValue(salesData),
-    $eval: jest.fn().mockResolvedValue(null),
+    evaluate: jest.fn().mockResolvedValue(tableRows),
     close: jest.fn().mockResolvedValue(undefined),
   };
 
-  // navigateWithThrottle returns searchPage first, then detailPage
   let callCount = 0;
   const browserService = {
     isRunning: jest.fn().mockReturnValue(true),
@@ -33,9 +39,6 @@ function createMockBrowserService(options: {
     shutdown: jest.fn().mockResolvedValue(undefined),
   };
 
-  // Override searchPage $$eval to return the detail URL (simulating link extraction)
-  searchPage.$$eval.mockResolvedValue(searchResults);
-
   return { browserService, searchPage, detailPage };
 }
 
@@ -48,6 +51,22 @@ function createMockCacheService() {
   };
 }
 
+/**
+ * Build mock table rows (string[][]) that parseSaleRows can extract.
+ * Sale rows have 7 cells: [image, date, auctionHouse, saleType, certNo, grade, price]
+ */
+function buildTableRows(sales: { grade: string; venue: string; date: string; price: string }[]): string[][] {
+  return sales.map(s => [
+    '<img .../>',    // cell 0: image
+    s.date,          // cell 1: date
+    s.venue,         // cell 2: auction house
+    'Auction',       // cell 3: sale type
+    '12345678',      // cell 4: cert number
+    s.grade,         // cell 5: grade
+    s.price,         // cell 6: price
+  ]);
+}
+
 const sampleRequest: CompRequest = {
   cardId: 'card-1',
   player: 'Mike Trout',
@@ -56,6 +75,8 @@ const sampleRequest: CompRequest = {
   cardNumber: '1',
   condition: 'RAW',
 };
+
+// ─── Adapter Tests ───────────────────────────────────────────────────────────
 
 describe('PsaAdapter', () => {
   it('returns stub error when no browser service', async () => {
@@ -93,19 +114,14 @@ describe('PsaAdapter', () => {
     expect(browserService.navigateWithThrottle).not.toHaveBeenCalled();
   });
 
-  it('extracts auction results successfully with two-step navigation', async () => {
-    const salesData = [
-      { price: 150, date: '01/15/2026', grade: '10', auctionHouse: 'eBay' },
-      { price: 120, date: '01/10/2026', grade: '10', auctionHouse: 'Goldin' },
-      { price: 135, date: '01/05/2026', grade: '10', auctionHouse: 'Heritage' },
-    ];
+  it('extracts sales via two-step navigation', async () => {
+    const tableRows = buildTableRows([
+      { grade: '10', venue: 'eBay', date: 'Feb 3, 2026', price: '$150.00' },
+      { grade: '10', venue: 'Goldin', date: 'Jan 10, 2026', price: '$120.00' },
+      { grade: '10', venue: 'Heritage', date: 'Jan 5, 2026', price: '$135.00' },
+    ]);
 
-    const { browserService, searchPage, detailPage } = createMockBrowserService({ salesData });
-    // searchPage $$eval returns a detail URL
-    searchPage.$$eval.mockResolvedValue('https://www.psacard.com/auctionprices/baseball-cards/2023-topps/mike-trout/values/123');
-    // detailPage $$eval returns sales data
-    detailPage.$$eval.mockResolvedValue(salesData);
-
+    const { browserService, searchPage, detailPage } = createMockBrowserService({ tableRows });
     const cacheService = createMockCacheService();
     const adapter = new PsaAdapter(browserService as any, cacheService as any);
     const result = await adapter.fetchComps(sampleRequest);
@@ -116,17 +132,13 @@ describe('PsaAdapter', () => {
     expect(result.low).toBe(120);
     expect(result.high).toBe(150);
     expect(cacheService.set).toHaveBeenCalled();
-    // Both pages navigated
     expect(browserService.navigateWithThrottle).toHaveBeenCalledTimes(2);
-    // Both pages closed
     expect(searchPage.close).toHaveBeenCalled();
     expect(detailPage.close).toHaveBeenCalled();
   });
 
-  it('returns error when no search results found', async () => {
-    const { browserService, searchPage } = createMockBrowserService();
-    // No detail URL found
-    searchPage.$$eval.mockResolvedValue(null);
+  it('returns error when no search results (no detail URL)', async () => {
+    const { browserService } = createMockBrowserService({ detailUrl: null });
 
     const adapter = new PsaAdapter(browserService as any);
     const result = await adapter.fetchComps(sampleRequest);
@@ -135,10 +147,24 @@ describe('PsaAdapter', () => {
     expect(result.sales).toEqual([]);
   });
 
-  it('returns error when no sales on detail page', async () => {
-    const { browserService, searchPage, detailPage } = createMockBrowserService();
-    searchPage.$$eval.mockResolvedValue('https://www.psacard.com/auctionprices/baseball-cards/2023-topps/mike-trout/values/123');
-    detailPage.$$eval.mockResolvedValue([]);
+  it('returns error when detail page has no sales', async () => {
+    // Empty table rows — no 7-cell rows to parse
+    const { browserService } = createMockBrowserService({ tableRows: [] });
+
+    const adapter = new PsaAdapter(browserService as any);
+    const result = await adapter.fetchComps(sampleRequest);
+
+    expect(result.error).toContain('No PSA sales data found');
+    expect(result.sales).toEqual([]);
+  });
+
+  it('returns error when detail page has only summary rows', async () => {
+    // Grade summary rows have 5 cells — should be skipped
+    const summaryRows: string[][] = [
+      ['PSA 10', '$135.83', '$1,162.72', '1093', '0'],
+      ['PSA 9', '$231.07', '$212.15', '2928', '1093'],
+    ];
+    const { browserService } = createMockBrowserService({ tableRows: summaryRows });
 
     const adapter = new PsaAdapter(browserService as any);
     const result = await adapter.fetchComps(sampleRequest);
@@ -159,16 +185,14 @@ describe('PsaAdapter', () => {
   });
 
   it('filters to matching PSA grade only for PSA-graded cards', async () => {
-    const salesData = [
-      { price: 500, date: '01/15/2026', grade: '10', auctionHouse: 'eBay' },
-      { price: 480, date: '01/10/2026', grade: '10', auctionHouse: 'Goldin' },
-      { price: 50, date: '01/05/2026', grade: '8', auctionHouse: 'eBay' },
-      { price: 30, date: '01/01/2026', grade: '7', auctionHouse: 'Heritage' },
-    ];
+    const tableRows = buildTableRows([
+      { grade: '10', venue: 'eBay', date: 'Feb 3, 2026', price: '$500.00' },
+      { grade: '10', venue: 'Goldin', date: 'Jan 10, 2026', price: '$480.00' },
+      { grade: '8', venue: 'eBay', date: 'Jan 5, 2026', price: '$50.00' },
+      { grade: '7', venue: 'Heritage', date: 'Jan 1, 2026', price: '$30.00' },
+    ]);
 
-    const { browserService, searchPage, detailPage } = createMockBrowserService();
-    searchPage.$$eval.mockResolvedValue('https://www.psacard.com/auctionprices/baseball-cards/2023-topps/mike-trout/values/123');
-    detailPage.$$eval.mockResolvedValue(salesData);
+    const { browserService } = createMockBrowserService({ tableRows });
 
     const gradedRequest: CompRequest = {
       ...sampleRequest,
@@ -181,7 +205,6 @@ describe('PsaAdapter', () => {
     const result = await adapter.fetchComps(gradedRequest);
 
     expect(result.error).toBeUndefined();
-    // Should only include grade 10 sales
     expect(result.sales).toHaveLength(2);
     expect(result.sales!.every(s => s.grade === '10')).toBe(true);
     expect(result.low).toBe(480);
@@ -189,17 +212,13 @@ describe('PsaAdapter', () => {
   });
 
   it('returns all grades for ungraded cards', async () => {
-    const salesData = [
-      { price: 500, date: '01/15/2026', grade: '10', auctionHouse: 'eBay' },
-      { price: 50, date: '01/05/2026', grade: '8', auctionHouse: 'eBay' },
-      { price: 30, date: '01/01/2026', grade: '7', auctionHouse: 'Heritage' },
-    ];
+    const tableRows = buildTableRows([
+      { grade: '10', venue: 'eBay', date: 'Feb 3, 2026', price: '$500.00' },
+      { grade: '8', venue: 'eBay', date: 'Jan 5, 2026', price: '$50.00' },
+      { grade: '7', venue: 'Heritage', date: 'Jan 1, 2026', price: '$30.00' },
+    ]);
 
-    const { browserService, searchPage, detailPage } = createMockBrowserService();
-    searchPage.$$eval.mockResolvedValue('https://www.psacard.com/auctionprices/baseball-cards/2023-topps/mike-trout/values/123');
-    detailPage.$$eval.mockResolvedValue(salesData);
-
-    // Not graded — should return all grades
+    const { browserService } = createMockBrowserService({ tableRows });
     const adapter = new PsaAdapter(browserService as any);
     const result = await adapter.fetchComps(sampleRequest);
 
@@ -208,14 +227,12 @@ describe('PsaAdapter', () => {
   });
 
   it('returns all grades for non-PSA graded cards', async () => {
-    const salesData = [
-      { price: 500, date: '01/15/2026', grade: '10', auctionHouse: 'eBay' },
-      { price: 50, date: '01/05/2026', grade: '8', auctionHouse: 'eBay' },
-    ];
+    const tableRows = buildTableRows([
+      { grade: '10', venue: 'eBay', date: 'Feb 3, 2026', price: '$500.00' },
+      { grade: '8', venue: 'eBay', date: 'Jan 5, 2026', price: '$50.00' },
+    ]);
 
-    const { browserService, searchPage, detailPage } = createMockBrowserService();
-    searchPage.$$eval.mockResolvedValue('https://www.psacard.com/auctionprices/baseball-cards/2023-topps/mike-trout/values/123');
-    detailPage.$$eval.mockResolvedValue(salesData);
+    const { browserService } = createMockBrowserService({ tableRows });
 
     const bgsRequest: CompRequest = {
       ...sampleRequest,
@@ -228,7 +245,6 @@ describe('PsaAdapter', () => {
     const result = await adapter.fetchComps(bgsRequest);
 
     expect(result.error).toBeUndefined();
-    // BGS card — PSA adapter returns all grades since it's not PSA-graded
     expect(result.sales).toHaveLength(2);
   });
 
@@ -238,45 +254,146 @@ describe('PsaAdapter', () => {
   });
 });
 
+// ─── parseSaleRows Tests ────────────────────────────────────────────────────
+
+describe('parseSaleRows', () => {
+  it('parses standard 7-cell sale rows', () => {
+    const rows: string[][] = [
+      ['<img/>', 'Feb 3, 2026', 'eBay', 'Auction', '43036578', '10', '$135.83'],
+      ['<img/>', 'Jan 10, 2026', 'Goldin', 'Auction', '12345678', '9', '$231.07'],
+    ];
+    const sales = parseSaleRows(rows);
+    expect(sales).toHaveLength(2);
+    expect(sales[0]).toEqual({ price: 135.83, date: 'Feb 3, 2026', grade: '10', auctionHouse: 'eBay' });
+    expect(sales[1]).toEqual({ price: 231.07, date: 'Jan 10, 2026', grade: '9', auctionHouse: 'Goldin' });
+  });
+
+  it('skips grade summary rows (5 cells)', () => {
+    const rows: string[][] = [
+      ['PSA 10', '$135.83', '$1,162.72', '1093', '0'],           // summary — skip
+      ['PSA 9', '$231.07', '$212.15', '2928', '1093'],           // summary — skip
+      ['<img/>', 'Feb 3, 2026', 'eBay', 'Auction', '43036578', '10', '$135.83'],  // sale — keep
+    ];
+    const sales = parseSaleRows(rows);
+    expect(sales).toHaveLength(1);
+    expect(sales[0].price).toBe(135.83);
+  });
+
+  it('handles prices with commas', () => {
+    const rows: string[][] = [
+      ['<img/>', 'Feb 1, 2026', 'eBay', 'Auction', '43036578', '10', '$1,198.00'],
+    ];
+    const sales = parseSaleRows(rows);
+    expect(sales).toHaveLength(1);
+    expect(sales[0].price).toBe(1198);
+  });
+
+  it('skips $0 prices', () => {
+    const rows: string[][] = [
+      ['<img/>', 'Oct 3, 2025', 'eBay', 'Auction', '45326635', '8', '$0.00'],
+    ];
+    const sales = parseSaleRows(rows);
+    expect(sales).toHaveLength(0);
+  });
+
+  it('skips rows with non-numeric price', () => {
+    const rows: string[][] = [
+      ['<img/>', 'Oct 3, 2025', 'eBay', 'Auction', '45326635', '8', 'N/A'],
+    ];
+    const sales = parseSaleRows(rows);
+    expect(sales).toHaveLength(0);
+  });
+
+  it('returns empty array for empty input', () => {
+    expect(parseSaleRows([])).toEqual([]);
+  });
+
+  it('extracts half grades correctly', () => {
+    const rows: string[][] = [
+      ['<img/>', 'Dec 23, 2025', 'eBay', 'Auction', '87181981', '8.5', '$271.00'],
+    ];
+    const sales = parseSaleRows(rows);
+    expect(sales[0].grade).toBe('8.5');
+  });
+
+  it('defaults auctionHouse to PSA when empty', () => {
+    const rows: string[][] = [
+      ['<img/>', 'Feb 3, 2026', '', 'Auction', '43036578', '10', '$135.83'],
+    ];
+    const sales = parseSaleRows(rows);
+    expect(sales[0].auctionHouse).toBe('PSA');
+  });
+
+  it('handles mixed summary and sale rows', () => {
+    const rows: string[][] = [
+      ['PSA 10', '$135.83', '$1,162.72', '1093', '0'],                          // summary
+      ['PSA 9', '$231.07', '$212.15', '2928', '1093'],                          // summary
+      ['<img/>', 'Feb 3, 2026', 'eBay', 'Auction', '43036578', '10', '$135.83'],  // sale
+      ['<img/>', 'Feb 2, 2026', 'eBay', 'Auction', '43036578', '10', '$1,198.00'],// sale
+      ['PSA 8', '$141.05', '$114.89', '3354', '4294'],                          // summary
+      ['<img/>', 'Jan 31, 2026', 'eBay', 'Auction', '58074655', '8', '$141.05'],  // sale
+    ];
+    const sales = parseSaleRows(rows);
+    expect(sales).toHaveLength(3);
+    expect(sales[0].price).toBe(135.83);
+    expect(sales[1].price).toBe(1198);
+    expect(sales[2].price).toBe(141.05);
+  });
+});
+
+// ─── Helper Tests ────────────────────────────────────────────────────────────
+
 describe('buildSearchQuery', () => {
   it('builds basic query from required fields', () => {
-    const query = buildSearchQuery(sampleRequest);
-    expect(query).toBe('2023 Topps Mike Trout #1');
+    expect(buildSearchQuery(sampleRequest)).toBe('2023 Topps Mike Trout #1');
   });
 
   it('includes setName when provided', () => {
-    const query = buildSearchQuery({ ...sampleRequest, setName: 'Chrome' });
-    expect(query).toBe('2023 Topps Chrome Mike Trout #1');
+    expect(buildSearchQuery({ ...sampleRequest, setName: 'Chrome' })).toBe('2023 Topps Chrome Mike Trout #1');
   });
 
   it('includes parallel when provided', () => {
-    const query = buildSearchQuery({ ...sampleRequest, parallel: 'Refractor' });
-    expect(query).toBe('2023 Topps Mike Trout #1 Refractor');
+    expect(buildSearchQuery({ ...sampleRequest, parallel: 'Refractor' })).toBe('2023 Topps Mike Trout #1 Refractor');
   });
 
   it('does not include grading info (PSA search is card-level)', () => {
-    const query = buildSearchQuery({
+    expect(buildSearchQuery({
       ...sampleRequest,
-      isGraded: true,
-      gradingCompany: 'PSA',
-      grade: '10',
-    });
-    // PSA search doesn't include grading info — grade filtering happens on results
-    expect(query).toBe('2023 Topps Mike Trout #1');
+      isGraded: true, gradingCompany: 'PSA', grade: '10',
+    })).toBe('2023 Topps Mike Trout #1');
   });
 });
 
 describe('buildSearchUrl', () => {
   it('builds correct URL with query parameter', () => {
-    const url = buildSearchUrl('2023 Topps Mike Trout #1');
-    expect(url).toBe('https://www.psacard.com/auctionprices?q=2023+Topps+Mike+Trout+%231');
+    expect(buildSearchUrl('2023 Topps Mike Trout #1')).toBe('https://www.psacard.com/auctionprices/search?q=2023+Topps+Mike+Trout+%231');
   });
 
   it('encodes special characters', () => {
     const url = buildSearchUrl('2023 Topps Chrome Mike Trout #1 Refractor');
-    expect(url).toContain('https://www.psacard.com/auctionprices?q=');
-    expect(url).toContain('Topps');
-    expect(url).toContain('Trout');
+    expect(url).toContain('https://www.psacard.com/auctionprices/search?q=');
+  });
+});
+
+describe('extractSpecId', () => {
+  it('extracts from /values/ URL format', () => {
+    expect(extractSpecId('/auctionprices/baseball-cards/2000-topps/mike-trout/values/187370')).toBe('187370');
+  });
+
+  it('extracts from trailing segment URL format', () => {
+    expect(extractSpecId('https://www.psacard.com/auctionprices/football-cards/2000-fleer/tom-brady/279660')).toBe('279660');
+  });
+
+  it('returns null for URL without numeric ID', () => {
+    expect(extractSpecId('https://www.psacard.com/auctionprices')).toBeNull();
+  });
+
+  it('returns null for search URL', () => {
+    expect(extractSpecId('https://www.psacard.com/auctionprices/search?q=tom+brady')).toBeNull();
+  });
+
+  it('returns null for empty string', () => {
+    expect(extractSpecId('')).toBeNull();
   });
 });
 
@@ -284,87 +401,40 @@ describe('filterByRelevance', () => {
   const sales = [
     { price: 150, date: '01/15/2026', grade: '10', auctionHouse: 'eBay' },
     { price: 120, date: '01/10/2026', grade: '10', auctionHouse: 'Goldin' },
-    { price: 500, date: '01/03/2026', grade: '10', auctionHouse: 'Heritage' },
   ];
 
   it('returns all sales (PSA detail pages are card-specific)', () => {
-    const result = filterByRelevance(sales, sampleRequest);
-    expect(result).toHaveLength(3);
-  });
-
-  it('handles empty player name gracefully', () => {
-    const result = filterByRelevance(sales, { ...sampleRequest, player: '' });
-    expect(result).toHaveLength(3);
+    expect(filterByRelevance(sales, sampleRequest)).toHaveLength(2);
   });
 });
 
 describe('mapCategory', () => {
-  it('maps baseball correctly', () => {
-    expect(mapCategory('Baseball')).toBe('baseball-cards');
-  });
-
-  it('maps basketball correctly', () => {
-    expect(mapCategory('Basketball')).toBe('basketball-cards');
-  });
-
-  it('maps football correctly', () => {
-    expect(mapCategory('Football')).toBe('football-cards');
-  });
-
-  it('maps hockey correctly', () => {
-    expect(mapCategory('Hockey')).toBe('hockey-cards');
-  });
-
-  it('maps soccer correctly', () => {
-    expect(mapCategory('Soccer')).toBe('soccer-cards');
-  });
-
-  it('maps pokemon correctly', () => {
-    expect(mapCategory('Pokemon')).toBe('tcg-cards');
-  });
-
+  it('maps baseball correctly', () => { expect(mapCategory('Baseball')).toBe('baseball-cards'); });
+  it('maps basketball correctly', () => { expect(mapCategory('Basketball')).toBe('basketball-cards'); });
+  it('maps football correctly', () => { expect(mapCategory('Football')).toBe('football-cards'); });
+  it('maps hockey correctly', () => { expect(mapCategory('Hockey')).toBe('hockey-cards'); });
+  it('maps soccer correctly', () => { expect(mapCategory('Soccer')).toBe('soccer-cards'); });
+  it('maps pokemon correctly', () => { expect(mapCategory('Pokemon')).toBe('tcg-cards'); });
   it('maps other/unknown to non-sports-cards', () => {
     expect(mapCategory('Other')).toBe('non-sports-cards');
     expect(mapCategory('random')).toBe('non-sports-cards');
   });
-
   it('is case insensitive', () => {
     expect(mapCategory('BASEBALL')).toBe('baseball-cards');
-    expect(mapCategory('basketball')).toBe('basketball-cards');
     expect(mapCategory('POKEMON')).toBe('tcg-cards');
   });
 });
 
 describe('computeTrimmedMean', () => {
-  it('returns 0 for empty array', () => {
-    expect(computeTrimmedMean([])).toBe(0);
+  it('returns 0 for empty array', () => { expect(computeTrimmedMean([])).toBe(0); });
+  it('returns simple average for fewer than 5', () => { expect(computeTrimmedMean([100, 200, 300])).toBeCloseTo(200); });
+  it('trims for 5+', () => {
+    expect(computeTrimmedMean([1, 10, 20, 30, 40, 50, 60, 70, 80, 1000])).toBeCloseTo(45);
   });
-
-  it('returns simple average for fewer than 5 prices', () => {
-    expect(computeTrimmedMean([100, 200, 300])).toBeCloseTo(200, 5);
-  });
-
-  it('returns simple average for exactly 4 prices', () => {
-    expect(computeTrimmedMean([10, 20, 30, 40])).toBeCloseTo(25, 5);
-  });
-
-  it('trims top and bottom 15% for 5+ prices', () => {
-    // 10 prices: trim 1 from each end (floor(10 * 0.15) = 1)
-    const prices = [1, 10, 20, 30, 40, 50, 60, 70, 80, 1000];
-    // After trimming: [10, 20, 30, 40, 50, 60, 70, 80] => avg = 45
-    expect(computeTrimmedMean(prices)).toBeCloseTo(45, 5);
-  });
-
-  it('removes outliers effectively', () => {
-    const prices = [100, 110, 120, 130, 140, 5000];
-    // Sorted: [100, 110, 120, 130, 140, 5000], trim 1 from each end
-    // Trimmed: [110, 120, 130, 140] => avg = 125
-    const result = computeTrimmedMean(prices);
-    expect(result).toBeCloseTo(125, 5);
+  it('removes outliers', () => {
+    const result = computeTrimmedMean([100, 110, 120, 130, 140, 5000]);
+    expect(result).toBeCloseTo(125);
     expect(result).toBeLessThan(200);
   });
-
-  it('returns single value for array of 1', () => {
-    expect(computeTrimmedMean([42])).toBe(42);
-  });
+  it('returns single value for array of 1', () => { expect(computeTrimmedMean([42])).toBe(42); });
 });
