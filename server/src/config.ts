@@ -37,6 +37,7 @@ export function loadConfig(): Config {
       CardLadder: parseInt(process.env.RATE_LIMIT_CARDLADDER || '1500', 10),
       MarketMovers: parseInt(process.env.RATE_LIMIT_MARKETMOVERS || '1500', 10),
       '130Point': parseInt(process.env.RATE_LIMIT_130POINT || '6000', 10),
+      PSA: parseInt(process.env.RATE_LIMIT_PSA || '3000', 10),
     },
   };
 }
