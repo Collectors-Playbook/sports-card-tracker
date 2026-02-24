@@ -18,6 +18,8 @@ import { createAuthRoutes } from './routes/auth';
 import { createCompRoutes } from './routes/comps';
 import { createImageProcessingRoutes } from './routes/imageProcessing';
 import CompService from './services/compService';
+import BrowserService from './services/browserService';
+import CompCacheService from './services/compCacheService';
 import AnthropicVisionService from './services/anthropicVisionService';
 import ImageProcessingService from './services/imageProcessingService';
 import ImageCropService from './services/imageCropService';
@@ -39,7 +41,15 @@ const db = new Database(config.dbPath);
 const fileService = new FileService(config.rawDir, config.processedDir, config.dataDir);
 const eventService = new EventService();
 const jobService = new JobService(db, eventService);
-const compService = new CompService(fileService);
+
+// Puppeteer-based comp scraping (optional)
+const browserService = config.puppeteerEnabled ? new BrowserService({
+  headless: config.puppeteerHeadless,
+  rateLimits: config.rateLimits,
+}) : undefined;
+const compCacheService = config.puppeteerEnabled ? new CompCacheService(db, config.compCacheTtlMs) : undefined;
+const compService = new CompService(fileService, undefined, browserService, compCacheService, db);
+
 const visionService = new AnthropicVisionService();
 const imageCropService = new ImageCropService();
 const auditService = new AuditService(db);
@@ -97,6 +107,15 @@ jobService.registerHandler('comp-generation', async (job, updateProgress) => {
         brand: card.brand,
         cardNumber: card.cardNumber,
         condition: card.condition,
+        setName: card.setName,
+        parallel: card.parallel,
+        isGraded: card.isGraded,
+        gradingCompany: card.gradingCompany,
+        grade: card.grade,
+        isRookie: card.isRookie,
+        isAutograph: card.isAutograph,
+        isRelic: card.isRelic,
+        isNumbered: card.isNumbered,
       });
       results.push({ cardId: card.id, generatedAt: report.generatedAt });
     }
@@ -137,6 +156,11 @@ if (require.main === module) {
       fileService.ensureDirectories();
       console.log('Directories ready');
 
+      if (browserService) {
+        await browserService.launch();
+        console.log('Browser service started');
+      }
+
       jobService.start(config.jobPollInterval);
       console.log('Job service started');
 
@@ -152,6 +176,10 @@ if (require.main === module) {
         jobService.stop();
         eventService.stopHeartbeat();
         server.close(async () => {
+          if (browserService) {
+            await browserService.shutdown();
+            console.log('Browser service stopped');
+          }
           await db.close();
           console.log('Server stopped');
           process.exit(0);
@@ -167,4 +195,4 @@ if (require.main === module) {
   })();
 }
 
-export { app, db, fileService, eventService, jobService, compService, visionService, imageCropService, imageProcessingService, ebayExportService, auditService };
+export { app, db, fileService, eventService, jobService, compService, browserService, compCacheService, visionService, imageCropService, imageProcessingService, ebayExportService, auditService };

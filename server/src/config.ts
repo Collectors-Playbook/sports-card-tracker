@@ -9,6 +9,10 @@ export interface Config {
   dbPath: string;
   jwtSecret: string;
   jobPollInterval: number;
+  puppeteerEnabled: boolean;
+  puppeteerHeadless: boolean;
+  compCacheTtlMs: number;
+  rateLimits: Record<string, number>;
 }
 
 export function loadConfig(): Config {
@@ -24,5 +28,14 @@ export function loadConfig(): Config {
     dbPath: process.env.DB_PATH || path.join(dataDir, 'server', 'database.sqlite'),
     jwtSecret: process.env.JWT_SECRET || 'dev-secret-change-in-production',
     jobPollInterval: parseInt(process.env.JOB_POLL_INTERVAL || '5000', 10),
+    puppeteerEnabled: process.env.PUPPETEER_ENABLED !== 'false',
+    puppeteerHeadless: process.env.PUPPETEER_HEADLESS !== 'false',
+    compCacheTtlMs: parseInt(process.env.COMP_CACHE_TTL_MS || '86400000', 10),
+    rateLimits: {
+      eBay: parseInt(process.env.RATE_LIMIT_EBAY || '2000', 10),
+      SportsCardsPro: parseInt(process.env.RATE_LIMIT_SPORTSCARDSPRO || '1000', 10),
+      CardLadder: parseInt(process.env.RATE_LIMIT_CARDLADDER || '1500', 10),
+      MarketMovers: parseInt(process.env.RATE_LIMIT_MARKETMOVERS || '1500', 10),
+    },
   };
 }

@@ -214,11 +214,32 @@ export interface CompRequest {
   brand: string;
   cardNumber: string;
   condition?: string;
+  setName?: string;
+  parallel?: string;
+  isGraded?: boolean;
+  gradingCompany?: string;
+  grade?: string;
+  isRookie?: boolean;
+  isAutograph?: boolean;
+  isRelic?: boolean;
+  isNumbered?: boolean;
 }
 
 export interface CompAdapter {
   source: CompSource;
   fetchComps(request: CompRequest): Promise<CompResult>;
+}
+
+export interface StoredCompReport {
+  id: string;
+  cardId: string;
+  condition?: string;
+  sources: CompResult[];
+  aggregateAverage: number | null;
+  aggregateLow: number | null;
+  aggregateHigh: number | null;
+  generatedAt: string;
+  createdAt: string;
 }
 
 // ─── eBay Export ────────────────────────────────────────────────────────────

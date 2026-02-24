@@ -15,6 +15,20 @@
       "when": 1771879924245,
       "tag": "0001_numerous_shinko_yamashiro",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1771977600000,
+      "tag": "0002_comp_cache",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1772064000000,
+      "tag": "0003_card_comp_storage",
+      "breakpoints": true
     }
   ]
 }
