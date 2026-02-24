@@ -164,6 +164,17 @@ describe('parsePopJson', () => {
     const result = parsePopJson(counts);
     expect(result).toEqual([]);
   });
+
+  it('handles PSAData format with string grade values', () => {
+    // PSAData returns grades as strings, not numbers
+    const counts = { GradeN0: '0', Grade1: '0', Grade8: '200', Grade9: '50', Grade10: '3' };
+    const result = parsePopJson(counts);
+    expect(result).toEqual([
+      { grade: '8', count: 200 },
+      { grade: '9', count: 50 },
+      { grade: '10', count: 3 },
+    ]);
+  });
 });
 
 // ─── scoreMatch ─────────────────────────────────────────────────────────────
@@ -280,10 +291,13 @@ describe('PsaPopScraper', () => {
   });
 
   it('returns null when search finds no results', async () => {
-    // First evaluate: form search returns empty results
-    // Second evaluate: another query, also empty
     const mockPage = {
       evaluate: jest.fn().mockResolvedValue([]),
+      select: jest.fn().mockResolvedValue(undefined),
+      focus: jest.fn().mockResolvedValue(undefined),
+      type: jest.fn().mockResolvedValue(undefined),
+      click: jest.fn().mockResolvedValue(undefined),
+      waitForSelector: jest.fn().mockRejectedValue(new Error('timeout')),
       close: jest.fn().mockResolvedValue(undefined),
     };
     const mockBrowser = {
@@ -300,8 +314,6 @@ describe('PsaPopScraper', () => {
       grade: '10',
     });
     expect(result).toBeNull();
-    // One navigateWithThrottle call for the search page
-    expect(mockBrowser.navigateWithThrottle).toHaveBeenCalledTimes(1);
   });
 
   it('returns PopulationData when scraping succeeds', async () => {
@@ -321,12 +333,25 @@ describe('PsaPopScraper', () => {
       },
     };
 
+    // Mock the AJAX response intercepted via waitForResponse
+    const mockPopResponse = {
+      text: jest.fn().mockResolvedValue(JSON.stringify(popJsonResponse)),
+    };
+
     let evalCallCount = 0;
     const mockPage = {
+      select: jest.fn().mockResolvedValue(undefined),
+      focus: jest.fn().mockResolvedValue(undefined),
+      type: jest.fn().mockResolvedValue(undefined),
+      click: jest.fn().mockResolvedValue(undefined),
+      waitForSelector: jest.fn().mockResolvedValue(undefined),
+      waitForResponse: jest.fn().mockResolvedValue(mockPopResponse),
       evaluate: jest.fn().mockImplementation(() => {
         evalCallCount++;
-        if (evalCallCount === 1) return Promise.resolve(searchResults);
-        if (evalCallCount === 2) return Promise.resolve(popJsonResponse);
+        // 1st call: form submit dispatch (return value ignored)
+        if (evalCallCount === 1) return Promise.resolve(undefined);
+        // 2nd call: extract results from table
+        if (evalCallCount === 2) return Promise.resolve(searchResults);
         return Promise.resolve(null);
       }),
       close: jest.fn().mockResolvedValue(undefined),
@@ -358,7 +383,12 @@ describe('PsaPopScraper', () => {
 
   it('returns null and cleans up page on error', async () => {
     const mockPage = {
-      evaluate: jest.fn().mockRejectedValue(new Error('Navigation failed')),
+      select: jest.fn().mockResolvedValue(undefined),
+      focus: jest.fn().mockRejectedValue(new Error('Navigation failed')),
+      type: jest.fn().mockResolvedValue(undefined),
+      click: jest.fn().mockResolvedValue(undefined),
+      waitForSelector: jest.fn().mockResolvedValue(undefined),
+      evaluate: jest.fn().mockResolvedValue([]),
       close: jest.fn().mockResolvedValue(undefined),
     };
     const mockBrowser = {

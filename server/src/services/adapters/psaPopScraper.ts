@@ -76,13 +76,15 @@ function buildPopSearchUrl(query: string): string {
 }
 
 /**
- * Parse grade breakdown from PSA's JSON API Counts object.
+ * Parse grade breakdown from PSA's JSON API.
+ * Handles both DNAData.Counts (numeric values) and PSAData (string values) formats.
  */
-function parsePopJson(counts: Record<string, number>): PopGradeEntry[] {
+function parsePopJson(counts: Record<string, number | string>): PopGradeEntry[] {
   const entries: PopGradeEntry[] = [];
   for (const [key, grade] of COUNTS_GRADE_MAP) {
-    const count = counts[key];
-    if (typeof count === 'number' && count > 0) {
+    const raw = counts[key];
+    const count = typeof raw === 'number' ? raw : parseInt(String(raw), 10);
+    if (!isNaN(count) && count > 0) {
       entries.push({ grade, count });
     }
   }
@@ -178,60 +180,52 @@ class PsaPopScraper implements PopScraper {
       const queries = buildSearchQueries(request);
       const categoryValue = mapCategoryToSearchValue(request.category);
 
-      // Step 1: Navigate to search page
-      page = await this.browserService.navigateWithThrottle('PSA', PSA_SEARCH_URL);
-
-      // Step 2: Try each query, submit the form, find the best match
+      // Step 2: Try each query — use a fresh page per query to avoid stale results
       let bestSpecId: string | null = null;
       let bestDescription = '';
 
       for (const query of queries) {
         console.log(`[PsaPopScraper] Trying query: "${query}" (category: "${categoryValue || 'All'}")`);
 
-        // Clear input, set values, submit form
+        // Navigate to fresh search page for each query
+        page = await this.browserService.navigateWithThrottle('PSA', PSA_SEARCH_URL);
+
+        // Set category dropdown
+        if (categoryValue) {
+          await page.select('#categoryid', categoryValue);
+        }
+
+        // Type query using Puppeteer's native type (fires proper keyboard events)
+        await page.focus('#term');
+        await page.type('#term', query, { delay: 30 });
+
+        // Submit the form (dispatch submit event — more reliable with jQuery than button click)
+        await page.evaluate(`document.getElementById('formSearch').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))`);
+
+        // Wait for actual results to populate (look for .show-pop elements, not just tbody tr)
+        try {
+          await page.waitForSelector('#tableResults .show-pop[data-id]', { timeout: 10000 });
+        } catch {
+          // Timeout — no results for this query
+          console.log(`[PsaPopScraper] No results appeared for query`);
+          await page.close();
+          page = undefined;
+          continue;
+        }
+
+        // Extract results from the table
         const results = await page.evaluate(`
-          (async () => {
-            const input = document.getElementById('term');
-            const categorySelect = document.getElementById('categoryid');
-            const form = document.getElementById('formSearch');
-            if (!input || !form) return [];
-
-            input.value = ${JSON.stringify(query)};
-            if (categorySelect) categorySelect.value = ${JSON.stringify(categoryValue)};
-
-            // Submit form via jQuery (PSA uses jQuery AJAX form submission)
-            return new Promise(resolve => {
-              // Listen for the table to populate
-              const check = () => {
-                const table = document.getElementById('tableResults');
-                if (table) {
-                  const rows = table.querySelectorAll('tbody tr');
-                  if (rows.length > 0) {
-                    const results = Array.from(rows).map(tr => {
-                      const cells = tr.querySelectorAll('td');
-                      const showPop = tr.querySelector('.show-pop');
-                      return {
-                        description: cells[1] ? cells[1].textContent.trim() : '',
-                        specId: showPop ? showPop.getAttribute('data-id') : null,
-                      };
-                    }).filter(r => r.specId);
-                    resolve(results);
-                    return;
-                  }
-                }
-                // Check again after delay
-                setTimeout(check, 500);
+          (() => {
+            const table = document.getElementById('tableResults');
+            if (!table) return [];
+            return Array.from(table.querySelectorAll('tbody tr')).map(tr => {
+              const cells = tr.querySelectorAll('td');
+              const showPop = tr.querySelector('.show-pop');
+              return {
+                description: cells[1] ? cells[1].textContent.trim() : '',
+                specId: showPop ? showPop.getAttribute('data-id') : null,
               };
-
-              // Trigger form submit
-              form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-
-              // Start checking for results after a brief delay
-              setTimeout(check, 1000);
-
-              // Timeout after 8 seconds
-              setTimeout(() => resolve([]), 8000);
-            });
+            }).filter(r => r.specId);
           })()
         `) as Array<{ description: string; specId: string }>;
 
@@ -254,43 +248,70 @@ class PsaPopScraper implements PopScraper {
             break;
           }
         }
+
+        // Close this page before trying the next query
+        await page.close();
+        page = undefined;
       }
 
       if (!bestSpecId) {
         console.log(`[PsaPopScraper] No results for any query variant`);
-        await page.close();
+        if (page) await page.close();
         return null;
       }
 
-      // Step 3: Fetch pop data via JSON API (PSA returns double-encoded JSON)
-      console.log(`[PsaPopScraper] Fetching pop JSON for specId ${bestSpecId}`);
-      const popJson = await page.evaluate(`
-        (async () => {
-          try {
-            const response = await fetch('${PSA_POP_JSON_URL}?specid=' + ${JSON.stringify(bestSpecId)});
-            if (!response.ok) return null;
-            const text = await response.text();
-            const outer = JSON.parse(text);
-            return typeof outer === 'string' ? JSON.parse(outer) : outer;
-          } catch {
-            return null;
-          }
-        })()
-      `);
+      // Step 3: Click "Show Pop" button and intercept the AJAX response.
+      // PSA's JSON API is behind Cloudflare — our own fetch() gets challenged,
+      // but clicking the button lets PSA's jQuery make the request with proper tokens.
+      console.log(`[PsaPopScraper] Clicking Show Pop for specId ${bestSpecId}`);
+
+      let popJson: any = null;
+      try {
+        // Set up response listener BEFORE clicking
+        const popResponsePromise = page.waitForResponse(
+          (resp: any) => resp.url().includes('getpopulationjson'),
+          { timeout: 15000 }
+        );
+
+        // Click the Show Pop button for the best match
+        await page.click(`.show-pop[data-id="${bestSpecId}"]`);
+
+        // Wait for the AJAX response
+        const popResponse = await popResponsePromise;
+        const popText = await popResponse.text();
+
+        // PSA returns double-encoded JSON (JSON string wrapped in JSON)
+        const outer = JSON.parse(popText);
+        popJson = typeof outer === 'string' ? JSON.parse(outer) : outer;
+      } catch (fetchErr) {
+        console.log(`[PsaPopScraper] Failed to intercept pop JSON:`, fetchErr instanceof Error ? fetchErr.message : fetchErr);
+      }
 
       await page.close();
       page = undefined;
 
-      if (!popJson || !popJson.DNAData) {
+      if (!popJson) {
         console.log(`[PsaPopScraper] Failed to fetch pop JSON`);
         return null;
       }
 
-      const data = popJson.DNAData;
-      const counts = data.Counts;
+      // PSA returns data in one of two formats:
+      // 1. DNAData.Counts — numeric grade values in a Counts sub-object
+      // 2. PSAData — string grade values as top-level properties (DNAData will be null)
+      let counts: Record<string, number | string> | null = null;
+      let totalFromData: number | undefined;
+
+      if (popJson.DNAData?.Counts) {
+        counts = popJson.DNAData.Counts;
+        totalFromData = typeof popJson.DNAData.Total === 'number' ? popJson.DNAData.Total : undefined;
+      } else if (popJson.PSAData) {
+        counts = popJson.PSAData;
+        const rawTotal = popJson.PSAData.TotalPop ?? popJson.PSAData.Total;
+        totalFromData = rawTotal != null ? parseInt(String(rawTotal), 10) : undefined;
+      }
 
       if (!counts) {
-        console.log(`[PsaPopScraper] No Counts in pop JSON`);
+        console.log(`[PsaPopScraper] No grade data in pop JSON (DNAData and PSAData both empty)`);
         return null;
       }
 
@@ -301,7 +322,7 @@ class PsaPopScraper implements PopScraper {
         return null;
       }
 
-      const totalGraded = typeof data.Total === 'number' ? data.Total : gradeBreakdown.reduce((sum, e) => sum + e.count, 0);
+      const totalGraded = totalFromData && !isNaN(totalFromData) ? totalFromData : gradeBreakdown.reduce((sum, e) => sum + e.count, 0);
       const targetEntry = gradeBreakdown.find(e => e.grade === request.grade);
       const targetGradePop = targetEntry?.count ?? 0;
       const higherGradePop = computeHigherGradePop(gradeBreakdown, request.grade);
