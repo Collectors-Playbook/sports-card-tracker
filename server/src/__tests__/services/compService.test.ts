@@ -3,6 +3,7 @@ import path from 'path';
 import os from 'os';
 import FileService from '../../services/fileService';
 import CompService from '../../services/compService';
+import Database from '../../database';
 import { CompAdapter, CompRequest, CompResult } from '../../types';
 
 function createMockAdapter(source: string, result: Partial<CompResult> = {}): CompAdapter {
@@ -149,7 +150,123 @@ describe('CompService', () => {
     expect(sourceNames).toContain('eBay');
     expect(sourceNames).toContain('CardLadder');
     expect(sourceNames).toContain('MarketMovers');
-    // All default adapters return stub errors
+    // All default adapters return stub errors (no browser service)
     expect(report.sources.every(s => s.error)).toBe(true);
+  });
+
+  it('accepts optional browserService and cacheService in constructor', async () => {
+    const mockBrowserService = {
+      isRunning: jest.fn().mockReturnValue(false),
+      launch: jest.fn(),
+      shutdown: jest.fn(),
+      newPage: jest.fn(),
+      throttle: jest.fn(),
+      navigateWithThrottle: jest.fn(),
+    };
+    const mockCacheService = {
+      get: jest.fn().mockReturnValue(null),
+      set: jest.fn(),
+      buildCacheKey: jest.fn(),
+      purgeExpired: jest.fn(),
+    };
+
+    // Should not throw — adapters are created with browser/cache services
+    const service = new CompService(
+      fileService,
+      undefined,
+      mockBrowserService as any,
+      mockCacheService as any
+    );
+    const report = await service.generateComps(sampleRequest);
+
+    expect(report.sources).toHaveLength(4);
+    // Browser not running so all should return stub errors
+    expect(report.sources.every(s => s.error)).toBe(true);
+  });
+
+  describe('with Database', () => {
+    let db: Database;
+    let cardId: string;
+
+    beforeEach(async () => {
+      db = new Database(':memory:');
+      await db.waitReady();
+
+      const card = await db.createCard({
+        player: 'Mike Trout',
+        team: 'Angels',
+        year: 2023,
+        brand: 'Topps',
+        category: 'Baseball',
+        cardNumber: '1',
+        condition: 'RAW',
+        purchasePrice: 10,
+        purchaseDate: '2023-01-01',
+        currentValue: 0,
+        images: [],
+        notes: '',
+      });
+      cardId = card.id;
+    });
+
+    afterEach(async () => {
+      await db.close();
+    });
+
+    it('generateAndWriteComps persists to DB', async () => {
+      const adapters = [
+        createMockAdapter('SportsCardsPro', { averagePrice: 50, low: 40, high: 60, marketValue: 50 }),
+      ];
+      const service = new CompService(fileService, adapters, undefined, undefined, db);
+
+      const request = { ...sampleRequest, cardId };
+      await service.generateAndWriteComps(request);
+
+      const stored = await service.getStoredComps(cardId);
+      expect(stored).toBeDefined();
+      expect(stored!.sources).toHaveLength(1);
+      expect(stored!.sources[0].averagePrice).toBe(50);
+    });
+
+    it('card currentValue updated after storing comps', async () => {
+      const adapters = [
+        createMockAdapter('SportsCardsPro', { averagePrice: 75, low: 60, high: 90, marketValue: 75 }),
+      ];
+      const service = new CompService(fileService, adapters, undefined, undefined, db);
+
+      const request = { ...sampleRequest, cardId };
+      await service.generateAndWriteComps(request);
+
+      const card = await db.getCardById(cardId);
+      expect(card!.currentValue).toBe(75);
+    });
+
+    it('currentValue unchanged when all sources fail', async () => {
+      // First, set a value
+      const goodAdapters = [
+        createMockAdapter('SportsCardsPro', { averagePrice: 50, low: 40, high: 60, marketValue: 50 }),
+      ];
+      const service1 = new CompService(fileService, goodAdapters, undefined, undefined, db);
+      await service1.generateAndWriteComps({ ...sampleRequest, cardId });
+
+      const cardBefore = await db.getCardById(cardId);
+      expect(cardBefore!.currentValue).toBe(50);
+
+      // Now generate with failing sources
+      const failAdapters = [
+        createMockAdapter('SportsCardsPro', { error: 'API not implemented' }),
+      ];
+      const service2 = new CompService(fileService, failAdapters, undefined, undefined, db);
+      await service2.generateAndWriteComps({ ...sampleRequest, cardId });
+
+      const cardAfter = await db.getCardById(cardId);
+      expect(cardAfter!.currentValue).toBe(50);
+    });
+
+    it('getStoredComps returns undefined without db', async () => {
+      const service = new CompService(fileService);
+      const stored = await service.getStoredComps(cardId);
+      expect(stored).toBeUndefined();
+    });
   });
 });

@@ -109,6 +109,51 @@ export const gradingSubmissions = sqliteTable('grading_submissions', {
   index('idx_grading_status').on(table.status),
 ]);
 
+// ─── Comp Cache ────────────────────────────────────────────────────────────
+
+export const compCache = sqliteTable('comp_cache', {
+  key: text('key').primaryKey(),
+  source: text('source').notNull(),
+  result: text('result', { mode: 'json' }).$type<Record<string, unknown>>().notNull(),
+  createdAt: text('createdAt').notNull(),
+  expiresAt: text('expiresAt').notNull(),
+}, (table) => [
+  index('idx_comp_cache_expiresAt').on(table.expiresAt),
+]);
+
+// ─── Card Comp Reports ────────────────────────────────────────────────────
+
+export const cardCompReports = sqliteTable('card_comp_reports', {
+  id: text('id').primaryKey(),
+  cardId: text('cardId').notNull().references(() => cards.id, { onDelete: 'cascade' }),
+  condition: text('condition'),
+  aggregateAverage: real('aggregateAverage'),
+  aggregateLow: real('aggregateLow'),
+  aggregateHigh: real('aggregateHigh'),
+  generatedAt: text('generatedAt').notNull(),
+  createdAt: text('createdAt').notNull(),
+}, (table) => [
+  index('idx_comp_reports_cardId').on(table.cardId),
+  index('idx_comp_reports_generatedAt').on(table.generatedAt),
+]);
+
+// ─── Card Comp Sources ───────────────────────────────────────────────────
+
+export const cardCompSources = sqliteTable('card_comp_sources', {
+  id: text('id').primaryKey(),
+  reportId: text('reportId').notNull().references(() => cardCompReports.id, { onDelete: 'cascade' }),
+  source: text('source').notNull(),
+  marketValue: real('marketValue'),
+  averagePrice: real('averagePrice'),
+  low: real('low'),
+  high: real('high'),
+  sales: text('sales', { mode: 'json' }).$type<Record<string, unknown>[]>().notNull().default([]),
+  error: text('error'),
+  createdAt: text('createdAt').notNull(),
+}, (table) => [
+  index('idx_comp_sources_reportId').on(table.reportId),
+]);
+
 // ─── Audit Logs ─────────────────────────────────────────────────────────────
 
 export const auditLogs = sqliteTable('audit_logs', {

@@ -482,6 +482,36 @@ class ApiService {
     };
   }
 
+  // ─── Comps ──────────────────────────────────────────────────────────────
+
+  public async generateComps(cardId: string): Promise<CompReport> {
+    return this.request<CompReport>(`/comps/${cardId}`);
+  }
+
+  public async getStoredComps(cardId: string): Promise<CompReport | null> {
+    try {
+      return await this.request<CompReport>(`/comps/${cardId}/stored`);
+    } catch {
+      return null;
+    }
+  }
+
+  public async getCompHistory(cardId: string, limit?: number): Promise<CompReport[]> {
+    const query = limit ? `?limit=${limit}` : '';
+    return this.request<CompReport[]>(`/comps/${cardId}/history${query}`);
+  }
+
+  public async refreshComps(cardId: string): Promise<CompReport> {
+    return this.request<CompReport>(`/comps/${cardId}?refresh=true`);
+  }
+
+  public async generateBulkComps(cardIds: string[]): Promise<{ id: string; type: string; status: string }> {
+    return this.request('/jobs', {
+      method: 'POST',
+      body: JSON.stringify({ type: 'comp-generation', payload: { cardIds } }),
+    });
+  }
+
   // ─── Health ───────────────────────────────────────────────────────────────
 
   public async healthCheck(): Promise<{ status: string; message: string }> {
@@ -798,6 +828,41 @@ export interface GradingStats {
   totalCost: number;
   avgTurnaroundDays: number | null;
   avgGrade: number | null;
+}
+
+// ─── Comp Types ───────────────────────────────────────────────────────────
+
+export type CompSource = 'SportsCardsPro' | 'eBay' | 'CardLadder' | 'MarketMovers';
+
+export interface CompSale {
+  date: string;
+  price: number;
+  grade?: string;
+  venue: string;
+}
+
+export interface CompResult {
+  source: CompSource;
+  marketValue: number | null;
+  sales: CompSale[];
+  averagePrice: number | null;
+  low: number | null;
+  high: number | null;
+  error?: string;
+}
+
+export interface CompReport {
+  cardId: string;
+  player: string;
+  year: number;
+  brand: string;
+  cardNumber: string;
+  condition?: string;
+  sources: CompResult[];
+  aggregateAverage: number | null;
+  aggregateLow: number | null;
+  aggregateHigh: number | null;
+  generatedAt: string;
 }
 
 export const apiService = new ApiService();

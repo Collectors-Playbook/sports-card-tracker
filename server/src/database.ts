@@ -1,7 +1,7 @@
 import BetterSqlite3 from 'better-sqlite3';
 import { drizzle, BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
-import { eq, and, like, desc, asc, sql, count, lt, inArray } from 'drizzle-orm';
-import { Card, CardInput, User, UserInput, Collection, CollectionInput, CollectionStats, Job, JobInput, JobStatus, AuditLogEntry, AuditLogInput, AuditLogQuery, GradingSubmission, GradingSubmissionInput, GradingStatus, GradingStats } from './types';
+import { eq, and, like, desc, asc, sql, count, lt, lte, inArray } from 'drizzle-orm';
+import { Card, CardInput, User, UserInput, Collection, CollectionInput, CollectionStats, Job, JobInput, JobStatus, AuditLogEntry, AuditLogInput, AuditLogQuery, GradingSubmission, GradingSubmissionInput, GradingStatus, GradingStats, CompReport, CompSale, CompSource, CompResult, StoredCompReport } from './types';
 import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
 import * as schema from './db/schema';
@@ -10,7 +10,7 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 
-const { users, collections, cards, jobs, gradingSubmissions, auditLogs } = schema;
+const { users, collections, cards, jobs, gradingSubmissions, auditLogs, compCache, cardCompReports, cardCompSources } = schema;
 
 // Baseline SQL executed for in-memory databases (no migration journal needed)
 const BASELINE_SQL = `
@@ -117,6 +117,15 @@ CREATE INDEX IF NOT EXISTS idx_grading_userId ON grading_submissions (userId);
 CREATE INDEX IF NOT EXISTS idx_grading_cardId ON grading_submissions (cardId);
 CREATE INDEX IF NOT EXISTS idx_grading_status ON grading_submissions (status);
 
+CREATE TABLE IF NOT EXISTS comp_cache (
+  key text PRIMARY KEY NOT NULL,
+  source text NOT NULL,
+  result text NOT NULL,
+  createdAt text NOT NULL,
+  expiresAt text NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_comp_cache_expiresAt ON comp_cache (expiresAt);
+
 CREATE TABLE IF NOT EXISTS audit_logs (
   id text PRIMARY KEY NOT NULL,
   userId text,
@@ -130,6 +139,35 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 CREATE INDEX IF NOT EXISTS idx_audit_logs_entity ON audit_logs (entity, entityId);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_userId ON audit_logs (userId);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_createdAt ON audit_logs (createdAt);
+
+CREATE TABLE IF NOT EXISTS card_comp_reports (
+  id text PRIMARY KEY NOT NULL,
+  cardId text NOT NULL,
+  condition text,
+  aggregateAverage real,
+  aggregateLow real,
+  aggregateHigh real,
+  generatedAt text NOT NULL,
+  createdAt text NOT NULL,
+  FOREIGN KEY (cardId) REFERENCES cards(id) ON UPDATE no action ON DELETE cascade
+);
+CREATE INDEX IF NOT EXISTS idx_comp_reports_cardId ON card_comp_reports (cardId);
+CREATE INDEX IF NOT EXISTS idx_comp_reports_generatedAt ON card_comp_reports (generatedAt);
+
+CREATE TABLE IF NOT EXISTS card_comp_sources (
+  id text PRIMARY KEY NOT NULL,
+  reportId text NOT NULL,
+  source text NOT NULL,
+  marketValue real,
+  averagePrice real,
+  low real,
+  high real,
+  sales text DEFAULT '[]' NOT NULL,
+  error text,
+  createdAt text NOT NULL,
+  FOREIGN KEY (reportId) REFERENCES card_comp_reports(id) ON UPDATE no action ON DELETE cascade
+);
+CREATE INDEX IF NOT EXISTS idx_comp_sources_reportId ON card_comp_sources (reportId);
 `;
 
 class Database {
@@ -1031,6 +1069,154 @@ class Database {
     }
 
     return { totalSubmissions: total, pending, complete, totalCost, avgTurnaroundDays, avgGrade };
+  }
+
+  // ─── Comp Cache ─────────────────────────────────────────────────────────────
+
+  public getCompCache(key: string): { result: Record<string, unknown>; expiresAt: string } | null {
+    const row = this.db.select().from(compCache).where(eq(compCache.key, key)).get();
+    if (!row) return null;
+    return { result: row.result, expiresAt: row.expiresAt };
+  }
+
+  public setCompCache(key: string, source: string, result: Record<string, unknown>, createdAt: string, expiresAt: string): void {
+    // Upsert: delete existing then insert
+    this.db.delete(compCache).where(eq(compCache.key, key)).run();
+    this.db.insert(compCache).values({
+      key,
+      source,
+      result,
+      createdAt,
+      expiresAt,
+    }).run();
+  }
+
+  public purgeCompCache(now: string): number {
+    const result = this.db.delete(compCache).where(lte(compCache.expiresAt, now)).run();
+    return result.changes;
+  }
+
+  // ─── Card Comp Reports ──────────────────────────────────────────────────────
+
+  public async saveCompReport(cardId: string, report: CompReport): Promise<StoredCompReport> {
+    const reportId = uuidv4();
+    const now = new Date().toISOString();
+
+    this.db.insert(cardCompReports).values({
+      id: reportId,
+      cardId,
+      condition: report.condition || null,
+      aggregateAverage: report.aggregateAverage,
+      aggregateLow: report.aggregateLow,
+      aggregateHigh: report.aggregateHigh,
+      generatedAt: report.generatedAt,
+      createdAt: now,
+    }).run();
+
+    const sourceRows: CompResult[] = [];
+    for (const source of report.sources) {
+      const sourceId = uuidv4();
+      this.db.insert(cardCompSources).values({
+        id: sourceId,
+        reportId,
+        source: source.source,
+        marketValue: source.marketValue,
+        averagePrice: source.averagePrice,
+        low: source.low,
+        high: source.high,
+        sales: source.sales as unknown as Record<string, unknown>[],
+        error: source.error || null,
+        createdAt: now,
+      }).run();
+      sourceRows.push(source);
+    }
+
+    // Update card's currentValue if aggregate is non-null
+    if (report.aggregateAverage !== null) {
+      const updatedAt = new Date().toISOString();
+      this.db.update(cards).set({
+        currentValue: report.aggregateAverage,
+        updatedAt,
+      }).where(eq(cards.id, cardId)).run();
+    }
+
+    return {
+      id: reportId,
+      cardId,
+      condition: report.condition,
+      sources: sourceRows,
+      aggregateAverage: report.aggregateAverage,
+      aggregateLow: report.aggregateLow,
+      aggregateHigh: report.aggregateHigh,
+      generatedAt: report.generatedAt,
+      createdAt: now,
+    };
+  }
+
+  public async getLatestCompReport(cardId: string): Promise<StoredCompReport | undefined> {
+    const reportRow = this.db.select().from(cardCompReports)
+      .where(eq(cardCompReports.cardId, cardId))
+      .orderBy(desc(cardCompReports.generatedAt))
+      .limit(1)
+      .get();
+
+    if (!reportRow) return undefined;
+
+    const sourceRows = this.db.select().from(cardCompSources)
+      .where(eq(cardCompSources.reportId, reportRow.id))
+      .all();
+
+    return this.mapCompReportRow(reportRow, sourceRows);
+  }
+
+  public async getCompHistory(cardId: string, limit: number = 20): Promise<StoredCompReport[]> {
+    const reportRows = this.db.select().from(cardCompReports)
+      .where(eq(cardCompReports.cardId, cardId))
+      .orderBy(desc(cardCompReports.generatedAt))
+      .limit(limit)
+      .all();
+
+    const results: StoredCompReport[] = [];
+    for (const reportRow of reportRows) {
+      const sourceRows = this.db.select().from(cardCompSources)
+        .where(eq(cardCompSources.reportId, reportRow.id))
+        .all();
+      results.push(this.mapCompReportRow(reportRow, sourceRows));
+    }
+
+    return results;
+  }
+
+  public async deleteCompReports(cardId: string): Promise<number> {
+    const result = this.db.delete(cardCompReports)
+      .where(eq(cardCompReports.cardId, cardId))
+      .run();
+    return result.changes;
+  }
+
+  private mapCompReportRow(
+    row: typeof cardCompReports.$inferSelect,
+    sourceRows: (typeof cardCompSources.$inferSelect)[]
+  ): StoredCompReport {
+    return {
+      id: row.id,
+      cardId: row.cardId,
+      condition: row.condition ?? undefined,
+      sources: sourceRows.map(s => ({
+        source: s.source as CompSource,
+        marketValue: s.marketValue,
+        averagePrice: s.averagePrice,
+        low: s.low,
+        high: s.high,
+        sales: (s.sales ?? []) as unknown as CompSale[],
+        error: s.error ?? undefined,
+      })),
+      aggregateAverage: row.aggregateAverage,
+      aggregateLow: row.aggregateLow,
+      aggregateHigh: row.aggregateHigh,
+      generatedAt: row.generatedAt,
+      createdAt: row.createdAt,
+    };
   }
 
   // ─── Lifecycle ───────────────────────────────────────────────────────────────

@@ -1,23 +1,34 @@
 import fs from 'fs';
 import path from 'path';
 import FileService from './fileService';
+import BrowserService from './browserService';
+import CompCacheService from './compCacheService';
 import SportsCardsProAdapter from './adapters/sportsCardsPro';
 import EbayAdapter from './adapters/ebay';
 import CardLadderAdapter from './adapters/cardLadder';
 import MarketMoversAdapter from './adapters/marketMovers';
-import { CompAdapter, CompRequest, CompReport, CompResult } from '../types';
+import { CompAdapter, CompRequest, CompReport, CompResult, StoredCompReport } from '../types';
+import Database from '../database';
 
 class CompService {
   private fileService: FileService;
   private adapters: CompAdapter[];
+  private db?: Database;
 
-  constructor(fileService: FileService, adapters?: CompAdapter[]) {
+  constructor(
+    fileService: FileService,
+    adapters?: CompAdapter[],
+    browserService?: BrowserService,
+    cacheService?: CompCacheService,
+    db?: Database
+  ) {
     this.fileService = fileService;
+    this.db = db;
     this.adapters = adapters || [
-      new SportsCardsProAdapter(),
-      new EbayAdapter(),
-      new CardLadderAdapter(),
-      new MarketMoversAdapter(),
+      new SportsCardsProAdapter(browserService, cacheService),
+      new EbayAdapter(browserService, cacheService),
+      new CardLadderAdapter(browserService, cacheService),
+      new MarketMoversAdapter(browserService, cacheService),
     ];
   }
 
@@ -92,13 +103,28 @@ class CompService {
       });
     }
 
-    // Write comp file to processed/
+    // Persist to DB (primary storage)
+    if (this.db) {
+      await this.db.saveCompReport(request.cardId, report);
+    }
+
+    // Write comp file to processed/ (secondary artifact)
     const compFilename = `${request.year}-${request.brand}-${request.player.replace(/\s+/g, '-')}-${request.cardNumber}-comps.txt`;
     const compContent = this.formatCompReport(report);
     const processedDir = this.fileService.getProcessedDir();
     fs.writeFileSync(path.join(processedDir, compFilename), compContent);
 
     return report;
+  }
+
+  async getStoredComps(cardId: string): Promise<StoredCompReport | undefined> {
+    if (!this.db) return undefined;
+    return this.db.getLatestCompReport(cardId);
+  }
+
+  async getCompHistory(cardId: string, limit?: number): Promise<StoredCompReport[]> {
+    if (!this.db) return [];
+    return this.db.getCompHistory(cardId, limit);
   }
 
   private formatCompReport(report: CompReport): string {
