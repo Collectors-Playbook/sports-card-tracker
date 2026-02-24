@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { apiService, ExtractedCardData } from '../../services/api';
+import { apiService, ExtractedCardData, CompReport } from '../../services/api';
 import { Card } from '../../types';
 import ImageLightbox from '../HoldingPen/ImageLightbox';
 import CardReviewForm from '../CardReviewForm/CardReviewForm';
+import CompReportModal from './CompReportModal';
 import './ProcessedGallery.css';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
@@ -164,6 +165,9 @@ const ProcessedGallery: React.FC = () => {
     card: Card;
   } | null>(null);
   const [editSaving, setEditSaving] = useState(false);
+  const [compLoadingId, setCompLoadingId] = useState<string | null>(null);
+  const [compReport, setCompReport] = useState<CompReport | null>(null);
+  const [bulkCompLoading, setBulkCompLoading] = useState(false);
 
   const fetchFiles = useCallback(async () => {
     try {
@@ -266,6 +270,47 @@ const ProcessedGallery: React.FC = () => {
     }
   };
 
+  const handleGenerateComps = async (pair: CardPair) => {
+    const filename = pair.front?.name || pair.back?.name;
+    if (!filename) return;
+    setCompLoadingId(pair.id);
+    try {
+      const card = await apiService.getCardByImage(filename);
+      const report = await apiService.generateComps(card.id);
+      setCompReport(report);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate comps');
+    } finally {
+      setCompLoadingId(null);
+    }
+  };
+
+  const handleBulkComps = async () => {
+    const selectedPairs = pairs.filter(p => selectedIds.has(p.id));
+    if (selectedPairs.length === 0) return;
+    setBulkCompLoading(true);
+    try {
+      const cardIds: string[] = [];
+      for (const pair of selectedPairs) {
+        const filename = pair.front?.name || pair.back?.name;
+        if (!filename) continue;
+        const card = await apiService.getCardByImage(filename);
+        cardIds.push(card.id);
+      }
+      if (cardIds.length === 0) {
+        setError('No card records found for selected files');
+        return;
+      }
+      await apiService.generateBulkComps(cardIds);
+      setError(null);
+      alert(`Comp generation job created for ${cardIds.length} card(s). Check back shortly for results.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start bulk comp generation');
+    } finally {
+      setBulkCompLoading(false);
+    }
+  };
+
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
@@ -326,6 +371,13 @@ const ProcessedGallery: React.FC = () => {
               <span className="processed-gallery-selection-count">{selectedIds.size} selected</span>
               <button className="processed-gallery-bulk-btn delete" onClick={handleBulkDelete}>
                 Delete Selected
+              </button>
+              <button
+                className="processed-gallery-bulk-btn comps"
+                disabled={bulkCompLoading}
+                onClick={handleBulkComps}
+              >
+                {bulkCompLoading ? 'Generating...' : 'Generate Comps'}
               </button>
             </div>
           )}
@@ -417,6 +469,14 @@ const ProcessedGallery: React.FC = () => {
                   Edit
                 </button>
                 <button
+                  className="processed-gallery-action-btn comps"
+                  title="Generate Comps"
+                  disabled={compLoadingId === pair.id}
+                  onClick={() => handleGenerateComps(pair)}
+                >
+                  {compLoadingId === pair.id ? 'Loading...' : 'Comps'}
+                </button>
+                <button
                   className="processed-gallery-action-btn delete"
                   title="Delete"
                   onClick={() => handleDelete(pair)}
@@ -472,6 +532,19 @@ const ProcessedGallery: React.FC = () => {
           saving={editSaving}
           onSave={handleEditSave}
           onCancel={() => setEditTarget(null)}
+        />
+      )}
+
+      {/* Comp Report Modal */}
+      {compReport && (
+        <CompReportModal
+          report={compReport}
+          onClose={() => setCompReport(null)}
+          onRefresh={async (cardId) => {
+            const updated = await apiService.refreshComps(cardId);
+            setCompReport(updated);
+            return updated;
+          }}
         />
       )}
     </div>
