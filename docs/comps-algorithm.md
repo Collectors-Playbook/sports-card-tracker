@@ -20,6 +20,16 @@ This document describes the algorithm the Sports Card Tracker uses to generate c
   - [Step 3: Deduplicate](#step-3-deduplicate)
   - [Step 4: Recency-Weighted Trimmed Mean](#step-4-recency-weighted-trimmed-mean)
   - [Step 5: Market Value Fallback](#step-5-market-value-fallback)
+- [Mathematical Model](#mathematical-model)
+  - [Notation](#notation)
+  - [Recency Weight Function](#recency-weight-function)
+  - [Composite Sale Weight](#composite-sale-weight)
+  - [Deduplication Predicate](#deduplication-predicate)
+  - [Weighted Trimmed Mean](#weighted-trimmed-mean)
+  - [Market Value Fallback](#market-value-fallback)
+  - [Population Multiplier](#population-multiplier-graded-cards-only)
+  - [Complete Pipeline Equation](#complete-pipeline-equation)
+  - [Key Design Properties](#key-design-properties)
 - [Population Report Adjustment](#population-report-adjustment)
 - [Caching](#caching)
 - [Error Handling](#error-handling)
@@ -405,6 +415,150 @@ If no individual sales exist across any source (all adapters returned only marke
 | SportsCardsPro | 0.60 |
 
 Computes: `weighted_avg = sum(value * weight) / sum(weight)`, with `low` = min and `high` = max across sources.
+
+---
+
+## Mathematical Model
+
+This section formalizes the comp algorithm as a set of equations for reference, analysis, and potential optimization.
+
+### Notation
+
+| Symbol | Meaning |
+|--------|---------|
+| `S = {s_1, s_2, ..., s_n}` | Set of all sales pooled from all sources |
+| `p_i` | Price of sale `i` |
+| `t_i` | Date of sale `i` (epoch ms), or `null` |
+| `v_i` | Venue of sale `i` |
+| `sigma_i` | Source adapter of sale `i` (eBay, PSA, etc.) |
+| `r_s` | Source reliability weight for source `s` |
+| `tau` | Recency half-life in days (= 30) |
+| `w_min` | Recency weight floor (= 0.20) |
+| `w_null` | Undated sale penalty weight (= 0.10) |
+| `alpha` | Trim fraction (= 0.10 per tail) |
+| `t_now` | Current timestamp (epoch ms) |
+
+### Recency Weight Function
+
+For each sale `s_i`, the recency weight is an exponential decay with a floor:
+
+```
+                         { max(w_min, 2^(-a_i / tau))           if t_i != null
+    R(t_i, t_now)   =   { max(w_min, 2^(-a_proxy / tau))       if t_i = null and t_median exists
+                         { w_null                                if t_i = null and t_median = null
+```
+
+where:
+- `a_i = (t_now - t_i) / 86400000` is the sale age in days
+- `a_proxy = (t_now - t_median) / 86400000` substitutes the median-date proxy
+- `t_median = median({t_j : t_j != null, s_j in S})` is the median date of all dated sales in the batch
+
+The exponential decay gives a **half-life of 30 days**: a sale from today has weight 1.0, a 30-day-old sale has weight 0.5, and a 60-day-old sale has weight 0.25. The floor at 0.20 prevents old sales from becoming negligible on cards with sparse sales data, and the 0.10 penalty for fully-undated batches preserves equal weighting among them.
+
+### Composite Sale Weight
+
+Each sale's final weight combines recency with source reliability:
+
+```
+    w_i = R(t_i, t_now) * r_{sigma_i}
+```
+
+### Deduplication Predicate
+
+Two dated sales `(s_i, s_j)` are identified as duplicates when all three conditions hold simultaneously:
+
+```
+    DUPLICATE(s_i, s_j) =
+        |p_i - p_j| <= max(0.50, 0.03 * (p_i + p_j) / 2)     [price]
+      AND
+        |t_i - t_j| <= 2 * 86400000                            [date]
+      AND
+        VENUES_OVERLAP(v_i, v_j)                                [venue]
+```
+
+The price tolerance is percentage-based with a floor, adapting to card value. The crossover from floor to percentage occurs at ~$16.67.
+
+Undated sales (`t_i = null`) are **never** subject to deduplication.
+
+### Weighted Trimmed Mean
+
+After deduplication produces set `S'`, sort by price ascending to get `p_(1) <= p_(2) <= ... <= p_(m)` with corresponding weights `w_(1), ..., w_(m)`.
+
+Let `W = sum(w_(i))` be the total weight.
+
+**When `m >= 5`** (trimming enabled):
+
+Trim `alpha * W` weight from each tail by walking inward:
+
+```
+    Low-tail:  Remove items from p_(1) upward until alpha * W weight is consumed
+    High-tail: Remove items from p_(m) downward until alpha * W weight is consumed
+
+    Boundary items are partially trimmed (weight reduced, not removed entirely)
+```
+
+Let `T` be the remaining set with (possibly reduced) weights `w'_i`. The aggregate value:
+
+```
+             sum_{i in T}  p_i * w'_i
+    V   =   -------------------------
+               sum_{i in T}  w'_i
+```
+
+With `V_low = min_{i in T}(p_i)` and `V_high = max_{i in T}(p_i)`.
+
+**When `m < 5`** (no trimming): `T = S'`, all weights unchanged.
+
+### Market Value Fallback
+
+When no individual sales exist (`|S| = 0`), fall back to static market values weighted by source reliability:
+
+```
+             sum_s  M_s * r_s
+    V   =   -----------------
+               sum_s  r_s
+```
+
+where `M_s` is the market value (or average price) reported by source `s`.
+
+### Population Multiplier (graded cards only)
+
+A continuous log10 decay curve maps population count to a price scarcity adjustment:
+
+```
+    P(pop) = max(0.95,  1.25 - 0.10 * log10(pop))
+```
+
+This simplifies from the implementation form `1.25 - 0.30 * log10(pop) / log10(1000)` since `log10(1000) = 3` and `0.30 / 3 = 0.10`.
+
+For `pop <= 0`, `P = 1.25`.
+
+The multiplier ranges from +25% (pop 1) to -5% floor (pop 1000+), providing a scarcity premium for low-pop cards and a modest correction for high-pop cards.
+
+### Complete Pipeline Equation
+
+For the common case (sales exist, `m >= 5`, graded card with pop data):
+
+```
+                   sum_{i in T(S')}  p_i * max(w_min, 2^(-a_i / tau)) * r_{sigma_i}
+    V_adj   =    -------------------------------------------------------------------  *  max(0.95, 1.25 - 0.10 * log10(pop))
+                     sum_{i in T(S')}  max(w_min, 2^(-a_i / tau)) * r_{sigma_i}
+```
+
+where `S'` is the deduplicated sale set and `T(S')` is the 10%-weight-trimmed subset.
+
+For raw (ungraded) cards, the population multiplier term is omitted (`V_adj = V`).
+
+### Key Design Properties
+
+| Property | Mechanism | Effect |
+|----------|-----------|--------|
+| Recency bias | Exponential decay (half-life 30d) | Recent sales dominate, but old sales never vanish (floor 0.20) |
+| Source trust | Reliability weights (0.60 - 1.00) | eBay actual sales weigh 67% more than SportsCardsPro static values |
+| Outlier resistance | 10% weight trimming from each tail | Removes shill bids and fire sales |
+| Scarcity premium | Log10 population curve | Low-pop graded cards get up to +25%; high-pop get modest -5% correction |
+| Graceful degradation | Sales -> market value fallback -> null | Never crashes; quality degrades proportionally to data availability |
+| Cross-source dedup | Price + date + venue matching | Same physical sale from eBay + 130Point counted once, not twice |
 
 ---
 
