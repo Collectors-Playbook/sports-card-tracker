@@ -16,7 +16,8 @@ import PopulationReportService, { getMultiplier } from './populationReportServic
 // ─── Aggregation Constants ──────────────────────────────────────────────────
 
 const RECENCY_HALF_LIFE_DAYS = 30;
-const DEDUP_PRICE_TOLERANCE = 0.50;       // dollars
+const DEDUP_PRICE_FLOOR = 0.50;            // minimum dollar tolerance
+const DEDUP_PRICE_PERCENT = 0.03;          // 3% of average price
 const DEDUP_DATE_TOLERANCE_MS = 2 * 86400000; // 2 days
 const TRIM_PERCENTAGE = 0.10;
 const UNKNOWN_DATE_WEIGHT = 0.10;
@@ -84,9 +85,21 @@ export function recencyWeight(saleDateMs: number | null, nowMs: number): number 
 }
 
 /**
+ * Compute the price tolerance for deduplication.
+ * Uses the larger of a flat floor ($0.50) or a percentage (3%) of the
+ * average of the two prices being compared. This adapts to card value:
+ * cheap cards use the floor, expensive cards use the percentage.
+ */
+export function dedupPriceTolerance(priceA: number, priceB: number): number {
+  const avgPrice = (priceA + priceB) / 2;
+  return Math.max(DEDUP_PRICE_FLOOR, avgPrice * DEDUP_PRICE_PERCENT);
+}
+
+/**
  * Remove duplicate sales that appear across multiple sources.
- * Two sales are duplicates if: price within $0.50, dates within 2 days, and
- * venues overlap (case-insensitive or both contain "ebay").
+ * Two sales are duplicates if: price within tolerance (3% of avg price,
+ * min $0.50), dates within 2 days, and venues overlap (case-insensitive
+ * or both contain "ebay").
  * Input should be pre-sorted by source priority. First-seen wins.
  * Null-date sales are never deduped.
  */
@@ -101,7 +114,8 @@ export function deduplicateSales(sales: NormalizedSale[]): NormalizedSale[] {
 
     const isDup = kept.some(existing => {
       if (existing.dateMs === null) return false;
-      if (Math.abs(existing.price - sale.price) > DEDUP_PRICE_TOLERANCE) return false;
+      const tolerance = dedupPriceTolerance(existing.price, sale.price);
+      if (Math.abs(existing.price - sale.price) > tolerance) return false;
       if (Math.abs(existing.dateMs - sale.dateMs!) > DEDUP_DATE_TOLERANCE_MS) return false;
       // Venue overlap check
       const venueA = existing.venue.toLowerCase();
@@ -250,28 +264,36 @@ class CompService {
   }
 
   async generateComps(request: CompRequest): Promise<CompReport> {
-    const results: CompResult[] = [];
-
-    for (const adapter of this.adapters) {
+    // Filter adapters (skip PSA for non-PSA graded cards)
+    const activeAdapters = this.adapters.filter(adapter => {
       if (adapter.source === 'PSA' && request.isGraded && request.gradingCompany && request.gradingCompany !== 'PSA') {
-        continue;
+        return false;
       }
-      try {
-        const result = await adapter.fetchComps(request);
-        results.push(result);
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : String(err);
-        results.push({
-          source: adapter.source,
-          marketValue: null,
-          sales: [],
-          averagePrice: null,
-          low: null,
-          high: null,
-          error: errorMessage,
-        });
+      return true;
+    });
+
+    // Run all adapters in parallel
+    const settled = await Promise.allSettled(
+      activeAdapters.map(adapter => adapter.fetchComps(request))
+    );
+
+    const results: CompResult[] = settled.map((outcome, i) => {
+      if (outcome.status === 'fulfilled') {
+        return outcome.value;
       }
-    }
+      const errorMessage = outcome.reason instanceof Error
+        ? outcome.reason.message
+        : String(outcome.reason);
+      return {
+        source: activeAdapters[i].source,
+        marketValue: null,
+        sales: [],
+        averagePrice: null,
+        low: null,
+        high: null,
+        error: errorMessage,
+      };
+    });
 
     // Compute weighted aggregate from pooled sales (or fallback to market values)
     const { aggregateAverage, aggregateLow, aggregateHigh } = this.computeWeightedAggregate(results);
