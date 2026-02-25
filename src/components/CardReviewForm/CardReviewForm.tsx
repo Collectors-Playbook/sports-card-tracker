@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ExtractedCardData } from '../../services/api';
-import { CATEGORIES, GRADING_COMPANIES } from '../../types';
+import { CATEGORIES, GRADING_COMPANIES, getGradeScale, RAW_CONDITIONS } from '../../types';
 import './CardReviewForm.css';
 
 interface CardReviewFormProps {
@@ -12,8 +12,6 @@ interface CardReviewFormProps {
   onSave: (data: ExtractedCardData) => void;
   onCancel: () => void;
 }
-
-const CONDITIONS = ['Raw', 'Near Mint', 'Excellent', 'Very Good', 'Good', 'Poor'];
 
 const CardReviewForm: React.FC<CardReviewFormProps> = ({
   initialData,
@@ -34,7 +32,24 @@ const CardReviewForm: React.FC<CardReviewFormProps> = ({
   const [serialNumber, setSerialNumber] = useState(initialData.serialNumber || '');
   const [gradingCompany, setGradingCompany] = useState(initialData.gradingCompany || '');
   const [grade, setGrade] = useState(initialData.grade || '');
-  const [condition, setCondition] = useState('Raw');
+  const [condition, setCondition] = useState(
+    initialData.gradingCompany ? 'Graded' : (initialData.condition || 'Raw')
+  );
+
+  const handleGradingCompanyChange = (newCompany: string) => {
+    setGradingCompany(newCompany);
+    if (newCompany) {
+      setCondition('Graded');
+      const scale = getGradeScale(newCompany);
+      const validValues = scale.map(g => g.value);
+      if (grade && !validValues.includes(grade)) {
+        setGrade('');
+      }
+    } else {
+      setGrade('');
+      setCondition('Raw');
+    }
+  };
   const [isRookie, setIsRookie] = useState(initialData.features?.isRookie ?? false);
   const [isAutograph, setIsAutograph] = useState(initialData.features?.isAutograph ?? false);
   const [isRelic, setIsRelic] = useState(initialData.features?.isRelic ?? false);
@@ -64,10 +79,9 @@ const CardReviewForm: React.FC<CardReviewFormProps> = ({
         isGraded: !!(gradingCompany && grade),
         isParallel: !!parallel,
       },
+      condition,
       confidence: initialData.confidence,
     };
-    // Attach condition as part of the data via a convention (we'll read it on the consumer side)
-    (data as ExtractedCardData & { condition?: string }).condition = condition;
     onSave(data);
   };
 
@@ -219,7 +233,7 @@ const CardReviewForm: React.FC<CardReviewFormProps> = ({
                   <select
                     id="cr-grading-company"
                     value={gradingCompany}
-                    onChange={e => setGradingCompany(e.target.value)}
+                    onChange={e => handleGradingCompanyChange(e.target.value)}
                   >
                     <option value="">None</option>
                     {GRADING_COMPANIES.map(gc => (
@@ -229,28 +243,50 @@ const CardReviewForm: React.FC<CardReviewFormProps> = ({
                 </div>
                 <div className="card-review-field">
                   <label htmlFor="cr-grade">Grade</label>
-                  <input
-                    id="cr-grade"
-                    type="text"
-                    value={grade}
-                    onChange={e => setGrade(e.target.value)}
-                    placeholder="e.g. 10"
-                  />
+                  {gradingCompany ? (
+                    <select
+                      id="cr-grade"
+                      value={grade}
+                      onChange={e => setGrade(e.target.value)}
+                    >
+                      <option value="">Select grade...</option>
+                      {getGradeScale(gradingCompany).map(g => (
+                        <option key={g.value} value={g.value}>{g.label}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      id="cr-grade"
+                      type="text"
+                      value=""
+                      disabled
+                      placeholder="Select grading company first"
+                    />
+                  )}
                 </div>
               </div>
 
               <div className="card-review-row">
                 <div className="card-review-field">
                   <label htmlFor="cr-condition">Condition</label>
-                  <select
-                    id="cr-condition"
-                    value={condition}
-                    onChange={e => setCondition(e.target.value)}
-                  >
-                    {CONDITIONS.map(c => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
+                  {gradingCompany ? (
+                    <input
+                      id="cr-condition"
+                      type="text"
+                      value="Graded"
+                      disabled
+                    />
+                  ) : (
+                    <select
+                      id="cr-condition"
+                      value={condition}
+                      onChange={e => setCondition(e.target.value)}
+                    >
+                      {RAW_CONDITIONS.map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               </div>
 
