@@ -1,6 +1,6 @@
 // Card data validation utilities
 
-import { CATEGORIES, CONDITIONS, GRADING_COMPANIES } from '../types';
+import { CATEGORIES, CONDITIONS, GRADING_COMPANIES, RAW_CONDITIONS } from '../types';
 
 export interface ValidationResult {
   isValid: boolean;
@@ -35,7 +35,8 @@ export const validateCard = (card: any): ValidationResult => {
     errors.push('Card number is required');
   }
   
-  if (!card.condition || !CONDITIONS.includes(card.condition as any)) {
+  const validConditions = [...CONDITIONS, 'Graded', ...RAW_CONDITIONS];
+  if (!card.condition || !validConditions.includes(card.condition as any)) {
     errors.push('Valid condition is required');
   }
   
@@ -76,11 +77,13 @@ export const validateCard = (card: any): ValidationResult => {
   }
   
   // Logical validations
-  if (card.condition !== 'RAW' && !card.gradingCompany) {
+  const rawConditions = ['RAW', 'Raw', ...RAW_CONDITIONS];
+  const isRawCondition = rawConditions.includes(card.condition);
+  if (!isRawCondition && card.condition !== 'Graded' && !card.gradingCompany) {
     errors.push('Graded cards must have a grading company');
   }
-  
-  if (card.gradingCompany && card.condition === 'RAW') {
+
+  if (card.gradingCompany && isRawCondition) {
     errors.push('Cards with grading company cannot be RAW');
   }
   
