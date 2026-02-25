@@ -1,4 +1,4 @@
-import { validateImageFile, createImagePreview, convertFileToBase64 } from '../../utils/imageUtils';
+import { validateImageFile, createImagePreview, convertFileToBase64, compressImage, createThumbnail } from '../../utils/imageUtils';
 
 describe('validateImageFile', () => {
   const createMockFile = (type: string, size: number, name = 'test.jpg'): File => {
@@ -95,5 +95,150 @@ describe('convertFileToBase64', () => {
     mockFileReader.onerror!(new Error('read error'));
 
     await expect(promise).rejects.toBeTruthy();
+  });
+});
+
+describe('compressImage', () => {
+  beforeEach(() => {
+    // Re-set canvas mock since CRA resetMocks clears the jest.fn() from setupTests
+    HTMLCanvasElement.prototype.getContext = jest.fn(() => ({
+      drawImage: jest.fn(),
+      fillRect: jest.fn(),
+      clearRect: jest.fn(),
+    })) as any;
+    HTMLCanvasElement.prototype.toDataURL = jest.fn(() => 'data:image/png;base64,mock');
+  });
+
+  it('resolves with compressed data URL', async () => {
+    const mockImage = {
+      width: 1600,
+      height: 1200,
+      onload: null as any,
+      onerror: null as any,
+      src: '',
+    };
+    jest.spyOn(global, 'Image').mockImplementation(() => mockImage as any);
+
+    const file = new File(['data'], 'test.jpg', { type: 'image/jpeg' });
+    const promise = compressImage(file, 800, 0.8);
+
+    // Trigger image load
+    mockImage.onload!();
+
+    const result = await promise;
+    // Canvas toDataURL is mocked in setupTests to return 'data:image/png;base64,mock'
+    expect(result).toBe('data:image/png;base64,mock');
+  });
+
+  it('rejects when image fails to load', async () => {
+    const mockImage = {
+      width: 800,
+      height: 600,
+      onload: null as any,
+      onerror: null as any,
+      src: '',
+    };
+    jest.spyOn(global, 'Image').mockImplementation(() => mockImage as any);
+
+    const file = new File(['data'], 'test.jpg', { type: 'image/jpeg' });
+    const promise = compressImage(file);
+
+    mockImage.onerror!();
+
+    await expect(promise).rejects.toThrow('Failed to load image');
+  });
+
+  it('rejects when canvas context is null', async () => {
+    const mockImage = {
+      width: 800,
+      height: 600,
+      onload: null as any,
+      onerror: null as any,
+      src: '',
+    };
+    jest.spyOn(global, 'Image').mockImplementation(() => mockImage as any);
+
+    // Override getContext to return null for this test
+    const origGetContext = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = jest.fn(() => null) as any;
+
+    const file = new File(['data'], 'test.jpg', { type: 'image/jpeg' });
+    const promise = compressImage(file);
+
+    mockImage.onload!();
+
+    await expect(promise).rejects.toThrow('Failed to get canvas context');
+
+    // Restore
+    HTMLCanvasElement.prototype.getContext = origGetContext;
+  });
+});
+
+describe('createThumbnail', () => {
+  beforeEach(() => {
+    // Re-set canvas mock since CRA resetMocks clears the jest.fn() from setupTests
+    HTMLCanvasElement.prototype.getContext = jest.fn(() => ({
+      drawImage: jest.fn(),
+      fillRect: jest.fn(),
+      clearRect: jest.fn(),
+    })) as any;
+    HTMLCanvasElement.prototype.toDataURL = jest.fn(() => 'data:image/png;base64,mock');
+  });
+
+  it('resolves with thumbnail data URL', async () => {
+    const mockImage = {
+      width: 400,
+      height: 300,
+      onload: null as any,
+      onerror: null as any,
+      src: '',
+    };
+    jest.spyOn(global, 'Image').mockImplementation(() => mockImage as any);
+
+    const promise = createThumbnail('data:image/jpeg;base64,abc', 150);
+
+    mockImage.onload!();
+
+    const result = await promise;
+    expect(result).toBe('data:image/png;base64,mock');
+  });
+
+  it('rejects when image fails to load', async () => {
+    const mockImage = {
+      width: 400,
+      height: 300,
+      onload: null as any,
+      onerror: null as any,
+      src: '',
+    };
+    jest.spyOn(global, 'Image').mockImplementation(() => mockImage as any);
+
+    const promise = createThumbnail('data:image/jpeg;base64,abc');
+
+    mockImage.onerror!();
+
+    await expect(promise).rejects.toThrow('Failed to load image');
+  });
+
+  it('rejects when canvas context is null', async () => {
+    const mockImage = {
+      width: 400,
+      height: 300,
+      onload: null as any,
+      onerror: null as any,
+      src: '',
+    };
+    jest.spyOn(global, 'Image').mockImplementation(() => mockImage as any);
+
+    const origGetContext = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = jest.fn(() => null) as any;
+
+    const promise = createThumbnail('data:image/jpeg;base64,abc');
+
+    mockImage.onload!();
+
+    await expect(promise).rejects.toThrow('Failed to get canvas context');
+
+    HTMLCanvasElement.prototype.getContext = origGetContext;
   });
 });
