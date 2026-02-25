@@ -2,7 +2,9 @@ import { CompRequest } from '../../types';
 
 const GRADE_REGEX = /\b(PSA|BGS|SGC|CGC|HGA|BVG|GMA|MNT|CSG|AGS)\s*(\d+(?:\.\d+)?|Auth(?:entic)?)\b/i;
 
-export function extractGradeFromTitle(title: string): { company: string; grade: string } | null {
+export type GradeInfo = { company: string; grade: string };
+
+export function extractGradeFromTitle(title: string): GradeInfo | null {
   const match = title.match(GRADE_REGEX);
   if (!match) return null;
   const company = match[1].toUpperCase();
@@ -11,20 +13,77 @@ export function extractGradeFromTitle(title: string): { company: string; grade: 
   return { company, grade };
 }
 
-export function filterByGrade<T extends { title: string }>(
+// Companies that use half-point grading steps (±0.5)
+const HALF_STEP_COMPANIES = new Set(['BGS', 'BVG']);
+
+function formatGrade(n: number): string {
+  return n % 1 === 0 ? String(n) : n.toFixed(1);
+}
+
+export function getAdjacentGrades(company: string, grade: string): string[] {
+  if (/^auth$/i.test(grade)) return [];
+
+  const numeric = parseFloat(grade);
+  if (isNaN(numeric)) return [];
+
+  const step = HALF_STEP_COMPANIES.has(company.toUpperCase()) ? 0.5 : 1;
+  const adjacent: string[] = [];
+
+  const lower = numeric - step;
+  if (lower >= 1) adjacent.push(formatGrade(lower));
+
+  const upper = numeric + step;
+  if (upper <= 10) adjacent.push(formatGrade(upper));
+
+  return adjacent;
+}
+
+const MIN_THRESHOLD = 2;
+
+export function filterByGrade<T>(
   sales: T[],
-  request: CompRequest
+  request: CompRequest,
+  gradeExtractor?: (sale: T) => GradeInfo | null
 ): T[] {
   if (!request.isGraded || !request.gradingCompany || !request.grade) return sales;
 
   const targetCompany = request.gradingCompany.toUpperCase();
   const targetGrade = request.grade;
 
-  const matched = sales.filter(s => {
-    const info = extractGradeFromTitle(s.title);
+  const extract = gradeExtractor ?? ((s: T) => {
+    const rec = s as Record<string, unknown>;
+    if (typeof rec.title === 'string') return extractGradeFromTitle(rec.title);
+    return null;
+  });
+
+  // Tier 1: exact match (same company + same grade)
+  const exact = sales.filter(s => {
+    const info = extract(s);
     if (!info) return false;
     return info.company === targetCompany && info.grade === targetGrade;
   });
+  if (exact.length >= MIN_THRESHOLD) return exact;
 
-  return matched.length >= 3 ? matched : sales;
+  // Tier 2: adjacent grade (same company, grade ±1 step)
+  const adjacentGrades = getAdjacentGrades(targetCompany, targetGrade);
+  if (adjacentGrades.length > 0) {
+    const adjacentSet = new Set([targetGrade, ...adjacentGrades]);
+    const adjacent = sales.filter(s => {
+      const info = extract(s);
+      if (!info) return false;
+      return info.company === targetCompany && adjacentSet.has(info.grade);
+    });
+    if (adjacent.length >= MIN_THRESHOLD) return adjacent;
+  }
+
+  // Tier 3: same company, any grade
+  const sameCompany = sales.filter(s => {
+    const info = extract(s);
+    if (!info) return false;
+    return info.company === targetCompany;
+  });
+  if (sameCompany.length >= MIN_THRESHOLD) return sameCompany;
+
+  // Tier 4: all sales
+  return sales;
 }
