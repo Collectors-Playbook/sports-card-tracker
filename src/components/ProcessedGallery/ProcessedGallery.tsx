@@ -168,14 +168,35 @@ const ProcessedGallery: React.FC = () => {
   const [compLoadingId, setCompLoadingId] = useState<string | null>(null);
   const [compReport, setCompReport] = useState<CompReport | null>(null);
   const [bulkCompLoading, setBulkCompLoading] = useState(false);
-  const [lowPopIds, setLowPopIds] = useState<Set<string>>(new Set());
+  const [popTiers, setPopTiers] = useState<Map<string, PopRarityTier>>(new Map());
 
   const fetchFiles = useCallback(async () => {
     try {
       setError(null);
       const processedFiles = await apiService.getProcessedFiles();
       setFiles(processedFiles);
-      setPairs(groupIntoPairs(processedFiles));
+      const grouped = groupIntoPairs(processedFiles);
+      setPairs(grouped);
+
+      // Hydrate pop tiers from stored comp reports
+      try {
+        const summary = await apiService.getPopSummary();
+        const tiers = new Map<string, PopRarityTier>();
+        for (const entry of summary) {
+          // Match card images to pair IDs by checking filename prefixes
+          for (const img of entry.images) {
+            const ext = '.' + img.split('.').pop();
+            let base = img.slice(0, img.length - ext.length);
+            if (base.endsWith('-front')) base = base.slice(0, -6);
+            else if (base.endsWith('-back')) base = base.slice(0, -5);
+            if (grouped.some(p => p.id === base)) {
+              tiers.set(base, entry.rarityTier);
+              break;
+            }
+          }
+        }
+        if (tiers.size > 0) setPopTiers(tiers);
+      } catch { /* pop summary is non-critical */ }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load files');
     } finally {
@@ -271,12 +292,12 @@ const ProcessedGallery: React.FC = () => {
     }
   };
 
-  const trackLowPop = useCallback((pairId: string, report: CompReport) => {
+  const trackPopTier = useCallback((pairId: string, report: CompReport) => {
     const tier = report.popData?.rarityTier;
-    if (tier === 'ultra-low' || tier === 'low') {
-      setLowPopIds(prev => {
-        const next = new Set(prev);
-        next.add(pairId);
+    if (tier) {
+      setPopTiers(prev => {
+        const next = new Map(prev);
+        next.set(pairId, tier);
         return next;
       });
     }
@@ -289,7 +310,7 @@ const ProcessedGallery: React.FC = () => {
     try {
       const card = await apiService.getCardByImage(filename);
       const report = await apiService.generateComps(card.id);
-      trackLowPop(pair.id, report);
+      trackPopTier(pair.id, report);
       setCompReport(report);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate comps');
@@ -463,8 +484,13 @@ const ProcessedGallery: React.FC = () => {
                   {[pair.front, pair.back].filter(Boolean).map(f => (
                     <span key={f!.name} className="processed-gallery-file-size">{formatFileSize(f!.size)}</span>
                   ))}
-                  {lowPopIds.has(pair.id) && (
-                    <span className="processed-gallery-low-pop-badge">Low Pop</span>
+                  {popTiers.has(pair.id) && (
+                    <span className={`processed-gallery-pop-badge processed-gallery-pop-${popTiers.get(pair.id)}`}>
+                      {popTiers.get(pair.id) === 'ultra-low' ? 'Ultra-Low Pop' :
+                       popTiers.get(pair.id) === 'low' ? 'Low Pop' :
+                       popTiers.get(pair.id) === 'medium' ? 'Med Pop' :
+                       popTiers.get(pair.id) === 'high' ? 'High Pop' : 'Very High Pop'}
+                    </span>
                   )}
                 </div>
               </div>

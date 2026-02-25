@@ -580,16 +580,39 @@
   }
 }
 
-/* ─── Low Pop Badge ──────────────────────────────────────────────────────── */
+/* ─── Pop Badge ─────────────────────────────────────────────────────────── */
 
-.processed-gallery-low-pop-badge {
+.processed-gallery-pop-badge {
   display: inline-block;
   padding: 1px 6px;
   border-radius: var(--radius-sm);
   font-size: 11px;
   font-weight: 600;
+}
+
+.processed-gallery-pop-ultra-low {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.processed-gallery-pop-low {
   background: #d1fae5;
   color: #065f46;
+}
+
+.processed-gallery-pop-medium {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.processed-gallery-pop-high {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.processed-gallery-pop-very-high {
+  background: #f3f4f6;
+  color: #6b7280;
 }
 
 /* ─── Pop Report Section (CompReportModal) ─────────────────────────────── */

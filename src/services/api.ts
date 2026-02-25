@@ -506,6 +506,10 @@ class ApiService {
     return this.request<CompReport>(`/comps/${cardId}?refresh=true`);
   }
 
+  public async getPopSummary(): Promise<{ cardId: string; rarityTier: PopRarityTier; images: string[] }[]> {
+    return this.request<{ cardId: string; rarityTier: PopRarityTier; images: string[] }[]>('/comps/pop-summary');
+  }
+
   public async getPopHistory(cardId: string, limit?: number): Promise<PopulationData[]> {
     const query = limit ? `?limit=${limit}` : '';
     return this.request<PopulationData[]>(`/comps/${cardId}/pop-history${query}`);
