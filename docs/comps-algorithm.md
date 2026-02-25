@@ -62,7 +62,7 @@ CompRequest (card metadata)
 └───────────────────────────────────────────────────────┘
 ```
 
-Each adapter implements the `CompAdapter` interface and returns a `CompResult` with market value, individual sales, and per-source aggregates. The `CompService` then pools all sales across sources and computes a single weighted aggregate.
+Each adapter implements the `CompAdapter` interface and returns a `CompResult` with market value, individual sales, and per-source aggregates. All adapters run in parallel via `Promise.allSettled` — a single adapter failure or timeout does not block others. The `CompService` then pools all sales across sources and computes a single weighted aggregate.
 
 ---
 
@@ -305,9 +305,19 @@ Cross-source duplicate detection using three criteria — all must match:
 
 | Criterion | Tolerance |
 |-----------|-----------|
-| Price | +/- $0.50 |
+| Price | +/- max($0.50, 3% of average of two prices) |
 | Date | +/- 2 days (172,800,000 ms) |
 | Venue | Exact match OR both contain "ebay" |
+
+The price tolerance is **percentage-based with a floor**: `max(DEDUP_PRICE_FLOOR, avgPrice * DEDUP_PRICE_PERCENT)` where `avgPrice = (priceA + priceB) / 2`. This adapts to card value — cheap cards ($5) use the $0.50 floor while expensive cards ($500) use 3% ($15). The crossover point is ~$16.67.
+
+| Card Price | Tolerance |
+|-----------|-----------|
+| $5 | $0.50 (floor) |
+| $16 | $0.50 (floor) |
+| $17 | $0.51 (3%) |
+| $100 | $3.00 (3%) |
+| $500 | $15.00 (3%) |
 
 Rules:
 - Sales with `null` dates are **never** deduplicated (always kept)
@@ -452,7 +462,7 @@ All generated reports are persisted to `card_comp_reports` + `card_comp_sources`
 
 ## Error Handling
 
-- Each adapter is called sequentially with try/catch. A failed adapter returns a `CompResult` with an `error` field and empty data. It does not block other adapters.
+- All adapters run in parallel via `Promise.allSettled`. A rejected adapter is mapped to a `CompResult` with an `error` field and empty data. One adapter's failure does not block or delay others.
 - Failed sources are logged to `comp-error.log`:
   ```
   [YYYY-MM-DDTHH:MM:SS.sssZ] YEAR-BRAND-PLAYER-CARDNUMBER: SOURCE - error message
@@ -534,7 +544,8 @@ On `generateAndWriteComps()`, the report is also:
 | Constant | Value | Location | Purpose |
 |----------|-------|----------|---------|
 | `RECENCY_HALF_LIFE_DAYS` | 30 | compService.ts | Exponential decay half-life for sale weighting |
-| `DEDUP_PRICE_TOLERANCE` | $0.50 | compService.ts | Max price difference for duplicate detection |
+| `DEDUP_PRICE_FLOOR` | $0.50 | compService.ts | Minimum price tolerance for duplicate detection |
+| `DEDUP_PRICE_PERCENT` | 0.03 (3%) | compService.ts | Percentage of avg price used for duplicate detection |
 | `DEDUP_DATE_TOLERANCE_MS` | 172,800,000 (2 days) | compService.ts | Max date difference for duplicate detection |
 | `TRIM_PERCENTAGE` | 0.10 | compService.ts | Weight percentage trimmed from each tail |
 | `UNKNOWN_DATE_WEIGHT` | 0.10 | compService.ts | Fixed weight for sales with no date |
