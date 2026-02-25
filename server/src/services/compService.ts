@@ -154,14 +154,15 @@ export function deduplicateSales(sales: NormalizedSale[]): NormalizedSale[] {
  */
 export function computeWeightedTrimmedMean(
   sales: NormalizedSale[],
-  nowMs: number
+  nowMs: number,
+  sourceReliability?: Record<string, number>
 ): { average: number; low: number; high: number } | null {
   if (sales.length === 0) return null;
 
   // Assign weights
   const weighted = sales.map(s => ({
     price: s.price,
-    weight: recencyWeight(s.dateMs, nowMs),
+    weight: recencyWeight(s.dateMs, nowMs) * (sourceReliability?.[s.sourceAdapter] ?? 1),
   }));
 
   // Sort by price ascending
@@ -422,7 +423,7 @@ class CompService {
 
       // Compute weighted trimmed mean
       const nowMs = Date.now();
-      const result = computeWeightedTrimmedMean(deduped, nowMs);
+      const result = computeWeightedTrimmedMean(deduped, nowMs, SOURCE_RELIABILITY);
       if (result) {
         return {
           aggregateAverage: result.average,
