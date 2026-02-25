@@ -332,7 +332,7 @@ This is the core pricing algorithm. It applies exponential decay weighting and t
 **Recency weight function:**
 
 ```
-weight(sale) = max(MIN_RECENCY_WEIGHT, 0.5 ^ (ageDays / 30))
+weight(sale) = max(MIN_RECENCY_WEIGHT, 0.5 ^ (ageDays / 30)) × sourceReliability
 ```
 
 A floor of `MIN_RECENCY_WEIGHT = 0.20` ensures old sales still contribute meaningfully, preventing over-concentration on a single recent sale for infrequently traded cards. Without the floor, a 90-day sale would have only 12.5% influence; with it, the minimum is 20%.
@@ -347,9 +347,26 @@ A floor of `MIN_RECENCY_WEIGHT = 0.20` ensures old sales still contribute meanin
 | 70+ days | 0.200 (floor) |
 | Unknown date | 0.100 (fixed penalty, below floor) |
 
+**Source reliability factor:**
+
+Each sale's recency weight is further multiplied by the source's reliability factor, so sales from more trustworthy sources carry more influence:
+
+| Source | Reliability |
+|--------|------------|
+| eBay | 1.00 |
+| PSA | 0.95 |
+| 130Point | 0.90 |
+| Market Movers | 0.85 |
+| Card Ladder | 0.80 |
+| SportsCardsPro | 0.60 |
+
+Combined weight: `recencyWeight(sale) × sourceReliability(source)`
+
+These are the same reliability weights used in the [market value fallback](#step-5-market-value-fallback) path, ensuring consistent source trust across both aggregation methods.
+
 **Trimmed mean procedure:**
 
-1. Assign recency weights to all sales
+1. Assign recency weights (multiplied by source reliability) to all sales
 2. Sort by price ascending
 3. If **5+ sales**: trim 10% of **total weight** from each tail
    - Walk from lowest price upward, removing full items or partially reducing the boundary item's weight
