@@ -1215,6 +1215,38 @@ class Database {
     return results;
   }
 
+  public async getPopSummary(): Promise<{ cardId: string; rarityTier: string; images: string[] }[]> {
+    // Get the latest comp report per card that has popData, joined with card images
+    const rows = this.db
+      .select({
+        cardId: cardCompReports.cardId,
+        popData: cardCompReports.popData,
+        images: cards.images,
+        generatedAt: cardCompReports.generatedAt,
+      })
+      .from(cardCompReports)
+      .innerJoin(cards, eq(cards.id, cardCompReports.cardId))
+      .where(sql`${cardCompReports.popData} IS NOT NULL`)
+      .orderBy(desc(cardCompReports.generatedAt))
+      .all();
+
+    // Dedupe to latest report per card
+    const seen = new Set<string>();
+    const results: { cardId: string; rarityTier: string; images: string[] }[] = [];
+    for (const row of rows) {
+      if (seen.has(row.cardId)) continue;
+      seen.add(row.cardId);
+      try {
+        const pop = JSON.parse(row.popData!) as PopulationData;
+        if (pop.rarityTier) {
+          const images = Array.isArray(row.images) ? row.images as string[] : JSON.parse(row.images as string || '[]');
+          results.push({ cardId: row.cardId, rarityTier: pop.rarityTier, images });
+        }
+      } catch { /* skip malformed */ }
+    }
+    return results;
+  }
+
   public async deleteCompReports(cardId: string): Promise<number> {
     const result = this.db.delete(cardCompReports)
       .where(eq(cardCompReports.cardId, cardId))

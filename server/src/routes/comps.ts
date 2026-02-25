@@ -6,6 +6,17 @@ import { CompRequest, CompReport } from '../types';
 export function createCompRoutes(db: Database, compService: CompService): Router {
   const router = Router();
 
+  // GET /api/comps/pop-summary — returns pop rarity tiers for all cards with pop data
+  router.get('/pop-summary', async (_req: Request, res: Response) => {
+    try {
+      const summary = await db.getPopSummary();
+      res.json(summary);
+    } catch (error) {
+      console.error('Error getting pop summary:', error);
+      res.status(500).json({ error: 'Failed to get pop summary' });
+    }
+  });
+
   // POST /api/comps/generate
   router.post('/generate', async (req: Request, res: Response) => {
     try {

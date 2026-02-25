@@ -19,7 +19,7 @@ class AnthropicVisionService {
   constructor(apiKey?: string) {
     this.apiKey = apiKey || process.env.ANTHROPIC_API_KEY;
     if (this.apiKey) {
-      this.client = new Anthropic({ apiKey: this.apiKey });
+      this.client = new Anthropic({ apiKey: this.apiKey, maxRetries: 4 });
     }
   }
 

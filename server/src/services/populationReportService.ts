@@ -70,6 +70,9 @@ class PopulationReportService {
       }
     }
 
+    // Normalize e.g. "CGC Cards" → "CGC", "PSA" → "PSA"
+    const companyNorm = request.gradingCompany!.split(/\s+/)[0].toUpperCase();
+
     const popRequest = {
       player: request.player,
       year: request.year,
@@ -79,12 +82,10 @@ class PopulationReportService {
       parallel: request.parallel,
       grade: request.grade,
       category: request.category,
-      gradingCompany: request.gradingCompany,
+      gradingCompany: companyNorm,
     };
-
-    // Find scraper for this grading company
     const scraper = this.scrapers.find(
-      s => s.company.toLowerCase() === request.gradingCompany!.toLowerCase()
+      s => s.company.toUpperCase() === companyNorm
     );
 
     // Try primary scraper
