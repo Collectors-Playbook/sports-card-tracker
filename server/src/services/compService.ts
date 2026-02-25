@@ -88,6 +88,24 @@ export function recencyWeight(saleDateMs: number | null, nowMs: number): number 
 }
 
 /**
+ * Compute the median date (epoch ms) of all dated sales.
+ * Used as a proxy for undated sales so they receive a realistic
+ * recency weight instead of the harsh UNKNOWN_DATE_WEIGHT penalty.
+ * Returns null when no dated sales exist (all-undated batch).
+ */
+export function medianDateMs(sales: NormalizedSale[]): number | null {
+  const dates = sales
+    .map(s => s.dateMs)
+    .filter((d): d is number => d !== null)
+    .sort((a, b) => a - b);
+  if (dates.length === 0) return null;
+  const mid = Math.floor(dates.length / 2);
+  return dates.length % 2 === 0
+    ? Math.round((dates[mid - 1] + dates[mid]) / 2)
+    : dates[mid];
+}
+
+/**
  * Compute the price tolerance for deduplication.
  * Uses the larger of a flat floor ($0.50) or a percentage (3%) of the
  * average of the two prices being compared. This adapts to card value:
@@ -159,10 +177,12 @@ export function computeWeightedTrimmedMean(
 ): { average: number; low: number; high: number } | null {
   if (sales.length === 0) return null;
 
-  // Assign weights
+  // Assign weights (use median date as proxy for undated sales)
+  const proxyDateMs = medianDateMs(sales);
+
   const weighted = sales.map(s => ({
     price: s.price,
-    weight: recencyWeight(s.dateMs, nowMs) * (sourceReliability?.[s.sourceAdapter] ?? 1),
+    weight: recencyWeight(s.dateMs ?? proxyDateMs, nowMs) * (sourceReliability?.[s.sourceAdapter] ?? 1),
   }));
 
   // Sort by price ascending
