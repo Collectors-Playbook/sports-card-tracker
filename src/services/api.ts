@@ -15,6 +15,7 @@ export interface ExtractedCardData {
   serialNumber?: string;
   gradingCompany?: string;
   grade?: string;
+  condition?: string;
   features?: {
     isRookie: boolean;
     isAutograph: boolean;
