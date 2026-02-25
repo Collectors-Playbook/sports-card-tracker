@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { apiService, ExtractedCardData } from '../../services/api';
+import { useNotifications } from '../../hooks/useNotifications';
+import { useSSE } from '../../hooks/useSSE';
 import ImageLightbox from './ImageLightbox';
 import ImageCropModal from './ImageCropModal';
 import CardReviewForm from '../CardReviewForm/CardReviewForm';
@@ -110,7 +112,10 @@ const HoldingPen: React.FC = () => {
   const [reviewSaving, setReviewSaving] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { permission, enabled, setEnabled, requestPermission, notify } = useNotifications();
+  const { on: onSSE } = useSSE(activeJobId !== null);
 
   const fetchFiles = useCallback(async () => {
     try {
@@ -128,6 +133,43 @@ const HoldingPen: React.FC = () => {
   useEffect(() => {
     fetchFiles();
   }, [fetchFiles]);
+
+  useEffect(() => {
+    requestPermission();
+  }, [requestPermission]);
+
+  useEffect(() => {
+    if (!activeJobId) return;
+
+    const unsubComplete = onSSE('job:completed', (data: { jobId: string; result?: Record<string, unknown> }) => {
+      if (data.jobId !== activeJobId) return;
+      const result = data.result || {};
+      const processed = (result.processed as number) || 0;
+      const failed = (result.failed as number) || 0;
+      notify('Batch Complete', {
+        body: `${processed} processed, ${failed} failed`,
+      });
+      setActiveJobId(null);
+      setProcessing(new Set());
+      setSelectedIds(new Set());
+      fetchFiles();
+    });
+
+    const unsubFailed = onSSE('job:failed', (data: { jobId: string; error?: string }) => {
+      if (data.jobId !== activeJobId) return;
+      notify('Batch Processing Failed', {
+        body: data.error || 'Unknown error',
+      });
+      setError(data.error || 'Batch processing failed');
+      setActiveJobId(null);
+      setProcessing(new Set());
+    });
+
+    return () => {
+      unsubComplete();
+      unsubFailed();
+    };
+  }, [activeJobId, onSSE, notify, fetchFiles]);
 
   const handleUpload = async (fileList: FileList | File[]) => {
     const validFiles = Array.from(fileList).filter(f =>
@@ -187,10 +229,14 @@ const HoldingPen: React.FC = () => {
         primaryFile,
         frontFile && backFile ? backFile : undefined
       );
+      const label = [data.year, data.brand, data.player].filter(Boolean).join(' ') || pair.label;
+      notify('Card Identified', { body: label });
       // Open review form with vision results
       setReviewTarget({ pair, data });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Identification failed');
+      const msg = err instanceof Error ? err.message : 'Identification failed';
+      notify('Identification Failed', { body: `${pair.label}: ${msg}` });
+      setError(msg);
     } finally {
       setProcessing(prev => {
         const next = new Set(prev);
@@ -216,7 +262,12 @@ const HoldingPen: React.FC = () => {
         reviewTarget.data
       );
       if (result.status === 'failed' || result.status === 'duplicate' || result.status === 'skipped') {
+        const player = data.player || pair.label;
+        notify('Card Confirmation Issue', { body: `${player}: ${result.status}` });
         setError(result.error || `Processing ${result.status}`);
+      } else {
+        const player = data.player || pair.label;
+        notify('Card Added', { body: `${player} confirmed and saved` });
       }
       setReviewTarget(null);
       await fetchFiles();
@@ -236,12 +287,10 @@ const HoldingPen: React.FC = () => {
 
     setProcessing(new Set(selectedIds));
     try {
-      await apiService.processRawImages(allFilenames);
-      setSelectedIds(new Set());
-      await fetchFiles();
+      const job = await apiService.processRawImages(allFilenames);
+      setActiveJobId(job.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Bulk processing failed');
-    } finally {
       setProcessing(new Set());
     }
   };
@@ -367,6 +416,24 @@ const HoldingPen: React.FC = () => {
               </button>
             </div>
           )}
+          <label
+            className="holding-pen-notification-toggle"
+            title={permission === 'denied' ? 'Notifications blocked by browser' : permission === 'unsupported' ? 'Notifications not supported' : ''}
+          >
+            <input
+              type="checkbox"
+              checked={enabled && permission === 'granted'}
+              disabled={permission === 'denied' || permission === 'unsupported'}
+              onChange={() => {
+                if (permission === 'default') {
+                  requestPermission().then(p => { if (p === 'granted') setEnabled(true); });
+                } else {
+                  setEnabled(!enabled);
+                }
+              }}
+            />
+            Notifications
+          </label>
         </div>
       )}
 
