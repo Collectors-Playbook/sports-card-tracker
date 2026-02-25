@@ -6,14 +6,6 @@ import Database from '../database';
 
 export const POP_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-export const POP_MULTIPLIERS: Record<PopRarityTier, number> = {
-  'ultra-low': 1.25,
-  'low': 1.10,
-  'medium': 1.00,
-  'high': 1.00,
-  'very-high': 0.95,
-};
-
 // ─── Pure Functions ──────────────────────────────────────────────────────────
 
 export function classifyRarityTier(targetGradePop: number): PopRarityTier {
@@ -33,8 +25,15 @@ export function computePercentile(
   return Math.round(((targetGradePop + higherGradePop) / totalGraded) * 10000) / 100;
 }
 
-export function getMultiplier(popData: PopulationData): number {
-  return POP_MULTIPLIERS[popData.rarityTier];
+/**
+ * Continuous log₁₀ decay curve mapping population count to a price multiplier.
+ * ~1.25 at pop 1, ~1.15 at pop 10, ~1.05 at pop 100, ~0.95 at pop 1000+.
+ * Clamped at a 0.95 floor so very-high-pop cards still retain most of their value.
+ */
+export function popMultiplier(targetGradePop: number): number {
+  if (targetGradePop <= 0) return 1.25;
+  const raw = 1.25 - 0.30 * Math.log10(targetGradePop) / Math.log10(1000);
+  return Math.max(0.95, Math.round(raw * 1000) / 1000);
 }
 
 // ─── Service ────────────────────────────────────────────────────────────────

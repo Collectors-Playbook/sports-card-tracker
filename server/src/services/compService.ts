@@ -11,7 +11,7 @@ import OneThirtyPointAdapter from './adapters/oneThirtyPoint';
 import PsaAdapter from './adapters/psa';
 import { CompAdapter, CompRequest, CompReport, CompResult, CompSource, StoredCompReport, PopulationData } from '../types';
 import Database from '../database';
-import PopulationReportService, { getMultiplier } from './populationReportService';
+import PopulationReportService, { popMultiplier } from './populationReportService';
 
 // ─── Aggregation Constants ──────────────────────────────────────────────────
 
@@ -314,15 +314,15 @@ class CompService {
 
     // Fetch pop data for graded cards (failures don't break comps)
     let popData: PopulationData | null = null;
-    let popMultiplier: number | undefined;
+    let popMult: number | undefined;
     let popAdjustedAverage: number | null | undefined;
 
     if (this.popService) {
       try {
         popData = await this.popService.getPopulationData(request);
         if (popData && aggregateAverage !== null) {
-          popMultiplier = getMultiplier(popData);
-          popAdjustedAverage = Math.round(aggregateAverage * popMultiplier * 100) / 100;
+          popMult = popMultiplier(popData.targetGradePop);
+          popAdjustedAverage = Math.round(aggregateAverage * popMult * 100) / 100;
         }
       } catch (err) {
         console.error('[Pop] Error fetching pop data:', err);
@@ -341,7 +341,7 @@ class CompService {
       aggregateLow,
       aggregateHigh,
       popData,
-      popMultiplier,
+      popMultiplier: popMult,
       popAdjustedAverage,
       generatedAt: new Date().toISOString(),
     };
