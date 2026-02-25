@@ -22,6 +22,7 @@ import BrowserService from './services/browserService';
 import CompCacheService from './services/compCacheService';
 import PopulationReportService from './services/populationReportService';
 import PsaPopScraper from './services/adapters/psaPopScraper';
+import CgcPopScraper from './services/adapters/cgcPopScraper';
 import BgsPopScraper from './services/adapters/bgsPopScraper';
 import SgcPopScraper from './services/adapters/sgcPopScraper';
 import AnthropicVisionService from './services/anthropicVisionService';
@@ -53,7 +54,7 @@ const browserService = config.puppeteerEnabled ? new BrowserService({
 }) : undefined;
 const compCacheService = config.puppeteerEnabled ? new CompCacheService(db, config.compCacheTtlMs) : undefined;
 const popService = config.puppeteerEnabled
-  ? new PopulationReportService([new PsaPopScraper(browserService), new BgsPopScraper(), new SgcPopScraper()], db)
+  ? new PopulationReportService([new PsaPopScraper(browserService), new CgcPopScraper(browserService), new BgsPopScraper(), new SgcPopScraper()], db)
   : undefined;
 const compService = new CompService(fileService, undefined, browserService, compCacheService, db, popService);
 
