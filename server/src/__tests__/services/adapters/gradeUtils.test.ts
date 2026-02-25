@@ -1,4 +1,4 @@
-import { extractGradeFromTitle, filterByGrade } from '../../../services/adapters/gradeUtils';
+import { extractGradeFromTitle, filterByGrade, getAdjacentGrades, GradeInfo } from '../../../services/adapters/gradeUtils';
 import { CompRequest } from '../../../types';
 
 describe('extractGradeFromTitle', () => {
@@ -94,7 +94,7 @@ describe('filterByGrade', () => {
     expect(result.every(s => s.title.includes('PSA 10'))).toBe(true);
   });
 
-  it('falls back to all sales when fewer than 3 matches', () => {
+  it('returns exact matches when 2+ exist (lowered threshold)', () => {
     const sales = [
       mkSale('2023 Topps Trout PSA 10'),
       mkSale('2023 Topps Trout PSA 10 GEM'),
@@ -106,7 +106,8 @@ describe('filterByGrade', () => {
       isGraded: true, gradingCompany: 'PSA', grade: '10',
     };
     const result = filterByGrade(sales, request);
-    expect(result).toHaveLength(4); // Only 2 PSA 10 matches, falls back
+    expect(result).toHaveLength(2); // 2 PSA 10 matches meet threshold
+    expect(result.every(s => s.title.includes('PSA 10'))).toBe(true);
   });
 
   it('distinguishes company correctly (PSA 10 != BGS 10)', () => {
@@ -154,5 +155,142 @@ describe('filterByGrade', () => {
     const result = filterByGrade(sales, request);
     expect(result).toHaveLength(3);
     expect(result.every(s => s.title.includes('PSA 10'))).toBe(true);
+  });
+
+  it('falls back to adjacent grades (tier 2) when < 2 exact', () => {
+    const sales = [
+      mkSale('Trout PSA 10'),
+      mkSale('Trout PSA 9'),
+      mkSale('Trout PSA 9 MINT'),
+      mkSale('Trout BGS 10'),
+      mkSale('Trout raw card'),
+    ];
+    const request: CompRequest = {
+      cardId: '1', player: 'Mike Trout', year: 2023, brand: 'Topps', cardNumber: '1',
+      isGraded: true, gradingCompany: 'PSA', grade: '10',
+    };
+    const result = filterByGrade(sales, request);
+    // 1 exact PSA 10, falls to tier 2: PSA 9 + PSA 10 = 3 adjacent matches
+    expect(result).toHaveLength(3);
+    expect(result.every(s => s.title.includes('PSA'))).toBe(true);
+  });
+
+  it('falls back to same company (tier 3) when < 2 adjacent', () => {
+    const sales = [
+      mkSale('Trout PSA 10'),
+      mkSale('Trout PSA 7'),
+      mkSale('Trout PSA 7 GEM'),
+      mkSale('Trout BGS 10'),
+      mkSale('Trout raw card'),
+    ];
+    const request: CompRequest = {
+      cardId: '1', player: 'Mike Trout', year: 2023, brand: 'Topps', cardNumber: '1',
+      isGraded: true, gradingCompany: 'PSA', grade: '10',
+    };
+    const result = filterByGrade(sales, request);
+    // 1 exact, adjacent (9,10) = 1 only PSA 10, falls to tier 3: all PSA = 3
+    expect(result).toHaveLength(3);
+    expect(result.every(s => s.title.includes('PSA'))).toBe(true);
+  });
+
+  it('falls back to all sales (tier 4) when < 2 same company', () => {
+    const sales = [
+      mkSale('Trout PSA 10'),
+      mkSale('Trout BGS 9.5'),
+      mkSale('Trout raw card'),
+    ];
+    const request: CompRequest = {
+      cardId: '1', player: 'Mike Trout', year: 2023, brand: 'Topps', cardNumber: '1',
+      isGraded: true, gradingCompany: 'PSA', grade: '10',
+    };
+    const result = filterByGrade(sales, request);
+    // 1 exact, 1 adjacent, 1 same company — all < 2, return all
+    expect(result).toHaveLength(3);
+  });
+
+  it('uses BGS half-point adjacent grades', () => {
+    const sales = [
+      mkSale('Trout BGS 9.5'),
+      mkSale('Trout BGS 9'),
+      mkSale('Trout BGS 9 GEM'),
+      mkSale('Trout PSA 10'),
+    ];
+    const request: CompRequest = {
+      cardId: '1', player: 'Mike Trout', year: 2023, brand: 'Topps', cardNumber: '1',
+      isGraded: true, gradingCompany: 'BGS', grade: '9.5',
+    };
+    const result = filterByGrade(sales, request);
+    // 1 exact BGS 9.5, falls to tier 2: adjacent = 9.0 and 10.0, so BGS 9.5 + BGS 9 + BGS 9 = 3
+    expect(result).toHaveLength(3);
+    expect(result.every(s => s.title.includes('BGS'))).toBe(true);
+  });
+
+  it('Auth grade has no adjacency — falls through tiers', () => {
+    const sales = [
+      mkSale('Trout PSA Auth'),
+      mkSale('Trout PSA 10'),
+      mkSale('Trout PSA 9'),
+      mkSale('Trout raw card'),
+    ];
+    const request: CompRequest = {
+      cardId: '1', player: 'Mike Trout', year: 2023, brand: 'Topps', cardNumber: '1',
+      isGraded: true, gradingCompany: 'PSA', grade: 'Auth',
+    };
+    const result = filterByGrade(sales, request);
+    // 1 exact Auth, no adjacent grades for Auth, tier 3: all PSA = 3
+    expect(result).toHaveLength(3);
+    expect(result.every(s => s.title.includes('PSA'))).toBe(true);
+  });
+
+  it('accepts a custom gradeExtractor', () => {
+    const sales = [
+      { id: 1, grade: '10' },
+      { id: 2, grade: '10' },
+      { id: 3, grade: '9' },
+    ];
+    const request: CompRequest = {
+      cardId: '1', player: 'Mike Trout', year: 2023, brand: 'Topps', cardNumber: '1',
+      isGraded: true, gradingCompany: 'PSA', grade: '10',
+    };
+    const result = filterByGrade(sales, request, (s) => {
+      if (!s.grade) return null;
+      return { company: 'PSA', grade: s.grade };
+    });
+    expect(result).toHaveLength(2);
+    expect(result.every(s => s.grade === '10')).toBe(true);
+  });
+});
+
+describe('getAdjacentGrades', () => {
+  it('returns ±1 for PSA integer grade', () => {
+    expect(getAdjacentGrades('PSA', '9')).toEqual(['8', '10']);
+  });
+
+  it('returns ±0.5 for BGS half-point scale', () => {
+    expect(getAdjacentGrades('BGS', '9.5')).toEqual(['9', '10']);
+  });
+
+  it('returns ±0.5 for BVG half-point scale', () => {
+    expect(getAdjacentGrades('BVG', '8')).toEqual(['7.5', '8.5']);
+  });
+
+  it('returns empty for Auth grade', () => {
+    expect(getAdjacentGrades('PSA', 'Auth')).toEqual([]);
+  });
+
+  it('does not go below 1', () => {
+    expect(getAdjacentGrades('PSA', '1')).toEqual(['2']);
+  });
+
+  it('does not go above 10', () => {
+    expect(getAdjacentGrades('PSA', '10')).toEqual(['9']);
+  });
+
+  it('handles SGC integer grade', () => {
+    expect(getAdjacentGrades('SGC', '8')).toEqual(['7', '9']);
+  });
+
+  it('is case insensitive for company', () => {
+    expect(getAdjacentGrades('bgs', '9')).toEqual(['8.5', '9.5']);
   });
 });

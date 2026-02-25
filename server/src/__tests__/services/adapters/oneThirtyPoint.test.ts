@@ -252,7 +252,7 @@ describe('filterByRelevance', () => {
     expect(result.every(s => s.title.includes('PSA 8'))).toBe(true);
   });
 
-  it('falls back to all when fewer than 3 grade matches', () => {
+  it('returns exact grade matches when 2+ exist (lowered threshold)', () => {
     const mixed = [
       { price: 120, date: '01/15/2026', title: '2023 Topps Trout PSA 8', marketplace: 'eBay' },
       { price: 125, date: '01/14/2026', title: '2023 Topps Trout PSA 8', marketplace: 'eBay' },
@@ -265,7 +265,8 @@ describe('filterByRelevance', () => {
       grade: '8',
     };
     const result = filterByRelevance(mixed, gradedRequest);
-    expect(result).toHaveLength(3); // 2 PSA 8 < 3, all kept
+    expect(result).toHaveLength(2); // 2 PSA 8 matches meet threshold of 2
+    expect(result.every(s => s.price <= 125)).toBe(true);
   });
 
   it('does not grade-filter ungraded requests', () => {

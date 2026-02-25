@@ -186,7 +186,7 @@ describe('EbayAdapter', () => {
     expect(result.sales!.every(s => s.price <= 130)).toBe(true);
   });
 
-  it('falls back to all listings when fewer than 3 grade matches', async () => {
+  it('returns exact grade matches when 2+ exist (lowered threshold)', async () => {
     const soldListings = [
       { price: 120, date: 'Jan 15, 2026', title: '2023 Topps Mike Trout #1 PSA 8' },
       { price: 125, date: 'Jan 14, 2026', title: '2023 Topps Mike Trout #1 PSA 8' },
@@ -206,8 +206,9 @@ describe('EbayAdapter', () => {
     const adapter = new EbayAdapter(browserService as any);
     const result = await adapter.fetchComps(gradedRequest);
 
-    // Only 2 PSA 8 matches < 3, so all 3 kept
-    expect(result.sales).toHaveLength(3);
+    // 2 PSA 8 matches meet threshold of 2
+    expect(result.sales).toHaveLength(2);
+    expect(result.sales!.every(s => s.price <= 125)).toBe(true);
   });
 
   it('does not grade-filter ungraded card requests', async () => {

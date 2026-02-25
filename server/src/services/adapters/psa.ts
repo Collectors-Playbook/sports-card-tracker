@@ -1,6 +1,7 @@
 import { CompAdapter, CompRequest, CompResult, CompSource, CompSale } from '../../types';
 import BrowserService from '../browserService';
 import CompCacheService from '../compCacheService';
+import { filterByGrade } from './gradeUtils';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -197,16 +198,12 @@ class PsaAdapter implements CompAdapter {
         return this.errorResult(`No PSA sales data found for: ${query}`);
       }
 
-      // Grade filter: if PSA-graded, only keep matching grade
-      let filteredSales = rawSales;
-      if (request.isGraded && request.gradingCompany === 'PSA' && request.grade) {
-        const gradeMatch = rawSales.filter(s => s.grade === request.grade);
-        if (gradeMatch.length > 0) {
-          filteredSales = gradeMatch;
-        }
-      }
+      const gradeFiltered = filterByGrade(rawSales, request, (sale) => {
+        if (!sale.grade) return null;
+        return { company: 'PSA', grade: sale.grade };
+      });
 
-      filteredSales = filterByRelevance(filteredSales, request);
+      const filteredSales = filterByRelevance(gradeFiltered, request);
 
       const compSales: CompSale[] = filteredSales.map(s => ({
         date: s.date,
