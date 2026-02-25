@@ -35,7 +35,7 @@ export function createCardRoutes(db: Database, auditService: AuditService): Rout
   router.get('/heatmap', async (req: Request, res: Response) => {
     try {
       const period = (req.query.period as string) || 'all';
-      const validPeriods = ['7d', '30d', '90d', 'ytd', 'all'];
+      const validPeriods = ['1d', '7d', '30d', '90d', 'ytd', 'all'];
       if (!validPeriods.includes(period)) {
         res.status(400).json({ error: `Invalid period. Must be one of: ${validPeriods.join(', ')}` });
         return;

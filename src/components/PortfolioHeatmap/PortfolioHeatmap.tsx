@@ -16,7 +16,7 @@ interface PortfolioHeatmapProps {
 }
 
 type ViewMode = 'treemap' | 'grid';
-type TimePeriod = '7d' | '30d' | '90d' | 'ytd' | 'all';
+type TimePeriod = '1d' | '7d' | '30d' | '90d' | 'ytd' | 'all';
 
 const PortfolioHeatmap: React.FC<PortfolioHeatmapProps> = ({ onCardSelect }) => {
   const { state } = useCards();
@@ -192,7 +192,7 @@ const PortfolioHeatmap: React.FC<PortfolioHeatmapProps> = ({ onCardSelect }) => 
       {/* Controls row */}
       <div className="phm-controls">
         <div className="phm-time-periods">
-          {(['7d', '30d', '90d', 'ytd', 'all'] as TimePeriod[]).map(period => (
+          {(['1d', '7d', '30d', '90d', 'ytd', 'all'] as TimePeriod[]).map(period => (
             <button
               key={period}
               className={`phm-time-btn ${timePeriod === period ? 'active' : ''}`}
