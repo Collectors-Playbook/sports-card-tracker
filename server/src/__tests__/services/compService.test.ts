@@ -118,8 +118,11 @@ describe('CompService', () => {
     const service = new CompService(fileService, adapters);
     const report = await service.generateComps(sampleRequest);
 
-    // With sales, uses weighted trimmed mean (all same-day, so equal weights)
-    expect(report.aggregateAverage).toBeCloseTo(45, 0);
+    // With sales, uses weighted trimmed mean
+    // eBay sales (weight 1.0): 30, 40, 50
+    // SportsCardsPro sales (weight 0.6): 40, 50, 60
+    // Source reliability pulls average toward eBay's lower prices
+    expect(report.aggregateAverage).toBeCloseTo(43, 0);
     expect(report.aggregateLow).toBeDefined();
     expect(report.aggregateHigh).toBeDefined();
     expect(report.aggregateLow!).toBeLessThanOrEqual(report.aggregateAverage!);
@@ -732,6 +735,30 @@ describe('computeWeightedTrimmedMean', () => {
     expect(result).not.toBeNull();
     expect(result!.average).toBeCloseTo(100, 1);
   });
+
+  it('weights sales by source reliability when provided', () => {
+    const reliableSource: NormalizedSale = {
+      price: 200, dateMs: NOW, venue: 'eBay', sourceAdapter: 'eBay',
+    };
+    const unreliableSource: NormalizedSale = {
+      price: 100, dateMs: NOW, venue: 'SportsCardsPro', sourceAdapter: 'SportsCardsPro',
+    };
+    const reliability = { 'eBay': 1.0, 'SportsCardsPro': 0.6 };
+
+    const withReliability = computeWeightedTrimmedMean(
+      [reliableSource, unreliableSource], NOW, reliability
+    );
+    const withoutReliability = computeWeightedTrimmedMean(
+      [reliableSource, unreliableSource], NOW
+    );
+
+    expect(withReliability).not.toBeNull();
+    expect(withoutReliability).not.toBeNull();
+    // Without reliability: simple average = 150
+    expect(withoutReliability!.average).toBeCloseTo(150, 1);
+    // With reliability: (200*1.0 + 100*0.6) / 1.6 = 162.5
+    expect(withReliability!.average).toBeCloseTo(162.5, 1);
+  });
 });
 
 describe('computeFallbackFromMarketValues', () => {
@@ -895,6 +922,30 @@ describe('CompService weighted aggregation integration', () => {
 
     // Recent $200 sales (weight ~1.0) should dominate old $50 sales (weight ~0.125)
     expect(report.aggregateAverage).toBeGreaterThan(150);
+  });
+
+  it('eBay sales weighted higher than SportsCardsPro sales', async () => {
+    const today = new Date().toISOString().split('T')[0];
+    const adapters = [
+      createMockAdapter('eBay', {
+        averagePrice: 200, sales: [
+          { date: today, price: 200, venue: 'eBay' },
+          { date: today, price: 210, venue: 'eBay' },
+        ],
+      }),
+      createMockAdapter('SportsCardsPro', {
+        averagePrice: 100, sales: [
+          { date: today, price: 100, venue: 'SportsCardsPro' },
+          { date: today, price: 110, venue: 'SportsCardsPro' },
+        ],
+      }),
+    ];
+    const service = new CompService(fileService, adapters);
+    const report = await service.generateComps(sampleRequest);
+
+    // Without source weighting: simple avg of 200, 210, 100, 110 = 155
+    // With source weighting: eBay (w=1.0) pulls average above 155
+    expect(report.aggregateAverage).toBeGreaterThan(155);
   });
 
   it('single source with sales uses sales directly', async () => {
