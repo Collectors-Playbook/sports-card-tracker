@@ -13,9 +13,10 @@ function formatPrice(value: number | null): string {
 }
 
 function formatDate(dateStr: string): string {
+  if (!dateStr) return '--';
   const d = new Date(dateStr);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-    + ' ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 const SourceSection: React.FC<{ result: CompResult }> = ({ result }) => {
