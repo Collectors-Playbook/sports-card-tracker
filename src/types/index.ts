@@ -187,3 +187,117 @@ export const GRADING_COMPANIES: GradingCompany[] = [
   'GMA Grading',
   'ACE Grading'
 ];
+
+export interface GradeOption {
+  value: string;
+  label: string;
+}
+
+export const GRADING_SCALES: Record<string, GradeOption[]> = {
+  PSA: [
+    { value: '10', label: '10 - GEM-MT' },
+    { value: '9', label: '9 - MINT' },
+    { value: '8', label: '8 - NM-MT' },
+    { value: '7', label: '7 - NM' },
+    { value: '6', label: '6 - EX-MT' },
+    { value: '5', label: '5 - EX' },
+    { value: '4', label: '4 - VG-EX' },
+    { value: '3', label: '3 - VG' },
+    { value: '2', label: '2 - GOOD' },
+    { value: '1.5', label: '1.5 - FR' },
+    { value: '1', label: '1 - PR' },
+    { value: 'A', label: 'A - Authentic' },
+  ],
+  BGS: [
+    { value: '10', label: '10 - Pristine' },
+    { value: '9.5', label: '9.5 - Gem Mint' },
+    { value: '9', label: '9 - Mint' },
+    { value: '8.5', label: '8.5 - NM-MT+' },
+    { value: '8', label: '8 - NM-MT' },
+    { value: '7.5', label: '7.5 - NM+' },
+    { value: '7', label: '7 - NM' },
+    { value: '6.5', label: '6.5 - EX-MT+' },
+    { value: '6', label: '6 - EX-MT' },
+    { value: '5.5', label: '5.5 - EX+' },
+    { value: '5', label: '5 - EX' },
+    { value: '4.5', label: '4.5 - VG-EX+' },
+    { value: '4', label: '4 - VG-EX' },
+    { value: '3.5', label: '3.5 - VG+' },
+    { value: '3', label: '3 - VG' },
+    { value: '2.5', label: '2.5 - G+' },
+    { value: '2', label: '2 - G' },
+    { value: '1.5', label: '1.5 - FR' },
+    { value: '1', label: '1 - PR' },
+  ],
+  SGC: [
+    { value: '10', label: '10 - GEM MINT' },
+    { value: '9.5', label: '9.5 - MINT+' },
+    { value: '9', label: '9 - MINT' },
+    { value: '8.5', label: '8.5 - NM-MT+' },
+    { value: '8', label: '8 - NM-MT' },
+    { value: '7.5', label: '7.5 - NM+' },
+    { value: '7', label: '7 - NM' },
+    { value: '6.5', label: '6.5 - EX-NM+' },
+    { value: '6', label: '6 - EX-NM' },
+    { value: '5.5', label: '5.5 - EX+' },
+    { value: '5', label: '5 - EX' },
+    { value: '4.5', label: '4.5 - VG-EX+' },
+    { value: '4', label: '4 - VG-EX' },
+    { value: '3.5', label: '3.5 - VG+' },
+    { value: '3', label: '3 - VG' },
+    { value: '2.5', label: '2.5 - GOOD+' },
+    { value: '2', label: '2 - GOOD' },
+    { value: '1.5', label: '1.5 - FR' },
+    { value: '1', label: '1 - PR' },
+    { value: 'A', label: 'A - Authentic' },
+  ],
+  'CGC Cards': [
+    { value: '10', label: '10 - Pristine' },
+    { value: '9.5', label: '9.5 - Gem Mint' },
+    { value: '9', label: '9 - Mint' },
+    { value: '8.5', label: '8.5 - NM/Mint+' },
+    { value: '8', label: '8 - NM/Mint' },
+    { value: '7.5', label: '7.5 - NM+' },
+    { value: '7', label: '7 - NM' },
+    { value: '6.5', label: '6.5 - EX/NM+' },
+    { value: '6', label: '6 - EX/NM' },
+    { value: '5.5', label: '5.5 - EX+' },
+    { value: '5', label: '5 - EX' },
+    { value: '4.5', label: '4.5 - VG/EX+' },
+    { value: '4', label: '4 - VG/EX' },
+    { value: '3.5', label: '3.5 - VG+' },
+    { value: '3', label: '3 - VG' },
+    { value: '2.5', label: '2.5 - G+' },
+    { value: '2', label: '2 - G' },
+    { value: '1.5', label: '1.5 - FR' },
+    { value: '1', label: '1 - PR' },
+  ],
+};
+
+export const GENERIC_GRADE_SCALE: GradeOption[] = [
+  { value: '10', label: '10' },
+  { value: '9.5', label: '9.5' },
+  { value: '9', label: '9' },
+  { value: '8.5', label: '8.5' },
+  { value: '8', label: '8' },
+  { value: '7.5', label: '7.5' },
+  { value: '7', label: '7' },
+  { value: '6.5', label: '6.5' },
+  { value: '6', label: '6' },
+  { value: '5.5', label: '5.5' },
+  { value: '5', label: '5' },
+  { value: '4.5', label: '4.5' },
+  { value: '4', label: '4' },
+  { value: '3.5', label: '3.5' },
+  { value: '3', label: '3' },
+  { value: '2.5', label: '2.5' },
+  { value: '2', label: '2' },
+  { value: '1.5', label: '1.5' },
+  { value: '1', label: '1' },
+];
+
+export const getGradeScale = (company: string): GradeOption[] => {
+  return GRADING_SCALES[company] || GENERIC_GRADE_SCALE;
+};
+
+export const RAW_CONDITIONS = ['Raw', 'Near Mint', 'Excellent', 'Very Good', 'Good', 'Poor'];

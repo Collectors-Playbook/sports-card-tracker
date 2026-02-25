@@ -530,6 +530,7 @@ const ProcessedGallery: React.FC = () => {
             serialNumber: editTarget.card.serialNumber,
             gradingCompany: editTarget.card.gradingCompany,
             grade: editTarget.card.grade,
+            condition: editTarget.card.condition,
             features: {
               isRookie: editTarget.card.isRookie ?? false,
               isAutograph: editTarget.card.isAutograph ?? false,
