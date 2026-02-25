@@ -25,6 +25,7 @@ import PsaPopScraper from './services/adapters/psaPopScraper';
 import CgcPopScraper from './services/adapters/cgcPopScraper';
 import BgsPopScraper from './services/adapters/bgsPopScraper';
 import SgcPopScraper from './services/adapters/sgcPopScraper';
+import GemRatePopScraper from './services/adapters/gemratePopScraper';
 import AnthropicVisionService from './services/anthropicVisionService';
 import ImageProcessingService from './services/imageProcessingService';
 import ImageCropService from './services/imageCropService';
@@ -53,8 +54,13 @@ const browserService = config.puppeteerEnabled ? new BrowserService({
   rateLimits: config.rateLimits,
 }) : undefined;
 const compCacheService = config.puppeteerEnabled ? new CompCacheService(db, config.compCacheTtlMs) : undefined;
+const gemrateScraper = config.puppeteerEnabled ? new GemRatePopScraper(browserService) : undefined;
 const popService = config.puppeteerEnabled
-  ? new PopulationReportService([new PsaPopScraper(browserService), new CgcPopScraper(browserService), new BgsPopScraper(), new SgcPopScraper()], db)
+  ? new PopulationReportService(
+      [new PsaPopScraper(browserService), new CgcPopScraper(browserService), new BgsPopScraper(), new SgcPopScraper()],
+      db,
+      gemrateScraper
+    )
   : undefined;
 const compService = new CompService(fileService, undefined, browserService, compCacheService, db, popService);
 

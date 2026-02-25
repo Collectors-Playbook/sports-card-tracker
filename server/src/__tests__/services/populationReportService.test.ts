@@ -166,6 +166,7 @@ describe('PopulationReportService', () => {
       category: undefined,
       setName: undefined,
       parallel: undefined,
+      gradingCompany: 'PSA',
     });
   });
 
@@ -245,5 +246,97 @@ describe('PopulationReportService', () => {
       gradingCompany: undefined,
     });
     expect(result).toBeNull();
+  });
+
+  // ─── Fallback scraper ───────────────────────────────────────────────────
+
+  describe('fallback scraper', () => {
+    const fallbackPopData: PopulationData = {
+      ...samplePopData,
+      gradingCompany: 'PSA',
+    };
+
+    it('tries fallback when primary scraper returns null', async () => {
+      const primary = createMockScraper('PSA', null);
+      const fallback = createMockScraper('GemRate', fallbackPopData);
+      const service = new PopulationReportService([primary], undefined, fallback);
+
+      const result = await service.getPopulationData(gradedRequest);
+      expect(result).toEqual(fallbackPopData);
+      expect(primary.fetchPopulation).toHaveBeenCalledTimes(1);
+      expect(fallback.fetchPopulation).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not try fallback when primary succeeds', async () => {
+      const primary = createMockScraper('PSA', samplePopData);
+      const fallback = createMockScraper('GemRate', fallbackPopData);
+      const service = new PopulationReportService([primary], undefined, fallback);
+
+      const result = await service.getPopulationData(gradedRequest);
+      expect(result).toEqual(samplePopData);
+      expect(fallback.fetchPopulation).not.toHaveBeenCalled();
+    });
+
+    it('tries fallback when no primary scraper exists for company', async () => {
+      const primary = createMockScraper('CGC', null); // No PSA scraper
+      const fallback = createMockScraper('GemRate', fallbackPopData);
+      const service = new PopulationReportService([primary], undefined, fallback);
+
+      const result = await service.getPopulationData(gradedRequest);
+      expect(result).toEqual(fallbackPopData);
+      expect(primary.fetchPopulation).not.toHaveBeenCalled(); // CGC doesn't match PSA
+      expect(fallback.fetchPopulation).toHaveBeenCalledTimes(1);
+    });
+
+    it('returns null when both primary and fallback return null', async () => {
+      const primary = createMockScraper('PSA', null);
+      const fallback = createMockScraper('GemRate', null);
+      const service = new PopulationReportService([primary], undefined, fallback);
+
+      const result = await service.getPopulationData(gradedRequest);
+      expect(result).toBeNull();
+      expect(primary.fetchPopulation).toHaveBeenCalledTimes(1);
+      expect(fallback.fetchPopulation).toHaveBeenCalledTimes(1);
+    });
+
+    it('passes gradingCompany in PopRequest to fallback', async () => {
+      const primary = createMockScraper('PSA', null);
+      const fallback = createMockScraper('GemRate', fallbackPopData);
+      const service = new PopulationReportService([primary], undefined, fallback);
+
+      await service.getPopulationData(gradedRequest);
+      expect(fallback.fetchPopulation).toHaveBeenCalledWith(
+        expect.objectContaining({ gradingCompany: 'PSA' })
+      );
+    });
+
+    it('caches fallback result identically to primary result', async () => {
+      const db = new Database(':memory:');
+      const user = await db.createUser({ username: 'test', email: 'fallback@test.com', password: 'pass' });
+      await db.createCard({
+        userId: user.id, player: 'Mike Trout', team: 'Angels', year: 2023, brand: 'Topps',
+        category: 'Baseball', cardNumber: '1', condition: 'PSA 10', purchasePrice: 20,
+        purchaseDate: '2023-01-01', currentValue: 20, images: [], notes: '',
+      });
+      const cards = await db.getAllCards();
+      const request = { ...gradedRequest, cardId: cards[0].id };
+
+      const primary = createMockScraper('PSA', null);
+      const fallback = createMockScraper('GemRate', fallbackPopData);
+      const service = new PopulationReportService([primary], db, fallback);
+
+      // First call: primary fails, fallback succeeds, result is cached
+      await service.getPopulationData(request);
+      // Second call: should use cache
+      await service.getPopulationData(request);
+
+      expect(primary.fetchPopulation).toHaveBeenCalledTimes(1);
+      expect(fallback.fetchPopulation).toHaveBeenCalledTimes(1);
+
+      const history = await db.getPopHistory(cards[0].id);
+      expect(history).toHaveLength(1);
+
+      await db.close();
+    });
   });
 });
