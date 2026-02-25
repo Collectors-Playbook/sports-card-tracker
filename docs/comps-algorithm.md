@@ -345,7 +345,22 @@ A floor of `MIN_RECENCY_WEIGHT = 0.20` ensures old sales still contribute meanin
 | 30 days | 0.500 |
 | 60 days | 0.250 |
 | 70+ days | 0.200 (floor) |
-| Unknown date | 0.100 (fixed penalty, below floor) |
+| Unknown date (with dated peers) | Uses median date of batch (proxy) |
+| Unknown date (all undated) | 0.100 (fixed penalty, below floor) |
+
+**Unknown-date handling:**
+
+When a sale has no parseable date (`dateMs === null`), the system uses a **median-date proxy** rather than applying the harsh `UNKNOWN_DATE_WEIGHT` penalty directly. The median date of all dated sales in the same batch is computed and substituted for the missing date before calculating the recency weight.
+
+This is appropriate because undated sales typically come from the first page of search results sorted by most recent — they are likely recent sales where the scraper failed to extract the date from HTML. The proxy is adaptive: if most dated sales are from this week, undated sales are treated as this week too; if most are from 60 days ago, undated sales get that age.
+
+When **all** sales in the batch are undated, no median is available and the fallback `UNKNOWN_DATE_WEIGHT = 0.10` applies to all (preserving equal weighting among them).
+
+| Scenario | Weight |
+|----------|--------|
+| 10 dated sales from this week + 1 undated | Undated gets ~1.0 (proxy = this week) |
+| 10 dated sales from 60 days ago + 1 undated | Undated gets ~0.25 (proxy = 60 days) |
+| All sales undated | All get 0.10 (no proxy, equal weight) |
 
 **Source reliability factor:**
 
@@ -366,7 +381,7 @@ These are the same reliability weights used in the [market value fallback](#step
 
 **Trimmed mean procedure:**
 
-1. Assign recency weights (multiplied by source reliability) to all sales
+1. Assign recency weights (with median-date proxy for undated sales, multiplied by source reliability) to all sales
 2. Sort by price ascending
 3. If **5+ sales**: trim 10% of **total weight** from each tail
    - Walk from lowest price upward, removing full items or partially reducing the boundary item's weight
@@ -585,7 +600,7 @@ On `generateAndWriteComps()`, the report is also:
 | `DEDUP_PRICE_PERCENT` | 0.03 (3%) | compService.ts | Percentage of avg price used for duplicate detection |
 | `DEDUP_DATE_TOLERANCE_MS` | 172,800,000 (2 days) | compService.ts | Max date difference for duplicate detection |
 | `TRIM_PERCENTAGE` | 0.10 | compService.ts | Weight percentage trimmed from each tail |
-| `UNKNOWN_DATE_WEIGHT` | 0.10 | compService.ts | Fixed weight for sales with no date |
+| `UNKNOWN_DATE_WEIGHT` | 0.10 | compService.ts | Fallback weight when all sales are undated (no median-date proxy available) |
 | `MIN_RECENCY_WEIGHT` | 0.20 | compService.ts | Floor for recency weight (prevents old sale under-weighting) |
 | `MIN_SALES_FOR_TRIM` | 5 | compService.ts | Minimum sales count to enable trimming |
 | `POP_CACHE_TTL_MS` | 604,800,000 (7 days) | populationReportService.ts | Population report cache TTL |
