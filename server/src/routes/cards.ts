@@ -31,6 +31,82 @@ export function createCardRoutes(db: Database, auditService: AuditService): Rout
     }
   });
 
+  // Get heatmap data for a time period
+  router.get('/heatmap', async (req: Request, res: Response) => {
+    try {
+      const period = (req.query.period as string) || 'all';
+      const validPeriods = ['7d', '30d', '90d', 'ytd', 'all'];
+      if (!validPeriods.includes(period)) {
+        res.status(400).json({ error: `Invalid period. Must be one of: ${validPeriods.join(', ')}` });
+        return;
+      }
+
+      if (period === 'all') {
+        // For "all time", use purchasePrice as the baseline — no snapshots needed
+        const allCards = await db.getAllCards({});
+        const heatmapCards = allCards
+          .filter(c => !c.sellDate && c.currentValue > 0)
+          .map(c => ({
+            id: c.id,
+            player: c.player,
+            team: c.team,
+            year: c.year,
+            brand: c.brand,
+            category: c.category,
+            cardNumber: c.cardNumber,
+            isGraded: !!c.isGraded,
+            currentValue: c.currentValue,
+            periodStartValue: c.purchasePrice,
+            purchasePrice: c.purchasePrice,
+          }));
+        res.json({ period, periodStartDate: null, cards: heatmapCards });
+        return;
+      }
+
+      // Compute period start date
+      const now = new Date();
+      let periodStartDate: Date;
+      if (period === 'ytd') {
+        periodStartDate = new Date(now.getFullYear(), 0, 1);
+      } else {
+        const days = parseInt(period);
+        periodStartDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+      }
+      const periodStartIso = periodStartDate.toISOString();
+
+      const rows = db.getHeatmapDataForPeriod(periodStartIso);
+      const cards = rows.map(r => ({
+        id: r.cardId,
+        player: r.player,
+        team: r.team,
+        year: r.year,
+        brand: r.brand,
+        category: r.category,
+        cardNumber: r.cardNumber,
+        isGraded: r.isGraded,
+        currentValue: r.currentValue,
+        periodStartValue: r.periodStartValue,
+        purchasePrice: r.purchasePrice,
+      }));
+
+      res.json({ period, periodStartDate: periodStartIso, cards });
+    } catch (error) {
+      console.error('Error getting heatmap data:', error);
+      res.status(500).json({ error: 'Failed to fetch heatmap data' });
+    }
+  });
+
+  // Backfill value snapshots from comp history
+  router.post('/heatmap/backfill', async (_req: Request, res: Response) => {
+    try {
+      const count = db.backfillValueSnapshots();
+      res.json({ backfilled: count });
+    } catch (error) {
+      console.error('Error backfilling snapshots:', error);
+      res.status(500).json({ error: 'Failed to backfill value snapshots' });
+    }
+  });
+
   // Get a single card by ID
   router.get('/:id', async (req: Request, res: Response) => {
     try {

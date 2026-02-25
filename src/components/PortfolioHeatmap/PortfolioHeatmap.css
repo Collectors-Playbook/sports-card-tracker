@@ -126,6 +126,17 @@
   border-color: #1a2b45;
 }
 
+/* Data notice */
+.phm-data-notice {
+  margin: 0 0 16px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #666;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border: 1px solid #e0e0e0;
+}
+
 /* Filters */
 .phm-filters {
   display: flex;
@@ -281,30 +292,6 @@
   border-radius: 8px;
 }
 
-/* Disabled period tooltip */
-.phm-time-btn-wrapper {
-  position: relative;
-}
-
-.phm-time-btn-wrapper .phm-disabled-tip {
-  display: none;
-  position: absolute;
-  bottom: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  background: #333;
-  color: #fff;
-  font-size: 11px;
-  padding: 4px 8px;
-  border-radius: 4px;
-  white-space: nowrap;
-  margin-bottom: 4px;
-  pointer-events: none;
-}
-
-.phm-time-btn-wrapper:hover .phm-disabled-tip {
-  display: block;
-}
 
 /* Responsive */
 @media (max-width: 768px) {

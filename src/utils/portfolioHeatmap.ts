@@ -1,4 +1,5 @@
 import { Card } from '../types';
+import { HeatmapApiCard } from '../services/api';
 
 export interface HeatmapCardData {
   id: string;
@@ -97,4 +98,33 @@ export function computeHeatmapStats(data: HeatmapCardData[]): HeatmapStats {
     : 0;
 
   return { totalCards, totalValue, winners, losers, flat, avgRoi };
+}
+
+export function calculatePeriodRoi(currentValue: number, periodStartValue: number | null): number {
+  if (periodStartValue === null || periodStartValue <= 0) {
+    return 0;
+  }
+  return (currentValue - periodStartValue) / periodStartValue;
+}
+
+export function buildHeatmapDataFromApi(apiCards: HeatmapApiCard[], period: string): HeatmapCardData[] {
+  return apiCards.map(card => {
+    const baseline = period === 'all' ? card.purchasePrice : card.periodStartValue;
+    const roi = calculatePeriodRoi(card.currentValue, baseline);
+    return {
+      id: card.id,
+      name: `${card.year} ${card.brand} ${card.player} #${card.cardNumber}`,
+      player: card.player,
+      team: card.team,
+      year: card.year,
+      brand: card.brand,
+      category: card.category,
+      isGraded: card.isGraded,
+      currentValue: card.currentValue,
+      purchasePrice: card.purchasePrice,
+      roi,
+      roiPercent: roi * 100,
+      color: roiToColor(roi),
+    };
+  });
 }

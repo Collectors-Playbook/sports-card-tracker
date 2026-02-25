@@ -1,12 +1,13 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Treemap, ResponsiveContainer, Tooltip } from 'recharts';
 import { useCards } from '../../context/ApiCardContext';
 import { Card } from '../../types';
 import {
-  buildHeatmapData,
+  buildHeatmapDataFromApi,
   computeHeatmapStats,
   HeatmapCardData,
 } from '../../utils/portfolioHeatmap';
+import { apiService, HeatmapApiCard } from '../../services/api';
 import CustomTreemapContent from './CustomTreemapContent';
 import './PortfolioHeatmap.css';
 
@@ -20,19 +21,43 @@ type TimePeriod = '7d' | '30d' | '90d' | 'ytd' | 'all';
 const PortfolioHeatmap: React.FC<PortfolioHeatmapProps> = ({ onCardSelect }) => {
   const { state } = useCards();
   const [viewMode, setViewMode] = useState<ViewMode>('treemap');
-  const [timePeriod] = useState<TimePeriod>('all');
+  const [timePeriod, setTimePeriod] = useState<TimePeriod>('all');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [yearFilter, setYearFilter] = useState('');
   const [brandFilter, setBrandFilter] = useState('');
   const [gradingFilter, setGradingFilter] = useState('');
+  const [apiCards, setApiCards] = useState<HeatmapApiCard[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [missingHistoryCount, setMissingHistoryCount] = useState(0);
 
-  // Derive filter options from cards
+  const fetchHeatmapData = useCallback(async (period: TimePeriod) => {
+    setLoading(true);
+    try {
+      const response = await apiService.getHeatmapData(period);
+      setApiCards(response.cards);
+      if (period !== 'all') {
+        setMissingHistoryCount(response.cards.filter(c => c.periodStartValue === null).length);
+      } else {
+        setMissingHistoryCount(0);
+      }
+    } catch (error) {
+      console.error('Failed to fetch heatmap data:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchHeatmapData(timePeriod);
+  }, [timePeriod, fetchHeatmapData]);
+
+  // Derive filter options from API response data
   const filterOptions = useMemo(() => {
     const categories = new Set<string>();
     const years = new Set<number>();
     const brands = new Set<string>();
 
-    state.cards.forEach(card => {
+    apiCards.forEach(card => {
       if (card.category) categories.add(card.category);
       if (card.year) years.add(card.year);
       if (card.brand) brands.add(card.brand);
@@ -43,31 +68,31 @@ const PortfolioHeatmap: React.FC<PortfolioHeatmapProps> = ({ onCardSelect }) => 
       years: Array.from(years).sort((a, b) => b - a),
       brands: Array.from(brands).sort(),
     };
-  }, [state.cards]);
+  }, [apiCards]);
 
-  // Apply filters
-  const filteredCards = useMemo(() => {
-    let cards = state.cards;
+  // Apply filters to API data
+  const filteredApiCards = useMemo(() => {
+    let filtered = apiCards;
 
     if (categoryFilter) {
-      cards = cards.filter(c => c.category === categoryFilter);
+      filtered = filtered.filter(c => c.category === categoryFilter);
     }
     if (yearFilter) {
-      cards = cards.filter(c => c.year === parseInt(yearFilter));
+      filtered = filtered.filter(c => c.year === parseInt(yearFilter));
     }
     if (brandFilter) {
-      cards = cards.filter(c => c.brand === brandFilter);
+      filtered = filtered.filter(c => c.brand === brandFilter);
     }
     if (gradingFilter === 'graded') {
-      cards = cards.filter(c => c.isGraded);
+      filtered = filtered.filter(c => c.isGraded);
     } else if (gradingFilter === 'raw') {
-      cards = cards.filter(c => !c.isGraded);
+      filtered = filtered.filter(c => !c.isGraded);
     }
 
-    return cards;
-  }, [state.cards, categoryFilter, yearFilter, brandFilter, gradingFilter]);
+    return filtered;
+  }, [apiCards, categoryFilter, yearFilter, brandFilter, gradingFilter]);
 
-  const heatmapData = useMemo(() => buildHeatmapData(filteredCards), [filteredCards]);
+  const heatmapData = useMemo(() => buildHeatmapDataFromApi(filteredApiCards, timePeriod), [filteredApiCards, timePeriod]);
   const stats = useMemo(() => computeHeatmapStats(heatmapData), [heatmapData]);
 
   // Build treemap data format (requires 'value' key for sizing)
@@ -168,18 +193,13 @@ const PortfolioHeatmap: React.FC<PortfolioHeatmapProps> = ({ onCardSelect }) => 
       <div className="phm-controls">
         <div className="phm-time-periods">
           {(['7d', '30d', '90d', 'ytd', 'all'] as TimePeriod[]).map(period => (
-            <div key={period} className="phm-time-btn-wrapper">
-              {period !== 'all' && (
-                <span className="phm-disabled-tip">Requires price history tracking</span>
-              )}
-              <button
-                className={`phm-time-btn ${timePeriod === period ? 'active' : ''}`}
-                disabled={period !== 'all'}
-                title={period !== 'all' ? 'Requires price history tracking' : undefined}
-              >
-                {period === 'all' ? 'All Time' : period.toUpperCase()}
-              </button>
-            </div>
+            <button
+              key={period}
+              className={`phm-time-btn ${timePeriod === period ? 'active' : ''}`}
+              onClick={() => setTimePeriod(period)}
+            >
+              {period === 'all' ? 'All Time' : period.toUpperCase()}
+            </button>
           ))}
         </div>
 
@@ -198,6 +218,13 @@ const PortfolioHeatmap: React.FC<PortfolioHeatmapProps> = ({ onCardSelect }) => 
           </button>
         </div>
       </div>
+
+      {/* Data notice for missing history */}
+      {missingHistoryCount > 0 && timePeriod !== 'all' && (
+        <p className="phm-data-notice">
+          {missingHistoryCount} card{missingHistoryCount !== 1 ? 's' : ''} lack price history for this period and show 0% ROI.
+        </p>
+      )}
 
       {/* Filters */}
       <div className="phm-filters">
@@ -262,7 +289,9 @@ const PortfolioHeatmap: React.FC<PortfolioHeatmapProps> = ({ onCardSelect }) => 
       </div>
 
       {/* Content */}
-      {heatmapData.length === 0 ? (
+      {loading ? (
+        <div className="phm-empty">Loading heatmap data...</div>
+      ) : heatmapData.length === 0 ? (
         <div className="phm-empty">
           No cards with value data to display. Add cards with purchase price and current value to see the heatmap.
         </div>
