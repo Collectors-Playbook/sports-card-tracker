@@ -6,6 +6,7 @@ import CompService, {
   normalizeDate,
   recencyWeight,
   deduplicateSales,
+  dedupPriceTolerance,
   computeWeightedTrimmedMean,
   computeFallbackFromMarketValues,
   NormalizedSale,
@@ -479,19 +480,48 @@ describe('deduplicateSales', () => {
     expect(result[0].sourceAdapter).toBe('eBay');
   });
 
-  it('removes near-duplicate within tolerances ($0.50, 2 days)', () => {
+  it('removes near-duplicate within tolerances (3% of avg, 2 days)', () => {
     const sales = [
       mkSale(100, BASE_DATE, 'eBay', 'eBay'),
-      mkSale(100.49, BASE_DATE + 86400000, 'eBay', '130Point'), // $0.49 diff, 1 day diff
+      mkSale(102.50, BASE_DATE + 86400000, 'eBay', '130Point'), // $2.50 diff < 3% of ~$101.25
     ];
     const result = deduplicateSales(sales);
     expect(result).toHaveLength(1);
   });
 
-  it('keeps sales with price difference > $0.50', () => {
+  it('keeps sales with price difference exceeding 3% tolerance', () => {
     const sales = [
       mkSale(100, BASE_DATE, 'eBay', 'eBay'),
-      mkSale(100.60, BASE_DATE, 'eBay', '130Point'), // $0.60 diff
+      mkSale(104, BASE_DATE, 'eBay', '130Point'), // $4 diff > 3% of $102 avg ($3.06)
+    ];
+    const result = deduplicateSales(sales);
+    expect(result).toHaveLength(2);
+  });
+
+  it('uses $0.50 floor for cheap cards', () => {
+    // For $5 cards, 3% = $0.15 which is below the $0.50 floor
+    const sales = [
+      mkSale(5.00, BASE_DATE, 'eBay', 'eBay'),
+      mkSale(5.40, BASE_DATE, 'eBay', '130Point'), // $0.40 diff < $0.50 floor
+    ];
+    const result = deduplicateSales(sales);
+    expect(result).toHaveLength(1);
+  });
+
+  it('uses percentage tolerance for expensive cards', () => {
+    // For $500 cards, 3% = $15
+    const sales = [
+      mkSale(500, BASE_DATE, 'eBay', 'eBay'),
+      mkSale(510, BASE_DATE, 'eBay', '130Point'), // $10 diff < 3% of $505 avg ($15.15)
+    ];
+    const result = deduplicateSales(sales);
+    expect(result).toHaveLength(1);
+  });
+
+  it('keeps expensive cards with price difference exceeding percentage', () => {
+    const sales = [
+      mkSale(500, BASE_DATE, 'eBay', 'eBay'),
+      mkSale(520, BASE_DATE, 'eBay', '130Point'), // $20 diff > 3% of $510 avg ($15.30)
     ];
     const result = deduplicateSales(sales);
     expect(result).toHaveLength(2);
@@ -534,6 +564,36 @@ describe('deduplicateSales', () => {
     expect(result).toHaveLength(2);
     expect(result[0].sourceAdapter).toBe('eBay');
     expect(result[1].price).toBe(200);
+  });
+});
+
+describe('dedupPriceTolerance', () => {
+  it('returns $0.50 floor for cheap cards', () => {
+    // 3% of $5 = $0.15, floor is $0.50
+    expect(dedupPriceTolerance(5, 5)).toBe(0.50);
+  });
+
+  it('returns 3% for mid-range cards', () => {
+    // 3% of $100 = $3.00 > $0.50 floor
+    expect(dedupPriceTolerance(100, 100)).toBeCloseTo(3.00, 2);
+  });
+
+  it('returns 3% for expensive cards', () => {
+    // 3% of $500 = $15.00
+    expect(dedupPriceTolerance(500, 500)).toBeCloseTo(15.00, 2);
+  });
+
+  it('uses average of two prices', () => {
+    // avg of $100 and $200 = $150, 3% = $4.50
+    expect(dedupPriceTolerance(100, 200)).toBeCloseTo(4.50, 2);
+  });
+
+  it('floor kicks in around $16.67', () => {
+    // 3% of $16.67 = $0.50 — the crossover point
+    // At $16, 3% = $0.48 < $0.50 floor, so floor applies
+    expect(dedupPriceTolerance(16, 16)).toBe(0.50);
+    // At $17, 3% = $0.51 > $0.50 floor, so percentage applies
+    expect(dedupPriceTolerance(17, 17)).toBeGreaterThan(0.50);
   });
 });
 
