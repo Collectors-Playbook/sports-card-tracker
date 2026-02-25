@@ -5,6 +5,7 @@ import FileService from '../../services/fileService';
 import CompService, {
   normalizeDate,
   recencyWeight,
+  medianDateMs,
   deduplicateSales,
   dedupPriceTolerance,
   venuesOverlap,
@@ -477,6 +478,46 @@ describe('recencyWeight', () => {
   });
 });
 
+describe('medianDateMs', () => {
+  const mkSale = (dateMs: number | null): NormalizedSale => ({
+    price: 100,
+    dateMs,
+    venue: 'eBay',
+    sourceAdapter: 'eBay',
+  });
+
+  it('returns median of odd-count dated sales', () => {
+    // Unsorted: 300, 100, 200 → sorted: 100, 200, 300 → median = 200
+    const sales = [mkSale(300), mkSale(100), mkSale(200)];
+    expect(medianDateMs(sales)).toBe(200);
+  });
+
+  it('returns average of two middle dates for even count', () => {
+    const sales = [mkSale(100), mkSale(200)];
+    expect(medianDateMs(sales)).toBe(150);
+  });
+
+  it('ignores null-date sales', () => {
+    const sales = [mkSale(null), mkSale(100), mkSale(null), mkSale(300), mkSale(200)];
+    // Dated: 100, 200, 300 → median = 200
+    expect(medianDateMs(sales)).toBe(200);
+  });
+
+  it('returns null when all sales have null dates', () => {
+    const sales = [mkSale(null), mkSale(null), mkSale(null)];
+    expect(medianDateMs(sales)).toBeNull();
+  });
+
+  it('returns null for empty array', () => {
+    expect(medianDateMs([])).toBeNull();
+  });
+
+  it('returns the single date for one dated sale', () => {
+    const sales = [mkSale(42000)];
+    expect(medianDateMs(sales)).toBe(42000);
+  });
+});
+
 describe('deduplicateSales', () => {
   const mkSale = (
     price: number,
@@ -758,6 +799,48 @@ describe('computeWeightedTrimmedMean', () => {
     expect(withoutReliability!.average).toBeCloseTo(150, 1);
     // With reliability: (200*1.0 + 100*0.6) / 1.6 = 162.5
     expect(withReliability!.average).toBeCloseTo(162.5, 1);
+  });
+
+  it('uses median-date proxy for null-date sales when dated sales exist', () => {
+    // 3 sales today ($150, $200, $200) + 1 undated ($200)
+    // Median date = NOW → undated gets weight ~1.0 → all equal weight
+    // Average of 150, 200, 200, 200 = 187.5
+    const sales: NormalizedSale[] = [
+      { price: 150, dateMs: NOW, venue: 'eBay', sourceAdapter: 'eBay' },
+      { price: 200, dateMs: NOW, venue: 'eBay', sourceAdapter: 'eBay' },
+      { price: 200, dateMs: NOW, venue: 'eBay', sourceAdapter: 'eBay' },
+      { price: 200, dateMs: null, venue: 'eBay', sourceAdapter: 'eBay' },
+    ];
+    const result = computeWeightedTrimmedMean(sales, NOW);
+    expect(result).not.toBeNull();
+    expect(result!.average).toBeCloseTo(187.5, 1);
+  });
+
+  it('null-date sales fall back to UNKNOWN_DATE_WEIGHT when all dates are null', () => {
+    // 3 undated sales — no median available, all get 0.10 → equal weights → simple mean
+    const sales: NormalizedSale[] = [
+      { price: 100, dateMs: null, venue: 'eBay', sourceAdapter: 'eBay' },
+      { price: 200, dateMs: null, venue: 'eBay', sourceAdapter: 'eBay' },
+      { price: 300, dateMs: null, venue: 'eBay', sourceAdapter: 'eBay' },
+    ];
+    const result = computeWeightedTrimmedMean(sales, NOW);
+    expect(result).not.toBeNull();
+    expect(result!.average).toBeCloseTo(200, 1);
+  });
+
+  it('undated sale among old dated sales gets moderate weight, not penalty', () => {
+    const sixtyDaysAgo = NOW - 60 * 86400000;
+    // 2 sales from 60d ago + 1 undated → proxy = 60d ago → all weights = 0.25
+    // Equal weights → simple mean of 100, 200, 300 = 200
+    const sales: NormalizedSale[] = [
+      { price: 100, dateMs: sixtyDaysAgo, venue: 'eBay', sourceAdapter: 'eBay' },
+      { price: 300, dateMs: sixtyDaysAgo, venue: 'eBay', sourceAdapter: 'eBay' },
+      { price: 200, dateMs: null, venue: 'eBay', sourceAdapter: 'eBay' },
+    ];
+    const result = computeWeightedTrimmedMean(sales, NOW);
+    expect(result).not.toBeNull();
+    // All 3 have equal weight (0.25) → mean = 200
+    expect(result!.average).toBeCloseTo(200, 1);
   });
 });
 
