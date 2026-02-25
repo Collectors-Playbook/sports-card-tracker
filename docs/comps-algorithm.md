@@ -410,20 +410,36 @@ totalGraded     = sum of all grade counts
 percentile      = ((targetGradePop + higherGradePop) / totalGraded) * 100
 ```
 
-### Rarity Tier & Multiplier
+### Continuous Pop Multiplier
 
-| Target Grade Pop | Rarity Tier | Price Multiplier |
-|-----------------|-------------|-----------------|
-| 0-5 | ultra-low | 1.25x (+25%) |
-| 6-25 | low | 1.10x (+10%) |
-| 26-100 | medium | 1.00x (no change) |
-| 101-500 | high | 1.00x (no change) |
-| 501+ | very-high | 0.95x (-5%) |
+The price multiplier is computed from a smooth logarithmic decay curve rather than discrete tier boundaries. Tiers are retained for display/categorization only (UI badges, DB storage) — they do not affect the multiplier.
+
+**Formula:**
+
+```
+popMultiplier(pop) = max(0.95, 1.25 - 0.30 * log₁₀(pop) / log₁₀(1000))
+```
+
+For `pop ≤ 0`, the multiplier is `1.25` (same as pop 1).
+
+**Sample values:**
+
+| Target Grade Pop | Multiplier | Effect |
+|-----------------|-----------|--------|
+| 1 | 1.250 | +25.0% |
+| 5 | ~1.180 | +18.0% |
+| 10 | ~1.150 | +15.0% |
+| 25 | ~1.110 | +11.0% |
+| 50 | ~1.080 | +8.0% |
+| 100 | ~1.050 | +5.0% |
+| 250 | ~1.010 | +1.0% |
+| 500 | ~0.980 | -2.0% |
+| 1000+ | 0.950 | -5.0% (floor) |
 
 **Pop-adjusted average:**
 
 ```
-popAdjustedAverage = aggregateAverage * multiplier
+popAdjustedAverage = aggregateAverage * popMultiplier(targetGradePop)
 ```
 
 ### Caching
