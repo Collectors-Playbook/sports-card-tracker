@@ -7,6 +7,7 @@ import CompService, {
   recencyWeight,
   deduplicateSales,
   dedupPriceTolerance,
+  venuesOverlap,
   computeWeightedTrimmedMean,
   computeFallbackFromMarketValues,
   NormalizedSale,
@@ -450,7 +451,20 @@ describe('recencyWeight', () => {
     expect(recencyWeight(sixtyDaysAgo, NOW)).toBeCloseTo(0.25, 5);
   });
 
-  it('returns 0.10 for null date (unknown)', () => {
+  it('returns floor (0.20) for sale 90 days ago', () => {
+    const ninetyDaysAgo = NOW - 90 * 86400000;
+    // Without floor: 0.5^3 = 0.125. With floor: clamped to 0.20
+    expect(recencyWeight(ninetyDaysAgo, NOW)).toBe(0.20);
+  });
+
+  it('returns floor (0.20) for sale 180 days ago', () => {
+    const sixMonthsAgo = NOW - 180 * 86400000;
+    // Without floor: 0.5^6 = 0.0156. With floor: clamped to 0.20
+    expect(recencyWeight(sixMonthsAgo, NOW)).toBe(0.20);
+  });
+
+  it('returns 0.10 for null date (unknown, below floor)', () => {
+    // Unknown dates get a fixed penalty below the recency floor
     expect(recencyWeight(null, NOW)).toBe(0.10);
   });
 
@@ -536,10 +550,39 @@ describe('deduplicateSales', () => {
     expect(result).toHaveLength(2);
   });
 
-  it('keeps sales from different venues', () => {
+  it('keeps sales from different non-aggregator venues', () => {
     const sales = [
       mkSale(100, BASE_DATE, 'Goldin', 'CardLadder'),
       mkSale(100, BASE_DATE, 'Heritage', 'CardLadder'),
+    ];
+    const result = deduplicateSales(sales);
+    expect(result).toHaveLength(2);
+  });
+
+  it('dedupes 130Point (unknown marketplace) against any venue', () => {
+    // "130Point" as a venue means unknown marketplace — should match eBay
+    const sales = [
+      mkSale(100, BASE_DATE, 'eBay', 'eBay'),
+      mkSale(100, BASE_DATE, '130Point', '130Point'),
+    ];
+    const result = deduplicateSales(sales);
+    expect(result).toHaveLength(1);
+    expect(result[0].sourceAdapter).toBe('eBay');
+  });
+
+  it('dedupes 130Point (unknown) against Goldin', () => {
+    const sales = [
+      mkSale(100, BASE_DATE, 'Goldin', 'CardLadder'),
+      mkSale(100, BASE_DATE, '130Point', '130Point'),
+    ];
+    const result = deduplicateSales(sales);
+    expect(result).toHaveLength(1);
+  });
+
+  it('keeps 130Point-labeled sales when price differs', () => {
+    const sales = [
+      mkSale(100, BASE_DATE, 'eBay', 'eBay'),
+      mkSale(200, BASE_DATE, '130Point', '130Point'),
     ];
     const result = deduplicateSales(sales);
     expect(result).toHaveLength(2);
@@ -594,6 +637,36 @@ describe('dedupPriceTolerance', () => {
     expect(dedupPriceTolerance(16, 16)).toBe(0.50);
     // At $17, 3% = $0.51 > $0.50 floor, so percentage applies
     expect(dedupPriceTolerance(17, 17)).toBeGreaterThan(0.50);
+  });
+});
+
+describe('venuesOverlap', () => {
+  it('matches identical venues', () => {
+    expect(venuesOverlap('eBay', 'eBay')).toBe(true);
+    expect(venuesOverlap('Goldin', 'Goldin')).toBe(true);
+  });
+
+  it('matches both containing "ebay"', () => {
+    expect(venuesOverlap('eBay', 'eBay Sold')).toBe(true);
+  });
+
+  it('matches "130Point" against any venue (unknown marketplace)', () => {
+    expect(venuesOverlap('130Point', 'eBay')).toBe(true);
+    expect(venuesOverlap('eBay', '130Point')).toBe(true);
+    expect(venuesOverlap('130Point', 'Goldin')).toBe(true);
+    expect(venuesOverlap('130Point', 'Heritage')).toBe(true);
+    expect(venuesOverlap('130Point', '130Point')).toBe(true);
+  });
+
+  it('does not match different non-aggregator venues', () => {
+    expect(venuesOverlap('Goldin', 'Heritage')).toBe(false);
+    expect(venuesOverlap('eBay', 'Goldin')).toBe(false);
+    expect(venuesOverlap('PWCC', 'MySlabs')).toBe(false);
+  });
+
+  it('is case-insensitive', () => {
+    expect(venuesOverlap('EBAY', 'ebay')).toBe(true);
+    expect(venuesOverlap('130point', 'Goldin')).toBe(true);
   });
 });
 
