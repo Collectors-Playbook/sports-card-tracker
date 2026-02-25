@@ -307,7 +307,9 @@ Cross-source duplicate detection using three criteria — all must match:
 |-----------|-----------|
 | Price | +/- max($0.50, 3% of average of two prices) |
 | Date | +/- 2 days (172,800,000 ms) |
-| Venue | Exact match OR both contain "ebay" |
+| Venue | Exact match, both contain "ebay", OR either is "130Point" |
+
+**Venue matching** is handled by the `venuesOverlap()` function. Since 130Point is a meta-aggregator that scrapes sales from eBay, Goldin, Heritage, and others, a sale labeled `"130Point"` as its venue means the marketplace was unidentifiable — it could have come from any platform. These unknown-venue sales are treated as potential matches with any other venue, preventing the same eBay sale from appearing twice (once from the eBay adapter with venue `"eBay"` and once from 130Point with venue `"130Point"`).
 
 The price tolerance is **percentage-based with a floor**: `max(DEDUP_PRICE_FLOOR, avgPrice * DEDUP_PRICE_PERCENT)` where `avgPrice = (priceA + priceB) / 2`. This adapts to card value — cheap cards ($5) use the $0.50 floor while expensive cards ($500) use 3% ($15). The crossover point is ~$16.67.
 
@@ -330,8 +332,10 @@ This is the core pricing algorithm. It applies exponential decay weighting and t
 **Recency weight function:**
 
 ```
-weight(sale) = 0.5 ^ (ageDays / 30)
+weight(sale) = max(MIN_RECENCY_WEIGHT, 0.5 ^ (ageDays / 30))
 ```
+
+A floor of `MIN_RECENCY_WEIGHT = 0.20` ensures old sales still contribute meaningfully, preventing over-concentration on a single recent sale for infrequently traded cards. Without the floor, a 90-day sale would have only 12.5% influence; with it, the minimum is 20%.
 
 | Sale Age | Weight |
 |----------|--------|
@@ -340,8 +344,8 @@ weight(sale) = 0.5 ^ (ageDays / 30)
 | 14 days | 0.724 |
 | 30 days | 0.500 |
 | 60 days | 0.250 |
-| 90 days | 0.125 |
-| Unknown date | 0.100 (fixed penalty) |
+| 70+ days | 0.200 (floor) |
+| Unknown date | 0.100 (fixed penalty, below floor) |
 
 **Trimmed mean procedure:**
 
@@ -549,6 +553,7 @@ On `generateAndWriteComps()`, the report is also:
 | `DEDUP_DATE_TOLERANCE_MS` | 172,800,000 (2 days) | compService.ts | Max date difference for duplicate detection |
 | `TRIM_PERCENTAGE` | 0.10 | compService.ts | Weight percentage trimmed from each tail |
 | `UNKNOWN_DATE_WEIGHT` | 0.10 | compService.ts | Fixed weight for sales with no date |
+| `MIN_RECENCY_WEIGHT` | 0.20 | compService.ts | Floor for recency weight (prevents old sale under-weighting) |
 | `MIN_SALES_FOR_TRIM` | 5 | compService.ts | Minimum sales count to enable trimming |
 | `POP_CACHE_TTL_MS` | 604,800,000 (7 days) | populationReportService.ts | Population report cache TTL |
 | Adapter cache TTL | 86,400,000 (24 hours) | compCacheService.ts | Default adapter result cache TTL |
