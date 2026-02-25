@@ -41,10 +41,12 @@ export function popMultiplier(targetGradePop: number): number {
 class PopulationReportService {
   private scrapers: PopScraper[];
   private db?: Database;
+  private fallbackScraper?: PopScraper;
 
-  constructor(scrapers: PopScraper[], db?: Database) {
+  constructor(scrapers: PopScraper[], db?: Database, fallbackScraper?: PopScraper) {
     this.scrapers = scrapers;
     this.db = db;
+    this.fallbackScraper = fallbackScraper;
   }
 
   async getPopulationData(request: CompRequest): Promise<PopulationData | null> {
@@ -68,18 +70,7 @@ class PopulationReportService {
       }
     }
 
-    // Find scraper for this grading company
-    const scraper = this.scrapers.find(
-      s => s.company.toLowerCase() === request.gradingCompany!.toLowerCase()
-    );
-    if (!scraper) {
-      console.log(`[PopService] No scraper for company: ${request.gradingCompany}`);
-      return null;
-    }
-
-    // Fetch from scraper
-    console.log(`[PopService] Fetching pop for ${request.player} ${request.year} ${request.brand} #${request.cardNumber} grade=${request.grade} via ${scraper.company}`);
-    const popData = await scraper.fetchPopulation({
+    const popRequest = {
       player: request.player,
       year: request.year,
       brand: request.brand,
@@ -88,10 +79,31 @@ class PopulationReportService {
       parallel: request.parallel,
       grade: request.grade,
       category: request.category,
-    });
+      gradingCompany: request.gradingCompany,
+    };
+
+    // Find scraper for this grading company
+    const scraper = this.scrapers.find(
+      s => s.company.toLowerCase() === request.gradingCompany!.toLowerCase()
+    );
+
+    // Try primary scraper
+    let popData: PopulationData | null = null;
+    if (scraper) {
+      console.log(`[PopService] Fetching pop for ${request.player} ${request.year} ${request.brand} #${request.cardNumber} grade=${request.grade} via ${scraper.company}`);
+      popData = await scraper.fetchPopulation(popRequest);
+    } else {
+      console.log(`[PopService] No primary scraper for company: ${request.gradingCompany}`);
+    }
+
+    // Try fallback scraper if primary returned null
+    if (!popData && this.fallbackScraper) {
+      console.log(`[PopService] Primary scraper returned null, trying fallback (${this.fallbackScraper.company}) for ${request.player}`);
+      popData = await this.fallbackScraper.fetchPopulation(popRequest);
+    }
 
     if (!popData) {
-      console.log(`[PopService] Scraper returned null for ${request.player}`);
+      console.log(`[PopService] No pop data found for ${request.player}`);
       return null;
     }
     console.log(`[PopService] Got pop data: targetGradePop=${popData.targetGradePop} totalGraded=${popData.totalGraded} tier=${popData.rarityTier}`);
