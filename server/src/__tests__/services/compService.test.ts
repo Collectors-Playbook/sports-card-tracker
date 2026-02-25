@@ -14,7 +14,7 @@ import CompService, {
 } from '../../services/compService';
 import Database from '../../database';
 import { CompAdapter, CompRequest, CompResult, CompSource, PopulationData } from '../../types';
-import PopulationReportService from '../../services/populationReportService';
+import PopulationReportService, { popMultiplier } from '../../services/populationReportService';
 import { _resetRateLimitState as resetOneThirtyPointRateLimit } from '../../services/adapters/oneThirtyPoint';
 
 function createMockAdapter(source: string, result: Partial<CompResult> = {}): CompAdapter {
@@ -957,8 +957,8 @@ describe('CompService weighted aggregation integration', () => {
       const report = await service.generateComps(gradedRequest);
 
       expect(report.popData).toBeTruthy();
-      expect(report.popMultiplier).toBe(1.25);
-      expect(report.popAdjustedAverage).toBeCloseTo(50 * 1.25, 1);
+      expect(report.popMultiplier).toBeCloseTo(popMultiplier(3), 2);
+      expect(report.popAdjustedAverage).toBeCloseTo(50 * popMultiplier(3), 1);
     });
 
     it('does not include pop data for ungraded card', async () => {

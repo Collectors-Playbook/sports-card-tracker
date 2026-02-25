@@ -1,8 +1,7 @@
 import PopulationReportService, {
   classifyRarityTier,
   computePercentile,
-  getMultiplier,
-  POP_MULTIPLIERS,
+  popMultiplier,
   POP_CACHE_TTL_MS,
 } from '../../services/populationReportService';
 import Database from '../../database';
@@ -52,29 +51,46 @@ describe('computePercentile', () => {
   });
 });
 
-// ─── getMultiplier ──────────────────────────────────────────────────────────
+// ─── popMultiplier ──────────────────────────────────────────────────────────
 
-describe('getMultiplier', () => {
-  const makePopData = (tier: PopRarityTier): PopulationData => ({
-    gradingCompany: 'PSA',
-    totalGraded: 100,
-    gradeBreakdown: [],
-    targetGrade: '10',
-    targetGradePop: 3,
-    higherGradePop: 0,
-    percentile: 3,
-    rarityTier: tier,
-    fetchedAt: new Date().toISOString(),
+describe('popMultiplier', () => {
+  it('returns 1.25 for pop=0 (floor guard)', () => {
+    expect(popMultiplier(0)).toBe(1.25);
   });
 
-  it.each([
-    ['ultra-low', 1.25],
-    ['low', 1.10],
-    ['medium', 1.00],
-    ['high', 1.00],
-    ['very-high', 0.95],
-  ] as [PopRarityTier, number][])('tier=%s → %f', (tier, expected) => {
-    expect(getMultiplier(makePopData(tier))).toBe(expected);
+  it('returns 1.25 for pop=1', () => {
+    expect(popMultiplier(1)).toBe(1.25);
+  });
+
+  it('returns ~1.180 for pop=5', () => {
+    expect(popMultiplier(5)).toBeCloseTo(1.180, 2);
+  });
+
+  it('returns ~1.150 for pop=10', () => {
+    expect(popMultiplier(10)).toBeCloseTo(1.150, 2);
+  });
+
+  it('returns ~1.050 for pop=100', () => {
+    expect(popMultiplier(100)).toBeCloseTo(1.050, 2);
+  });
+
+  it('returns ~0.980 for pop=500', () => {
+    expect(popMultiplier(500)).toBeCloseTo(0.980, 2);
+  });
+
+  it('returns 0.95 for pop=1000', () => {
+    expect(popMultiplier(1000)).toBe(0.95);
+  });
+
+  it('returns 0.95 for pop=5000 (clamped)', () => {
+    expect(popMultiplier(5000)).toBe(0.95);
+  });
+
+  it('is monotonically decreasing across sample points', () => {
+    const pops = [1, 2, 5, 10, 25, 50, 100, 250, 500, 1000];
+    for (let i = 1; i < pops.length; i++) {
+      expect(popMultiplier(pops[i])).toBeLessThanOrEqual(popMultiplier(pops[i - 1]));
+    }
   });
 });
 
