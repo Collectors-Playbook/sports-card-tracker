@@ -280,6 +280,7 @@ export interface PopRequest {
   parallel?: string;
   grade: string;
   category?: string;
+  gradingCompany?: string;
 }
 
 // ─── eBay Export ────────────────────────────────────────────────────────────
