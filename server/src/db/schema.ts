@@ -193,3 +193,18 @@ export const popReportSnapshots = sqliteTable('pop_report_snapshots', {
   index('idx_pop_snapshots_cardId').on(table.cardId),
   index('idx_pop_snapshots_fetchedAt').on(table.fetchedAt),
 ]);
+
+// ─── Card Value Snapshots ────────────────────────────────────────────────
+
+export const cardValueSnapshots = sqliteTable('card_value_snapshots', {
+  id: text('id').primaryKey(),
+  cardId: text('cardId').notNull().references(() => cards.id, { onDelete: 'cascade' }),
+  value: real('value').notNull(),
+  source: text('source').notNull(),
+  snapshotAt: text('snapshotAt').notNull(),
+  createdAt: text('createdAt').notNull(),
+}, (table) => [
+  index('idx_value_snapshots_cardId').on(table.cardId),
+  index('idx_value_snapshots_snapshotAt').on(table.snapshotAt),
+  index('idx_value_snapshots_cardId_snapshotAt').on(table.cardId, table.snapshotAt),
+]);

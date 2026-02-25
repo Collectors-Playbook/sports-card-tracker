@@ -10,7 +10,7 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 
-const { users, collections, cards, jobs, gradingSubmissions, auditLogs, compCache, cardCompReports, cardCompSources, popReportSnapshots } = schema;
+const { users, collections, cards, jobs, gradingSubmissions, auditLogs, compCache, cardCompReports, cardCompSources, popReportSnapshots, cardValueSnapshots } = schema;
 
 // Baseline SQL executed for in-memory databases (no migration journal needed)
 const BASELINE_SQL = `
@@ -189,6 +189,19 @@ CREATE TABLE IF NOT EXISTS pop_report_snapshots (
 );
 CREATE INDEX IF NOT EXISTS idx_pop_snapshots_cardId ON pop_report_snapshots (cardId);
 CREATE INDEX IF NOT EXISTS idx_pop_snapshots_fetchedAt ON pop_report_snapshots (fetchedAt);
+
+CREATE TABLE IF NOT EXISTS card_value_snapshots (
+  id text PRIMARY KEY NOT NULL,
+  cardId text NOT NULL,
+  value real NOT NULL,
+  source text NOT NULL,
+  snapshotAt text NOT NULL,
+  createdAt text NOT NULL,
+  FOREIGN KEY (cardId) REFERENCES cards(id) ON UPDATE no action ON DELETE cascade
+);
+CREATE INDEX IF NOT EXISTS idx_value_snapshots_cardId ON card_value_snapshots (cardId);
+CREATE INDEX IF NOT EXISTS idx_value_snapshots_snapshotAt ON card_value_snapshots (snapshotAt);
+CREATE INDEX IF NOT EXISTS idx_value_snapshots_cardId_snapshotAt ON card_value_snapshots (cardId, snapshotAt);
 `;
 
 class Database {
@@ -357,6 +370,11 @@ class Database {
       updatedAt: card.updatedAt,
     }).run();
 
+    // Auto-create value snapshot when card is created with a value
+    if (card.currentValue > 0) {
+      this.createValueSnapshot(card.id, card.currentValue, 'manual', now);
+    }
+
     return card;
   }
 
@@ -396,6 +414,11 @@ class Database {
       notes: cardInput.notes || '',
       updatedAt,
     }).where(eq(cards.id, id)).run();
+
+    // Auto-create value snapshot when currentValue changes
+    if (cardInput.currentValue !== existing.currentValue && cardInput.currentValue > 0) {
+      this.createValueSnapshot(id, cardInput.currentValue, 'manual');
+    }
 
     return {
       ...existing,
@@ -1163,6 +1186,9 @@ class Database {
         currentValue: bestValue,
         updatedAt,
       }).where(eq(cards.id, cardId)).run();
+
+      // Auto-create value snapshot from comp report
+      this.createValueSnapshot(cardId, bestValue, 'comp', report.generatedAt);
     }
 
     return {
@@ -1356,6 +1382,115 @@ class Database {
       rarityTier: row.rarityTier as PopulationData['rarityTier'],
       fetchedAt: row.fetchedAt,
     }));
+  }
+
+  // ─── Card Value Snapshots ─────────────────────────────────────────────────
+
+  public createValueSnapshot(cardId: string, value: number, source: string, snapshotAt?: string): void {
+    const id = uuidv4();
+    const now = new Date().toISOString();
+
+    this.db.insert(cardValueSnapshots).values({
+      id,
+      cardId,
+      value,
+      source,
+      snapshotAt: snapshotAt || now,
+      createdAt: now,
+    }).run();
+  }
+
+  public getHeatmapDataForPeriod(periodStartDate: string): {
+    cardId: string;
+    currentValue: number;
+    purchasePrice: number;
+    periodStartValue: number | null;
+    player: string;
+    team: string;
+    year: number;
+    brand: string;
+    category: string;
+    cardNumber: string;
+    isGraded: boolean;
+  }[] {
+    // Use raw SQL for the correlated subquery to get the closest snapshot value
+    // on or before the period start date for each unsold card
+    const stmt = this.sqlite.prepare(`
+      SELECT
+        c.id AS cardId,
+        c.currentValue,
+        c.purchasePrice,
+        c.player,
+        c.team,
+        c.year,
+        c.brand,
+        c.category,
+        c.cardNumber,
+        c.isGraded,
+        (
+          SELECT cvs.value
+          FROM card_value_snapshots cvs
+          WHERE cvs.cardId = c.id AND cvs.snapshotAt <= ?
+          ORDER BY cvs.snapshotAt DESC
+          LIMIT 1
+        ) AS periodStartValue
+      FROM cards c
+      WHERE c.sellDate IS NULL AND c.currentValue > 0
+    `);
+
+    const rows = stmt.all(periodStartDate) as {
+      cardId: string;
+      currentValue: number;
+      purchasePrice: number;
+      periodStartValue: number | null;
+      player: string;
+      team: string;
+      year: number;
+      brand: string;
+      category: string;
+      cardNumber: string;
+      isGraded: number | boolean;
+    }[];
+
+    return rows.map(row => ({
+      ...row,
+      isGraded: !!row.isGraded,
+    }));
+  }
+
+  public backfillValueSnapshots(): number {
+    // Get all comp reports ordered by generatedAt ascending
+    const reports = this.db.select().from(cardCompReports)
+      .orderBy(asc(cardCompReports.generatedAt))
+      .all();
+
+    let count = 0;
+    const seen = new Set<string>(); // track cardId+snapshotAt to skip dupes
+
+    for (const report of reports) {
+      const value = report.popAdjustedAverage ?? report.aggregateAverage;
+      if (value === null || value === undefined) continue;
+
+      const key = `${report.cardId}:${report.generatedAt}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      // Check if a snapshot already exists for this cardId + snapshotAt
+      const existing = this.db.select({ id: cardValueSnapshots.id })
+        .from(cardValueSnapshots)
+        .where(and(
+          eq(cardValueSnapshots.cardId, report.cardId),
+          eq(cardValueSnapshots.snapshotAt, report.generatedAt),
+        ))
+        .get();
+
+      if (existing) continue;
+
+      this.createValueSnapshot(report.cardId, value, 'comp', report.generatedAt);
+      count++;
+    }
+
+    return count;
   }
 
   // ─── Lifecycle ───────────────────────────────────────────────────────────────

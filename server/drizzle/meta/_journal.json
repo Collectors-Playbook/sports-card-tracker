@@ -36,6 +36,13 @@
       "when": 1772150400000,
       "tag": "0004_pop_report_data",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1772236800000,
+      "tag": "0005_card_value_snapshots",
+      "breakpoints": true
     }
   ]
 }
