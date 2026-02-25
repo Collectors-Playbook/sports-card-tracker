@@ -143,6 +143,28 @@
   background: #c53030;
 }
 
+.holding-pen-notification-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.holding-pen-notification-toggle input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
+.holding-pen-notification-toggle input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
 /* ─── Card Grid ──────────────────────────────────────────────────────────── */
 
 .holding-pen-grid {

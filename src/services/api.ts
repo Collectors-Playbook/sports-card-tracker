@@ -446,11 +446,15 @@ class ApiService {
     }
   }
 
-  public async processRawImages(filenames: string[]): Promise<{ processed: number; failed: number; skipped: number; duplicates: number }> {
+  public async processRawImages(filenames: string[]): Promise<{ id: string; type: string; status: string }> {
     return this.request('/image-processing/process', {
       method: 'POST',
       body: JSON.stringify({ filenames }),
     });
+  }
+
+  public async getJob(id: string): Promise<{ id: string; type: string; status: string; result?: Record<string, unknown>; error?: string; progress?: number }> {
+    return this.request(`/jobs/${id}`);
   }
 
   public async identifyCard(filename: string, backFile?: string): Promise<ExtractedCardData> {
