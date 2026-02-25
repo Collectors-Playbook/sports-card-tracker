@@ -21,6 +21,7 @@ const DEDUP_PRICE_PERCENT = 0.03;          // 3% of average price
 const DEDUP_DATE_TOLERANCE_MS = 2 * 86400000; // 2 days
 const TRIM_PERCENTAGE = 0.10;
 const UNKNOWN_DATE_WEIGHT = 0.10;
+const MIN_RECENCY_WEIGHT = 0.20;          // floor so old sales still contribute
 const MIN_SALES_FOR_TRIM = 5;
 const SOURCE_RELIABILITY: Record<CompSource, number> = {
   'eBay': 1.0,
@@ -74,14 +75,16 @@ export function normalizeDate(dateStr: string): number | null {
 }
 
 /**
- * Exponential decay weight based on sale age.
- * Half-life of 30 days: today=1.0, 30d=0.5, 60d=0.25, 90d=0.125
- * Unknown dates get a fixed penalty weight.
+ * Exponential decay weight based on sale age, with a floor.
+ * Half-life of 30 days: today=1.0, 30d=0.5, 60d=0.25, ~70d+=0.20 (floor)
+ * The floor prevents over-concentration on sparse data — even old sales
+ * retain meaningful influence when only a few sales exist.
+ * Unknown dates get a fixed penalty weight (below the floor).
  */
 export function recencyWeight(saleDateMs: number | null, nowMs: number): number {
   if (saleDateMs === null) return UNKNOWN_DATE_WEIGHT;
   const ageDays = Math.max(0, (nowMs - saleDateMs) / 86400000);
-  return Math.pow(0.5, ageDays / RECENCY_HALF_LIFE_DAYS);
+  return Math.max(MIN_RECENCY_WEIGHT, Math.pow(0.5, ageDays / RECENCY_HALF_LIFE_DAYS));
 }
 
 /**
@@ -96,10 +99,26 @@ export function dedupPriceTolerance(priceA: number, priceB: number): number {
 }
 
 /**
+ * Check whether two sale venues overlap for dedup purposes.
+ * "130Point" as a venue means unknown marketplace (130Point is a
+ * meta-aggregator), so it's treated as a potential match with any venue.
+ */
+export function venuesOverlap(venueA: string, venueB: string): boolean {
+  const a = venueA.toLowerCase();
+  const b = venueB.toLowerCase();
+  if (a === b) return true;
+  if (a.includes('ebay') && b.includes('ebay')) return true;
+  // 130Point as a venue means unknown marketplace — could be from anywhere
+  if (a === '130point' || b === '130point') return true;
+  return false;
+}
+
+/**
  * Remove duplicate sales that appear across multiple sources.
  * Two sales are duplicates if: price within tolerance (3% of avg price,
- * min $0.50), dates within 2 days, and venues overlap (case-insensitive
- * or both contain "ebay").
+ * min $0.50), dates within 2 days, and venues overlap (case-insensitive,
+ * both contain "ebay", or either is "130Point" which is an unknown-
+ * marketplace default from the 130Point meta-aggregator).
  * Input should be pre-sorted by source priority. First-seen wins.
  * Null-date sales are never deduped.
  */
@@ -117,12 +136,7 @@ export function deduplicateSales(sales: NormalizedSale[]): NormalizedSale[] {
       const tolerance = dedupPriceTolerance(existing.price, sale.price);
       if (Math.abs(existing.price - sale.price) > tolerance) return false;
       if (Math.abs(existing.dateMs - sale.dateMs!) > DEDUP_DATE_TOLERANCE_MS) return false;
-      // Venue overlap check
-      const venueA = existing.venue.toLowerCase();
-      const venueB = sale.venue.toLowerCase();
-      if (venueA === venueB) return true;
-      if (venueA.includes('ebay') && venueB.includes('ebay')) return true;
-      return false;
+      return venuesOverlap(existing.venue, sale.venue);
     });
 
     if (!isDup) {
