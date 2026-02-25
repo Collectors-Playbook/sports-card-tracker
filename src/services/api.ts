@@ -483,6 +483,16 @@ class ApiService {
     };
   }
 
+  // ─── Heatmap ─────────────────────────────────────────────────────────────
+
+  public async getHeatmapData(period: string = 'all'): Promise<HeatmapResponse> {
+    return this.request<HeatmapResponse>(`/cards/heatmap?period=${encodeURIComponent(period)}`);
+  }
+
+  public async backfillValueSnapshots(): Promise<{ backfilled: number }> {
+    return this.request('/cards/heatmap/backfill', { method: 'POST' });
+  }
+
   // ─── Comps ──────────────────────────────────────────────────────────────
 
   public async generateComps(cardId: string): Promise<CompReport> {
@@ -838,6 +848,28 @@ export interface GradingStats {
   totalCost: number;
   avgTurnaroundDays: number | null;
   avgGrade: number | null;
+}
+
+// ─── Heatmap Types ───────────────────────────────────────────────────────
+
+export interface HeatmapApiCard {
+  id: string;
+  player: string;
+  team: string;
+  year: number;
+  brand: string;
+  category: string;
+  cardNumber: string;
+  isGraded: boolean;
+  currentValue: number;
+  periodStartValue: number | null;
+  purchasePrice: number;
+}
+
+export interface HeatmapResponse {
+  period: string;
+  periodStartDate: string | null;
+  cards: HeatmapApiCard[];
 }
 
 // ─── Comp Types ───────────────────────────────────────────────────────────
