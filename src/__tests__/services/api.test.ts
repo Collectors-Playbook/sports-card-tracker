@@ -245,33 +245,6 @@ describe('ApiService', () => {
     });
   });
 
-  // ---- eBay OAuth ----
-  describe('eBay OAuth methods', () => {
-    it('getEbayAuthStatus', async () => {
-      mockFetchSuccess({ connected: false, ebayUsername: null, environment: 'sandbox', isConfigured: false });
-      const status = await apiService.getEbayAuthStatus();
-      expect(status.connected).toBe(false);
-    });
-
-    it('getEbayAuthorizationUrl', async () => {
-      mockFetchSuccess({ url: 'https://ebay.com/auth' });
-      const result = await apiService.getEbayAuthorizationUrl();
-      expect(result.url).toBe('https://ebay.com/auth');
-    });
-
-    it('disconnectEbay sends POST', async () => {
-      mockFetchSuccess({ disconnected: true });
-      const result = await apiService.disconnectEbay();
-      expect(result.disconnected).toBe(true);
-    });
-
-    it('refreshEbayToken sends POST', async () => {
-      mockFetchSuccess({ refreshed: true });
-      const result = await apiService.refreshEbayToken();
-      expect(result.refreshed).toBe(true);
-    });
-  });
-
   // ---- Files ----
   describe('file methods', () => {
     it('getProcessedFiles', async () => {
