@@ -46,6 +46,88 @@ describe('Card Routes', () => {
       expect(res.status).toBe(200);
       expect(res.body.every((c: { collectionId: string }) => c.collectionId === 'col-123')).toBe(true);
     });
+
+    it('finds card by image query param', async () => {
+      const cardData = createCardData({ images: ['unique-image-lookup.jpg'] });
+      await request(ctx.app).post('/api/cards').send(cardData);
+
+      const res = await request(ctx.app).get('/api/cards?image=unique-image-lookup.jpg');
+      expect(res.status).toBe(200);
+      expect(res.body.images).toContain('unique-image-lookup.jpg');
+    });
+
+    it('returns 404 when image not found', async () => {
+      const res = await request(ctx.app).get('/api/cards?image=nonexistent-img.jpg');
+      expect(res.status).toBe(404);
+      expect(res.body.error).toContain('No card found');
+    });
+
+    it('returns 500 when db throws', async () => {
+      jest.spyOn(ctx.db, 'getAllCards').mockRejectedValueOnce(new Error('DB error'));
+      const res = await request(ctx.app).get('/api/cards');
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to fetch cards');
+    });
+  });
+
+  // ─── GET /api/cards/heatmap ─────────────────────────────────────────────
+
+  describe('GET /api/cards/heatmap', () => {
+    it('returns heatmap data for "all" period', async () => {
+      const cardData = createCardData({ currentValue: 20, purchasePrice: 10 });
+      await request(ctx.app).post('/api/cards').send(cardData);
+
+      const res = await request(ctx.app).get('/api/cards/heatmap?period=all');
+      expect(res.status).toBe(200);
+      expect(res.body.period).toBe('all');
+      expect(res.body.periodStartDate).toBeNull();
+      expect(Array.isArray(res.body.cards)).toBe(true);
+    });
+
+    it('returns heatmap data for timed period', async () => {
+      const res = await request(ctx.app).get('/api/cards/heatmap?period=30d');
+      expect(res.status).toBe(200);
+      expect(res.body.period).toBe('30d');
+      expect(res.body.periodStartDate).toBeTruthy();
+    });
+
+    it('returns heatmap data for ytd period', async () => {
+      const res = await request(ctx.app).get('/api/cards/heatmap?period=ytd');
+      expect(res.status).toBe(200);
+      expect(res.body.period).toBe('ytd');
+    });
+
+    it('returns 400 for invalid period', async () => {
+      const res = await request(ctx.app).get('/api/cards/heatmap?period=invalid');
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('Invalid period');
+    });
+
+    it('returns 500 when db throws', async () => {
+      jest.spyOn(ctx.db, 'getAllCards').mockRejectedValueOnce(new Error('DB error'));
+      const res = await request(ctx.app).get('/api/cards/heatmap?period=all');
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to fetch heatmap data');
+    });
+  });
+
+  // ─── POST /api/cards/heatmap/backfill ──────────────────────────────────
+
+  describe('POST /api/cards/heatmap/backfill', () => {
+    it('returns backfill count', async () => {
+      const res = await request(ctx.app).post('/api/cards/heatmap/backfill');
+      expect(res.status).toBe(200);
+      expect(typeof res.body.backfilled).toBe('number');
+    });
+
+    it('returns 500 when db throws', async () => {
+      jest.spyOn(ctx.db, 'backfillValueSnapshots').mockImplementationOnce(() => {
+        throw new Error('DB error');
+      });
+      const res = await request(ctx.app).post('/api/cards/heatmap/backfill');
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to backfill value snapshots');
+    });
   });
 
   describe('GET /api/cards/:id', () => {
@@ -63,6 +145,13 @@ describe('Card Routes', () => {
     it('returns 404 for non-existent card', async () => {
       const res = await request(ctx.app).get('/api/cards/nonexistent');
       expect(res.status).toBe(404);
+    });
+
+    it('returns 500 when db throws', async () => {
+      jest.spyOn(ctx.db, 'getCardById').mockRejectedValueOnce(new Error('DB error'));
+      const res = await request(ctx.app).get('/api/cards/some-id');
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to fetch card');
     });
   });
 
@@ -97,6 +186,14 @@ describe('Card Routes', () => {
       expect(res.body.userId).toBe('u1');
       expect(res.body.collectionId).toBe('c1');
     });
+
+    it('returns 500 when db throws', async () => {
+      jest.spyOn(ctx.db, 'createCard').mockRejectedValueOnce(new Error('DB error'));
+      const cardData = createCardData();
+      const res = await request(ctx.app).post('/api/cards').send(cardData);
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to create card');
+    });
   });
 
   describe('PUT /api/cards/:id', () => {
@@ -128,6 +225,30 @@ describe('Card Routes', () => {
         .send({ player: 'Partial' });
       expect(res.status).toBe(400);
     });
+
+    it('defaults images and notes when non-array/missing', async () => {
+      const cardData = createCardData();
+      const created = await request(ctx.app).post('/api/cards').send(cardData);
+
+      const updateData = createCardData({ player: 'Defaults Test' });
+      delete (updateData as any).images;
+      delete (updateData as any).notes;
+      const res = await request(ctx.app)
+        .put(`/api/cards/${created.body.id}`)
+        .send(updateData);
+
+      expect(res.status).toBe(200);
+      expect(res.body.images).toEqual([]);
+      expect(res.body.notes).toBe('');
+    });
+
+    it('returns 500 when db throws', async () => {
+      jest.spyOn(ctx.db, 'updateCard').mockRejectedValueOnce(new Error('DB error'));
+      const cardData = createCardData();
+      const res = await request(ctx.app).put('/api/cards/some-id').send(cardData);
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to update card');
+    });
   });
 
   describe('DELETE /api/cards/:id', () => {
@@ -145,6 +266,13 @@ describe('Card Routes', () => {
     it('returns 404 for non-existent card', async () => {
       const res = await request(ctx.app).delete('/api/cards/nonexistent');
       expect(res.status).toBe(404);
+    });
+
+    it('returns 500 when db throws', async () => {
+      jest.spyOn(ctx.db, 'deleteCard').mockRejectedValueOnce(new Error('DB error'));
+      const res = await request(ctx.app).delete('/api/cards/some-id');
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to delete card');
     });
   });
 });
