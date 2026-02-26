@@ -304,4 +304,78 @@ describe('Audit Log Routes', () => {
       expect(typeof exportEntry.details.entryCount).toBe('number');
     });
   });
+
+  // ─── GET /api/audit-logs/actions ──────────────────────────────────────────
+
+  describe('GET /api/audit-logs/actions', () => {
+    it('returns distinct action values for admin', async () => {
+      await seedAuditEntry({ action: 'actions.test' });
+      const res = await request(ctx.app)
+        .get('/api/audit-logs/actions')
+        .set('Authorization', `Bearer ${token}`);
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body)).toBe(true);
+      expect(res.body.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  // ─── Error paths (500s) ─────────────────────────────────────────────────
+
+  describe('error paths', () => {
+    it('returns 500 when GET / throws', async () => {
+      jest.spyOn(ctx.db, 'queryAuditLogs').mockRejectedValueOnce(new Error('DB error'));
+      const res = await request(ctx.app)
+        .get('/api/audit-logs')
+        .set('Authorization', `Bearer ${token}`);
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to query audit logs');
+    });
+
+    it('returns 500 when GET /actions throws', async () => {
+      jest.spyOn(ctx.db, 'getDistinctAuditActions').mockRejectedValueOnce(new Error('DB error'));
+      const res = await request(ctx.app)
+        .get('/api/audit-logs/actions')
+        .set('Authorization', `Bearer ${token}`);
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to get audit actions');
+    });
+
+    it('returns 500 when GET /export throws', async () => {
+      jest.spyOn(ctx.db, 'exportAuditLogs').mockRejectedValueOnce(new Error('DB error'));
+      const res = await request(ctx.app)
+        .get('/api/audit-logs/export?format=csv')
+        .set('Authorization', `Bearer ${token}`);
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to export audit logs');
+    });
+
+    it('returns 500 when POST /delete-bulk throws', async () => {
+      jest.spyOn(ctx.db, 'deleteAuditLogs').mockRejectedValueOnce(new Error('DB error'));
+      const res = await request(ctx.app)
+        .post('/api/audit-logs/delete-bulk')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ ids: ['some-id'] });
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to delete audit logs');
+    });
+
+    it('returns 500 when POST /purge throws', async () => {
+      jest.spyOn(ctx.db, 'purgeAuditLogs').mockRejectedValueOnce(new Error('DB error'));
+      const res = await request(ctx.app)
+        .post('/api/audit-logs/purge')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ before: new Date().toISOString() });
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to purge audit logs');
+    });
+
+    it('returns 500 when DELETE /:id throws', async () => {
+      jest.spyOn(ctx.db, 'deleteAuditLog').mockRejectedValueOnce(new Error('DB error'));
+      const res = await request(ctx.app)
+        .delete('/api/audit-logs/some-id')
+        .set('Authorization', `Bearer ${token}`);
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to delete audit log');
+    });
+  });
 });

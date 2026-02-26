@@ -429,4 +429,110 @@ describe('Admin User Routes', () => {
       expect(res.status).toBe(404);
     });
   });
+
+  // ─── PUT /api/admin/users/:id — duplicate email ─────────────────────────
+
+  describe('PUT /api/admin/users/:id (duplicate email)', () => {
+    it('returns 409 for duplicate email', async () => {
+      const user1 = await request(ctx.app)
+        .post('/api/admin/users')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ username: 'emaildupe1', email: 'emaildupe1@test.com', password: 'password123' });
+
+      await request(ctx.app)
+        .post('/api/admin/users')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ username: 'emaildupe2', email: 'emaildupe2@test.com', password: 'password123' });
+
+      const res = await request(ctx.app)
+        .put(`/api/admin/users/${user1.body.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ email: 'emaildupe2@test.com' });
+
+      expect(res.status).toBe(409);
+      expect(res.body.error).toMatch(/Email already in use/);
+    });
+  });
+
+  // ─── Error paths (500s) ─────────────────────────────────────────────────
+
+  describe('error paths', () => {
+    it('returns 500 when GET / throws', async () => {
+      jest.spyOn(ctx.db, 'getAllUsers').mockRejectedValueOnce(new Error('DB error'));
+      const res = await request(ctx.app)
+        .get('/api/admin/users')
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to list users');
+    });
+
+    it('returns 500 when GET /:id throws', async () => {
+      jest.spyOn(ctx.db, 'getUserById').mockRejectedValueOnce(new Error('DB error'));
+      const res = await request(ctx.app)
+        .get('/api/admin/users/some-id')
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to get user');
+    });
+
+    it('returns 500 when POST / throws', async () => {
+      jest.spyOn(ctx.db, 'getUserByEmail').mockResolvedValueOnce(undefined);
+      jest.spyOn(ctx.db, 'getUserByUsername').mockResolvedValueOnce(undefined);
+      jest.spyOn(ctx.db, 'createUser').mockRejectedValueOnce(new Error('DB error'));
+      const res = await request(ctx.app)
+        .post('/api/admin/users')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ username: 'erruser', email: 'erruser@test.com', password: 'password123' });
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to create user');
+    });
+
+    it('returns 500 when PUT /:id throws', async () => {
+      jest.spyOn(ctx.db, 'getUserById').mockRejectedValueOnce(new Error('DB error'));
+      const res = await request(ctx.app)
+        .put('/api/admin/users/some-id')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ username: 'x' });
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to update user');
+    });
+
+    it('returns 500 when POST /:id/reset-password throws', async () => {
+      jest.spyOn(ctx.db, 'getUserById').mockRejectedValueOnce(new Error('DB error'));
+      const res = await request(ctx.app)
+        .post('/api/admin/users/some-id/reset-password')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ password: 'newpassword456' });
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to reset password');
+    });
+
+    it('returns 500 when POST /:id/toggle-status throws', async () => {
+      jest.spyOn(ctx.db, 'getUserById').mockRejectedValueOnce(new Error('DB error'));
+      const res = await request(ctx.app)
+        .post('/api/admin/users/some-id/toggle-status')
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to toggle user status');
+    });
+
+    it('returns 500 when POST /:id/change-role throws', async () => {
+      jest.spyOn(ctx.db, 'getUserById').mockRejectedValueOnce(new Error('DB error'));
+      const res = await request(ctx.app)
+        .post('/api/admin/users/some-id/change-role')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ role: 'admin' });
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to change role');
+    });
+
+    it('returns 500 when DELETE /:id throws', async () => {
+      jest.spyOn(ctx.db, 'getUserById').mockRejectedValueOnce(new Error('DB error'));
+      const res = await request(ctx.app)
+        .delete('/api/admin/users/some-id')
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to delete user');
+    });
+  });
 });

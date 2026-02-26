@@ -164,4 +164,53 @@ describe('eBay Routes', () => {
       expect(typeof res.body.outputExists).toBe('boolean');
     });
   });
+
+  // ─── Error paths (500s) ─────────────────────────────────────────────────
+
+  describe('error paths', () => {
+    it('returns 500 when POST /generate throws', async () => {
+      jest.spyOn(ctx.ebayExportService, 'generateCsv').mockRejectedValueOnce(new Error('Service error'));
+      const res = await request(ctx.app)
+        .post('/api/ebay/generate')
+        .send({ priceMultiplier: 0.9, shippingCost: 4.99 });
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to generate eBay CSV');
+    });
+
+    it('returns 500 when POST /generate-async throws', async () => {
+      jest.spyOn(ctx.db, 'createJob').mockRejectedValueOnce(new Error('DB error'));
+      const res = await request(ctx.app)
+        .post('/api/ebay/generate-async')
+        .send({ priceMultiplier: 0.9, shippingCost: 4.99 });
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to create eBay CSV job');
+    });
+
+    it('returns 500 when GET /download throws', async () => {
+      jest.spyOn(ctx.ebayExportService, 'outputExists').mockImplementationOnce(() => {
+        throw new Error('FS error');
+      });
+      const res = await request(ctx.app).get('/api/ebay/download');
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to download eBay CSV');
+    });
+
+    it('returns 500 when GET /template throws', async () => {
+      jest.spyOn(ctx.ebayExportService, 'templateExists').mockImplementationOnce(() => {
+        throw new Error('FS error');
+      });
+      const res = await request(ctx.app).get('/api/ebay/template');
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to download template');
+    });
+
+    it('returns 500 when GET /status throws', async () => {
+      jest.spyOn(ctx.ebayExportService, 'templateExists').mockImplementationOnce(() => {
+        throw new Error('FS error');
+      });
+      const res = await request(ctx.app).get('/api/ebay/status');
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to check eBay export status');
+    });
+  });
 });

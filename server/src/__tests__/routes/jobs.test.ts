@@ -102,5 +102,61 @@ describe('Job Routes', () => {
       const res = await request(ctx.app).delete('/api/jobs/nonexistent');
       expect(res.status).toBe(404);
     });
+
+    it('returns 400 when cancelling a completed job', async () => {
+      const created = await request(ctx.app)
+        .post('/api/jobs')
+        .send({ type: 'cancel-completed-test' });
+      await ctx.db.updateJob(created.body.id, { status: 'completed' });
+
+      const res = await request(ctx.app).delete(`/api/jobs/${created.body.id}`);
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/Cannot cancel a completed job/);
+    });
+
+    it('returns 400 when cancelling a failed job', async () => {
+      const created = await request(ctx.app)
+        .post('/api/jobs')
+        .send({ type: 'cancel-failed-test' });
+      await ctx.db.updateJob(created.body.id, { status: 'failed' });
+
+      const res = await request(ctx.app).delete(`/api/jobs/${created.body.id}`);
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/Cannot cancel a failed job/);
+    });
+  });
+
+  // ─── Error paths (500s) ─────────────────────────────────────────────────
+
+  describe('error paths', () => {
+    it('returns 500 when POST / throws', async () => {
+      jest.spyOn(ctx.db, 'createJob').mockRejectedValueOnce(new Error('DB error'));
+      const res = await request(ctx.app)
+        .post('/api/jobs')
+        .send({ type: 'error-test' });
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to create job');
+    });
+
+    it('returns 500 when GET / throws', async () => {
+      jest.spyOn(ctx.db, 'getAllJobs').mockRejectedValueOnce(new Error('DB error'));
+      const res = await request(ctx.app).get('/api/jobs');
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to list jobs');
+    });
+
+    it('returns 500 when GET /:id throws', async () => {
+      jest.spyOn(ctx.db, 'getJobById').mockRejectedValueOnce(new Error('DB error'));
+      const res = await request(ctx.app).get('/api/jobs/some-id');
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to get job');
+    });
+
+    it('returns 500 when DELETE /:id throws', async () => {
+      jest.spyOn(ctx.db, 'getJobById').mockRejectedValueOnce(new Error('DB error'));
+      const res = await request(ctx.app).delete('/api/jobs/some-id');
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to cancel job');
+    });
   });
 });
