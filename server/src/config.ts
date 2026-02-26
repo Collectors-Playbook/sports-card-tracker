@@ -1,4 +1,14 @@
 import path from 'path';
+import { EbayEnvironment } from './types';
+
+export interface EbayConfig {
+  clientId: string;
+  clientSecret: string;
+  redirectUri: string;
+  environment: EbayEnvironment;
+  tokenEncryptionKey: string;
+  scopes: string[];
+}
 
 export interface Config {
   port: number;
@@ -13,6 +23,7 @@ export interface Config {
   puppeteerHeadless: boolean;
   compCacheTtlMs: number;
   rateLimits: Record<string, number>;
+  ebay: EbayConfig;
 }
 
 export function loadConfig(): Config {
@@ -39,6 +50,19 @@ export function loadConfig(): Config {
       '130Point': parseInt(process.env.RATE_LIMIT_130POINT || '6000', 10),
       PSA: parseInt(process.env.RATE_LIMIT_PSA || '3000', 10),
       GemRate: parseInt(process.env.RATE_LIMIT_GEMRATE || '2000', 10),
+    },
+    ebay: {
+      clientId: process.env.EBAY_CLIENT_ID || '',
+      clientSecret: process.env.EBAY_CLIENT_SECRET || '',
+      redirectUri: process.env.EBAY_REDIRECT_URI || '',
+      environment: (process.env.EBAY_ENVIRONMENT || 'sandbox') as EbayEnvironment,
+      tokenEncryptionKey: process.env.EBAY_TOKEN_ENCRYPTION_KEY || '',
+      scopes: [
+        'https://api.ebay.com/oauth/api_scope/sell.inventory',
+        'https://api.ebay.com/oauth/api_scope/sell.fulfillment',
+        'https://api.ebay.com/oauth/api_scope/sell.analytics.readonly',
+        'https://api.ebay.com/oauth/api_scope/sell.marketing',
+      ],
     },
   };
 }
