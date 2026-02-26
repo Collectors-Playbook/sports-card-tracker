@@ -31,6 +31,8 @@ import ImageProcessingService from './services/imageProcessingService';
 import ImageCropService from './services/imageCropService';
 import EbayExportService from './services/ebayExportService';
 import AuditService from './services/auditService';
+import EbayAuthService from './services/ebayAuthService';
+import { createEbayAuthRoutes } from './routes/ebayAuth';
 import { createEbayRoutes } from './routes/ebay';
 import { createAuditLogRoutes } from './routes/auditLogs';
 import { createCollectionRoutes } from './routes/collections';
@@ -67,6 +69,7 @@ const compService = new CompService(fileService, undefined, browserService, comp
 const visionService = new AnthropicVisionService();
 const imageCropService = new ImageCropService();
 const auditService = new AuditService(db);
+const ebayAuthService = new EbayAuthService(db, config);
 const imageProcessingService = new ImageProcessingService(fileService, db, visionService, imageCropService, auditService);
 const ebayExportService = new EbayExportService(db, fileService);
 
@@ -92,6 +95,7 @@ app.use('/api/events', createEventRoutes(eventService));
 app.use('/api/auth', createAuthRoutes(db, auditService));
 app.use('/api/comps', createCompRoutes(db, compService));
 app.use('/api/image-processing', createImageProcessingRoutes(db, imageProcessingService, fileService, auditService));
+app.use('/api/ebay/auth', createEbayAuthRoutes(ebayAuthService, auditService));
 app.use('/api/ebay', createEbayRoutes(db, ebayExportService, auditService));
 app.use('/api/audit-logs', createAuditLogRoutes(auditService));
 app.use('/api/collections', createCollectionRoutes(db, auditService));
@@ -209,4 +213,4 @@ if (require.main === module) {
   })();
 }
 
-export { app, db, fileService, eventService, jobService, compService, browserService, compCacheService, visionService, imageCropService, imageProcessingService, ebayExportService, auditService };
+export { app, db, fileService, eventService, jobService, compService, browserService, compCacheService, visionService, imageCropService, imageProcessingService, ebayExportService, auditService, ebayAuthService };

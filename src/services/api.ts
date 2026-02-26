@@ -46,7 +46,8 @@ export type AuditAction =
   | 'audit.delete' | 'audit.delete_bulk' | 'audit.purge' | 'audit.export'
   | 'admin.user_create' | 'admin.user_update' | 'admin.user_delete'
   | 'admin.user_toggle_status' | 'admin.user_change_role' | 'admin.user_reset_password'
-  | 'grading.create' | 'grading.update_status' | 'grading.update' | 'grading.delete';
+  | 'grading.create' | 'grading.update_status' | 'grading.update' | 'grading.delete'
+  | 'ebay_auth.connect' | 'ebay_auth.disconnect' | 'ebay_auth.token_refresh' | 'ebay_auth.token_refresh_failed';
 
 export interface AuditLogEntry {
   id: string;
@@ -379,6 +380,24 @@ class ApiService {
     outputExists: boolean;
   }> {
     return this.request('/ebay/status');
+  }
+
+  // ─── eBay OAuth ─────────────────────────────────────────────────────────
+
+  public async getEbayAuthStatus(): Promise<EbayAuthStatus> {
+    return this.request<EbayAuthStatus>('/ebay/auth/status');
+  }
+
+  public async getEbayAuthorizationUrl(): Promise<{ url: string }> {
+    return this.request<{ url: string }>('/ebay/auth/authorize');
+  }
+
+  public async disconnectEbay(): Promise<{ disconnected: boolean }> {
+    return this.request('/ebay/auth/disconnect', { method: 'POST' });
+  }
+
+  public async refreshEbayToken(): Promise<{ refreshed: boolean }> {
+    return this.request('/ebay/auth/refresh', { method: 'POST' });
   }
 
   // ─── Processed Files ────────────────────────────────────────────────────
@@ -926,6 +945,18 @@ export interface PopulationData {
   percentile: number;
   rarityTier: PopRarityTier;
   fetchedAt: string;
+}
+
+// ─── eBay Auth Types ──────────────────────────────────────────────────────
+
+export interface EbayAuthStatus {
+  connected: boolean;
+  ebayUsername: string | null;
+  environment: 'sandbox' | 'production';
+  accessTokenExpiresAt: string | null;
+  refreshTokenExpiresAt: string | null;
+  scopes: string | null;
+  isConfigured: boolean;
 }
 
 export const apiService = new ApiService();
