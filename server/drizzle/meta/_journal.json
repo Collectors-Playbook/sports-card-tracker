@@ -43,6 +43,13 @@
       "when": 1772236800000,
       "tag": "0005_card_value_snapshots",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1772323200000,
+      "tag": "0006_ebay_oauth_tokens",
+      "breakpoints": true
     }
   ]
 }

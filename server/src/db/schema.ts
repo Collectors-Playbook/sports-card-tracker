@@ -194,6 +194,26 @@ export const popReportSnapshots = sqliteTable('pop_report_snapshots', {
   index('idx_pop_snapshots_fetchedAt').on(table.fetchedAt),
 ]);
 
+// ─── eBay OAuth Tokens ──────────────────────────────────────────────────
+
+export const ebayOAuthTokens = sqliteTable('ebay_oauth_tokens', {
+  id: text('id').primaryKey(),
+  userId: text('userId').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  environment: text('environment').notNull().default('sandbox'),
+  accessTokenEncrypted: text('accessTokenEncrypted').notNull(),
+  refreshTokenEncrypted: text('refreshTokenEncrypted').notNull(),
+  accessTokenExpiresAt: text('accessTokenExpiresAt').notNull(),
+  refreshTokenExpiresAt: text('refreshTokenExpiresAt').notNull(),
+  ebayUsername: text('ebayUsername'),
+  scopes: text('scopes').notNull().default(''),
+  isActive: integer('isActive', { mode: 'boolean' }).notNull().default(true),
+  createdAt: text('createdAt').notNull(),
+  updatedAt: text('updatedAt').notNull(),
+}, (table) => [
+  index('idx_ebay_oauth_userId').on(table.userId),
+  index('idx_ebay_oauth_environment').on(table.environment),
+]);
+
 // ─── Card Value Snapshots ────────────────────────────────────────────────
 
 export const cardValueSnapshots = sqliteTable('card_value_snapshots', {
