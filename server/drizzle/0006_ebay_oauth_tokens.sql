@@ -13,5 +13,7 @@ CREATE TABLE IF NOT EXISTS ebay_oauth_tokens (
   updatedAt text NOT NULL,
   FOREIGN KEY (userId) REFERENCES users(id) ON UPDATE no action ON DELETE cascade
 );
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_ebay_oauth_userId ON ebay_oauth_tokens (userId);
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_ebay_oauth_environment ON ebay_oauth_tokens (environment);
