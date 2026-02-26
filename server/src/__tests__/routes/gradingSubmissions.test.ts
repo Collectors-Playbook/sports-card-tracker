@@ -386,4 +386,138 @@ describe('Grading Submission Routes', () => {
       expect(res.status).toBe(404);
     });
   });
+
+  // ─── 403 Access Denied ──────────────────────────────────────────────────
+
+  describe('403 access denied', () => {
+    const otherUserId = 'other-user-999';
+    const mockSubmission = {
+      id: 'sub-other-owner',
+      userId: otherUserId,
+      cardId: 'card-1',
+      gradingCompany: 'PSA',
+      submissionNumber: 'PSA-OTHER',
+      tier: 'Regular',
+      cost: 30,
+      status: 'Submitted' as const,
+      submittedAt: '2024-01-01T00:00:00.000Z',
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:00:00.000Z',
+    };
+
+    it('returns 403 on GET /:id for another user submission', async () => {
+      jest.spyOn(ctx.db, 'getGradingSubmissionById').mockResolvedValueOnce(mockSubmission as any);
+      const res = await request(ctx.app)
+        .get('/api/grading-submissions/sub-other-owner')
+        .set('Authorization', `Bearer ${token}`);
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe('Access denied');
+    });
+
+    it('returns 403 on PUT /:id for another user submission', async () => {
+      jest.spyOn(ctx.db, 'getGradingSubmissionById').mockResolvedValueOnce(mockSubmission as any);
+      const res = await request(ctx.app)
+        .put('/api/grading-submissions/sub-other-owner')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ notes: 'test' });
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe('Access denied');
+    });
+
+    it('returns 403 on POST /:id/status for another user submission', async () => {
+      jest.spyOn(ctx.db, 'getGradingSubmissionById').mockResolvedValueOnce(mockSubmission as any);
+      const res = await request(ctx.app)
+        .post('/api/grading-submissions/sub-other-owner/status')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ status: 'Received' });
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe('Access denied');
+    });
+
+    it('returns 403 on DELETE /:id for another user submission', async () => {
+      jest.spyOn(ctx.db, 'getGradingSubmissionById').mockResolvedValueOnce(mockSubmission as any);
+      const res = await request(ctx.app)
+        .delete('/api/grading-submissions/sub-other-owner')
+        .set('Authorization', `Bearer ${token}`);
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe('Access denied');
+    });
+  });
+
+  // ─── Error paths (500s) ─────────────────────────────────────────────────
+
+  describe('error paths', () => {
+    it('returns 500 when GET / throws', async () => {
+      jest.spyOn(ctx.db, 'getAllGradingSubmissions').mockRejectedValueOnce(new Error('DB error'));
+      const res = await request(ctx.app)
+        .get('/api/grading-submissions')
+        .set('Authorization', `Bearer ${token}`);
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to fetch grading submissions');
+    });
+
+    it('returns 500 when GET /stats throws', async () => {
+      jest.spyOn(ctx.db, 'getGradingStats').mockRejectedValueOnce(new Error('DB error'));
+      const res = await request(ctx.app)
+        .get('/api/grading-submissions/stats')
+        .set('Authorization', `Bearer ${token}`);
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to fetch grading stats');
+    });
+
+    it('returns 500 when GET /:id throws', async () => {
+      jest.spyOn(ctx.db, 'getGradingSubmissionById').mockRejectedValueOnce(new Error('DB error'));
+      const res = await request(ctx.app)
+        .get('/api/grading-submissions/some-id')
+        .set('Authorization', `Bearer ${token}`);
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to fetch grading submission');
+    });
+
+    it('returns 500 when POST / throws', async () => {
+      jest.spyOn(ctx.db, 'createGradingSubmission').mockRejectedValueOnce(new Error('DB error'));
+      const res = await request(ctx.app)
+        .post('/api/grading-submissions')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          cardId,
+          gradingCompany: 'PSA',
+          submissionNumber: 'PSA-ERR-1',
+          tier: 'Regular',
+          cost: 30,
+          submittedAt: '2024-01-01T00:00:00.000Z',
+        });
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to create grading submission');
+    });
+
+    it('returns 500 when PUT /:id throws', async () => {
+      jest.spyOn(ctx.db, 'getGradingSubmissionById').mockRejectedValueOnce(new Error('DB error'));
+      const res = await request(ctx.app)
+        .put('/api/grading-submissions/some-id')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ notes: 'test' });
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to update grading submission');
+    });
+
+    it('returns 500 when POST /:id/status throws', async () => {
+      jest.spyOn(ctx.db, 'getGradingSubmissionById').mockRejectedValueOnce(new Error('DB error'));
+      const res = await request(ctx.app)
+        .post('/api/grading-submissions/some-id/status')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ status: 'Received' });
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to update grading submission status');
+    });
+
+    it('returns 500 when DELETE /:id throws', async () => {
+      jest.spyOn(ctx.db, 'getGradingSubmissionById').mockRejectedValueOnce(new Error('DB error'));
+      const res = await request(ctx.app)
+        .delete('/api/grading-submissions/some-id')
+        .set('Authorization', `Bearer ${token}`);
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to delete grading submission');
+    });
+  });
 });
