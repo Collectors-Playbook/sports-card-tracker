@@ -77,6 +77,14 @@ describe('ImageProcessingService', () => {
       );
       expect(result).toBe('2023-Upper-Deck-Ken-Griffey-Jr.-1.jpg');
     });
+
+    it('includes setName when present', () => {
+      const result = service.buildProcessedFilename(
+        { year: '2023', brand: 'Topps', setName: 'Chrome Update', player: 'Mike Trout', cardNumber: '1' },
+        '.jpg'
+      );
+      expect(result).toBe('2023-Topps-Chrome-Update-Mike-Trout-1.jpg');
+    });
   });
 
   describe('checkDuplicate', () => {
@@ -123,6 +131,26 @@ describe('ImageProcessingService', () => {
       });
       expect(result).not.toBeNull();
     });
+
+    it('cleans up orphaned records (files missing from disk)', async () => {
+      // Create a card in DB whose processed file does NOT exist on disk
+      const card = await db.createCard({
+        player: 'Orphan Player', team: 'Team', year: 2023, brand: 'Topps',
+        category: 'Baseball', cardNumber: '99', condition: 'Raw',
+        purchasePrice: 0, purchaseDate: '2023-01-01', currentValue: 0,
+        images: ['nonexistent.jpg'], notes: '',
+      });
+
+      // checkDuplicate should find the match but detect the orphan and delete it
+      const result = await service.checkDuplicate({
+        player: 'Orphan Player', year: '2023', brand: 'Topps', cardNumber: '99',
+      });
+      expect(result).toBeNull(); // orphan removed, not treated as duplicate
+
+      // Verify the orphaned card was deleted
+      const allCards = await db.getAllCards();
+      expect(allCards.find(c => c.id === card.id)).toBeUndefined();
+    });
   });
 
   describe('isAlreadyProcessed', () => {
@@ -155,6 +183,131 @@ describe('ImageProcessingService', () => {
     it('returns null when pair is missing', () => {
       const result = service.findPairFile('card1-front.jpg', ['card1-front.jpg']);
       expect(result).toBeNull();
+    });
+  });
+
+  describe('identifyOnly', () => {
+    it('identifies a single image via vision service', async () => {
+      createTestFile('card.jpg');
+      const expected = mockVisionResult();
+      mockVisionService.identifyCard.mockResolvedValue(expected);
+
+      const result = await service.identifyOnly('card.jpg');
+      expect(result).toEqual(expected);
+      expect(mockVisionService.identifyCard).toHaveBeenCalledWith(
+        path.join(rawDir, 'card.jpg')
+      );
+    });
+
+    it('identifies a front/back pair via vision service', async () => {
+      createTestFile('card-front.jpg');
+      createTestFile('card-back.jpg');
+      const expected = mockVisionResult();
+      mockVisionService.identifyCardPair.mockResolvedValue(expected);
+
+      const result = await service.identifyOnly('card-front.jpg', 'card-back.jpg');
+      expect(result).toEqual(expected);
+      expect(mockVisionService.identifyCardPair).toHaveBeenCalledWith(
+        path.join(rawDir, 'card-front.jpg'),
+        path.join(rawDir, 'card-back.jpg')
+      );
+    });
+  });
+
+  describe('confirmCard', () => {
+    it('confirms a single image and creates a card record', async () => {
+      createTestFile('card.jpg');
+      const cardData = mockVisionResult();
+
+      const result = await service.confirmCard('card.jpg', cardData);
+      expect(result.status).toBe('processed');
+      expect(result.cardId).toBeDefined();
+      expect(result.processedFilename).toBe('2023-Topps-Chrome-Mike-Trout-1.jpg');
+      expect(result.confidence).toBe(85);
+
+      // Verify file was copied to processed dir
+      expect(fs.existsSync(path.join(processedDir, result.processedFilename!))).toBe(true);
+    });
+
+    it('confirms a front/back pair and creates card with both images', async () => {
+      createTestFile('trout-front.jpg');
+      createTestFile('trout-back.png');
+      const cardData = mockVisionResult();
+
+      const result = await service.confirmCard('trout-front.jpg', cardData, 'trout-back.png');
+      expect(result.status).toBe('processed');
+      expect(result.cardId).toBeDefined();
+
+      // Verify both files copied with -front/-back suffixes
+      const card = (await db.getAllCards()).find(c => c.id === result.cardId);
+      expect(card).toBeDefined();
+      expect(card!.images).toHaveLength(2);
+      expect(card!.images[0]).toContain('-front.jpg');
+      expect(card!.images[1]).toContain('-back.png');
+    });
+
+    it('skips if already processed (single)', async () => {
+      createTestFile('card.jpg');
+      const cardData = mockVisionResult();
+
+      // Pre-create the processed file
+      const processedFilename = service.buildProcessedFilename(cardData, '.jpg');
+      fs.writeFileSync(path.join(processedDir, processedFilename), 'existing');
+
+      const result = await service.confirmCard('card.jpg', cardData);
+      expect(result.status).toBe('skipped');
+    });
+
+    it('skips if already processed (pair)', async () => {
+      createTestFile('card-front.jpg');
+      createTestFile('card-back.jpg');
+      const cardData = mockVisionResult();
+
+      // Pre-create the processed front file
+      const baseName = service.buildProcessedFilename(cardData, '');
+      fs.writeFileSync(path.join(processedDir, baseName + '-front.jpg'), 'existing');
+
+      const result = await service.confirmCard('card-front.jpg', cardData, 'card-back.jpg');
+      expect(result.status).toBe('skipped');
+    });
+
+    it('detects duplicate on confirm (single)', async () => {
+      createTestFile('card.jpg');
+      fs.writeFileSync(path.join(processedDir, 'existing.jpg'), 'data');
+      await db.createCard({
+        player: 'Mike Trout', team: 'Angels', year: 2023, brand: 'Topps Chrome',
+        category: 'Baseball', cardNumber: '1', condition: 'Raw',
+        purchasePrice: 0, purchaseDate: '2023-01-01', currentValue: 0,
+        images: ['existing.jpg'], notes: '',
+      });
+
+      const result = await service.confirmCard('card.jpg', mockVisionResult());
+      expect(result.status).toBe('duplicate');
+      expect(result.error).toContain('Duplicate');
+    });
+
+    it('detects duplicate on confirm (pair)', async () => {
+      createTestFile('card-front.jpg');
+      createTestFile('card-back.jpg');
+      fs.writeFileSync(path.join(processedDir, 'existing.jpg'), 'data');
+      await db.createCard({
+        player: 'Mike Trout', team: 'Angels', year: 2023, brand: 'Topps Chrome',
+        category: 'Baseball', cardNumber: '1', condition: 'Raw',
+        purchasePrice: 0, purchaseDate: '2023-01-01', currentValue: 0,
+        images: ['existing.jpg'], notes: '',
+      });
+
+      const result = await service.confirmCard('card-front.jpg', mockVisionResult(), 'card-back.jpg');
+      expect(result.status).toBe('duplicate');
+    });
+
+    it('returns failed when copy fails (single)', async () => {
+      // Don't create the file so copy will fail
+      const cardData = mockVisionResult({ player: 'NoFile', cardNumber: '999' });
+
+      const result = await service.confirmCard('missing.jpg', cardData);
+      expect(result.status).toBe('failed');
+      expect(result.error).toContain('Failed to copy');
     });
   });
 
@@ -218,6 +371,20 @@ describe('ImageProcessingService', () => {
       mockVisionService.identifyCard.mockRejectedValue(new Error('Vision API failure'));
 
       await expect(service.processSingleImage('corrupt.jpg')).rejects.toThrow('Vision API failure');
+    });
+
+    it('returns failed when file copy fails', async () => {
+      // Create the file but mock copyFile to fail
+      createTestFile('card.jpg');
+      mockVisionService.identifyCard.mockResolvedValue(
+        mockVisionResult({ player: 'CopyFail', cardNumber: '777' })
+      );
+
+      jest.spyOn(fileService, 'copyFile').mockReturnValueOnce(false);
+
+      const result = await service.processSingleImage('card.jpg');
+      expect(result.status).toBe('failed');
+      expect(result.error).toContain('Failed to copy');
     });
   });
 
@@ -292,6 +459,132 @@ describe('ImageProcessingService', () => {
       const second = await service.processImages({ filenames: ['card1.jpg'] });
       expect(second.skipped).toBe(1);
       expect(second.processed).toBe(0);
+    });
+
+    it('catches errors from paired image processing', async () => {
+      createTestFile('err-front.jpg');
+      createTestFile('err-back.jpg');
+      mockVisionService.identifyCardPair.mockRejectedValue(new Error('Pair vision failed'));
+
+      const result = await service.processImages({
+        filenames: ['err-front.jpg', 'err-back.jpg'],
+      });
+
+      expect(result.failed).toBe(1);
+      expect(result.results[0].status).toBe('failed');
+      expect(result.results[0].error).toBe('Pair vision failed');
+    });
+
+    it('catches errors from standalone image processing', async () => {
+      createTestFile('standalone.jpg');
+      mockVisionService.identifyCard.mockRejectedValue(new Error('Standalone vision failed'));
+
+      const result = await service.processImages({
+        filenames: ['standalone.jpg'],
+      });
+
+      expect(result.failed).toBe(1);
+      expect(result.results[0].status).toBe('failed');
+      expect(result.results[0].error).toBe('Standalone vision failed');
+    });
+
+    it('reports progress for paired images', async () => {
+      createTestFile('pair-front.jpg');
+      createTestFile('pair-back.jpg');
+      mockVisionService.identifyCardPair.mockResolvedValue(
+        mockVisionResult({ player: 'PairProgress', cardNumber: '88' })
+      );
+
+      const progressCalls: { progress: number; completed: number }[] = [];
+      await service.processImages(
+        { filenames: ['pair-front.jpg', 'pair-back.jpg'] },
+        async (progress, completed) => { progressCalls.push({ progress, completed }); }
+      );
+
+      expect(progressCalls.length).toBeGreaterThan(0);
+    });
+
+    it('handles paired low confidence as failure', async () => {
+      createTestFile('lowconf-front.jpg');
+      createTestFile('lowconf-back.jpg');
+      mockVisionService.identifyCardPair.mockResolvedValue(
+        mockVisionResult({ confidence: { score: 15, level: 'low', detectedFields: 1 } })
+      );
+
+      const result = await service.processImages({
+        filenames: ['lowconf-front.jpg', 'lowconf-back.jpg'],
+        confidenceThreshold: 50,
+      });
+
+      expect(result.failed).toBe(1);
+      expect(result.results[0].error).toContain('Low confidence');
+    });
+
+    it('detects duplicate in paired images', async () => {
+      createTestFile('dup-front.jpg');
+      createTestFile('dup-back.jpg');
+      fs.writeFileSync(path.join(processedDir, 'existing-dup.jpg'), 'data');
+      await db.createCard({
+        player: 'DupPair', team: 'Team', year: 2023, brand: 'Topps Chrome',
+        category: 'Baseball', cardNumber: '1', condition: 'Raw',
+        purchasePrice: 0, purchaseDate: '2023-01-01', currentValue: 0,
+        images: ['existing-dup.jpg'], notes: '',
+      });
+
+      mockVisionService.identifyCardPair.mockResolvedValue(
+        mockVisionResult({ player: 'DupPair' })
+      );
+
+      const result = await service.processImages({
+        filenames: ['dup-front.jpg', 'dup-back.jpg'],
+        skipExisting: false,
+      });
+
+      expect(result.duplicates).toBe(1);
+    });
+
+    it('skips already processed paired files', async () => {
+      createTestFile('skip-front.jpg');
+      createTestFile('skip-back.jpg');
+
+      const cardData = mockVisionResult({ player: 'SkipPair', cardNumber: '42' });
+      mockVisionService.identifyCardPair.mockResolvedValue(cardData);
+
+      // Pre-create the processed front file
+      const baseName = service.buildProcessedFilename(cardData, '');
+      fs.writeFileSync(path.join(processedDir, baseName + '-front.jpg'), 'existing');
+
+      const result = await service.processImages({
+        filenames: ['skip-front.jpg', 'skip-back.jpg'],
+      });
+
+      expect(result.skipped).toBe(1);
+    });
+  });
+
+  describe('copyOrCropFile', () => {
+    it('uses cropService when available', async () => {
+      const mockCropService = {
+        cropAndSave: jest.fn().mockResolvedValue({
+          success: true,
+          cropped: true,
+          originalSize: { width: 1000, height: 1500 },
+          croppedSize: { width: 800, height: 1200 },
+        }),
+      } as any;
+
+      const serviceWithCrop = new ImageProcessingService(
+        fileService, db, mockVisionService, mockCropService
+      );
+
+      createTestFile('crop-card.jpg');
+      mockVisionService.identifyCard.mockResolvedValue(
+        mockVisionResult({ player: 'CropTest', cardNumber: '55' })
+      );
+
+      const result = await serviceWithCrop.processSingleImage('crop-card.jpg');
+      expect(result.status).toBe('processed');
+      expect(mockCropService.cropAndSave).toHaveBeenCalled();
     });
   });
 });
