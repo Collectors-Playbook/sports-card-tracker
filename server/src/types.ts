@@ -283,46 +283,6 @@ export interface PopRequest {
   gradingCompany?: string;
 }
 
-// ─── eBay OAuth ─────────────────────────────────────────────────────────────
-
-export type EbayEnvironment = 'sandbox' | 'production';
-
-export interface EbayAuthStatus {
-  connected: boolean;
-  ebayUsername: string | null;
-  environment: EbayEnvironment;
-  accessTokenExpiresAt: string | null;
-  refreshTokenExpiresAt: string | null;
-  scopes: string | null;
-  isConfigured: boolean;
-}
-
-export interface EbayOAuthTokenRow {
-  id: string;
-  userId: string;
-  environment: string;
-  accessTokenEncrypted: string;
-  refreshTokenEncrypted: string;
-  accessTokenExpiresAt: string;
-  refreshTokenExpiresAt: string;
-  ebayUsername: string | null;
-  scopes: string;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface EbayOAuthTokenInput {
-  userId: string;
-  environment: EbayEnvironment;
-  accessTokenEncrypted: string;
-  refreshTokenEncrypted: string;
-  accessTokenExpiresAt: string;
-  refreshTokenExpiresAt: string;
-  ebayUsername?: string | null;
-  scopes: string;
-}
-
 // ─── eBay Export ────────────────────────────────────────────────────────────
 
 export interface EbayExportOptions {
@@ -540,10 +500,6 @@ export interface AuditDetailsMap {
   'grading.update_status': { submissionId: string; oldStatus: string; newStatus: string; grade?: string };
   'grading.update': { submissionId: string; fields: string[] };
   'grading.delete': { submissionId: string; cardId: string };
-  'ebay_auth.connect': { environment: string; ebayUsername?: string };
-  'ebay_auth.disconnect': { environment: string };
-  'ebay_auth.token_refresh': { environment: string };
-  'ebay_auth.token_refresh_failed': { environment: string; error: string };
 }
 
 export type AuditAction = keyof AuditDetailsMap;

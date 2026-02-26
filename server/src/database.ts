@@ -1,7 +1,7 @@
 import BetterSqlite3 from 'better-sqlite3';
 import { drizzle, BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { eq, and, like, desc, asc, sql, count, lt, lte, inArray } from 'drizzle-orm';
-import { Card, CardInput, User, UserInput, Collection, CollectionInput, CollectionStats, Job, JobInput, JobStatus, AuditLogEntry, AuditLogInput, AuditLogQuery, GradingSubmission, GradingSubmissionInput, GradingStatus, GradingStats, CompReport, CompSale, CompSource, CompResult, StoredCompReport, PopulationData, EbayOAuthTokenRow, EbayOAuthTokenInput, EbayEnvironment } from './types';
+import { Card, CardInput, User, UserInput, Collection, CollectionInput, CollectionStats, Job, JobInput, JobStatus, AuditLogEntry, AuditLogInput, AuditLogQuery, GradingSubmission, GradingSubmissionInput, GradingStatus, GradingStats, CompReport, CompSale, CompSource, CompResult, StoredCompReport, PopulationData } from './types';
 import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
 import * as schema from './db/schema';
@@ -10,7 +10,7 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 
-const { users, collections, cards, jobs, gradingSubmissions, auditLogs, compCache, cardCompReports, cardCompSources, popReportSnapshots, cardValueSnapshots, ebayOAuthTokens } = schema;
+const { users, collections, cards, jobs, gradingSubmissions, auditLogs, compCache, cardCompReports, cardCompSources, popReportSnapshots, cardValueSnapshots } = schema;
 
 // Baseline SQL executed for in-memory databases (no migration journal needed)
 const BASELINE_SQL = `
@@ -203,23 +203,6 @@ CREATE INDEX IF NOT EXISTS idx_value_snapshots_cardId ON card_value_snapshots (c
 CREATE INDEX IF NOT EXISTS idx_value_snapshots_snapshotAt ON card_value_snapshots (snapshotAt);
 CREATE INDEX IF NOT EXISTS idx_value_snapshots_cardId_snapshotAt ON card_value_snapshots (cardId, snapshotAt);
 
-CREATE TABLE IF NOT EXISTS ebay_oauth_tokens (
-  id text PRIMARY KEY NOT NULL,
-  userId text NOT NULL,
-  environment text NOT NULL DEFAULT 'sandbox',
-  accessTokenEncrypted text NOT NULL,
-  refreshTokenEncrypted text NOT NULL,
-  accessTokenExpiresAt text NOT NULL,
-  refreshTokenExpiresAt text NOT NULL,
-  ebayUsername text,
-  scopes text DEFAULT '' NOT NULL,
-  isActive integer DEFAULT 1 NOT NULL,
-  createdAt text NOT NULL,
-  updatedAt text NOT NULL,
-  FOREIGN KEY (userId) REFERENCES users(id) ON UPDATE no action ON DELETE cascade
-);
-CREATE INDEX IF NOT EXISTS idx_ebay_oauth_userId ON ebay_oauth_tokens (userId);
-CREATE INDEX IF NOT EXISTS idx_ebay_oauth_environment ON ebay_oauth_tokens (environment);
 `;
 
 class Database {
@@ -1509,119 +1492,6 @@ class Database {
     }
 
     return count;
-  }
-
-  // ─── eBay OAuth Tokens ────────────────────────────────────────────────────────
-
-  public async getEbayOAuthToken(userId: string, environment: EbayEnvironment): Promise<EbayOAuthTokenRow | undefined> {
-    const row = this.db.select().from(ebayOAuthTokens)
-      .where(and(
-        eq(ebayOAuthTokens.userId, userId),
-        eq(ebayOAuthTokens.environment, environment),
-        eq(ebayOAuthTokens.isActive, true),
-      ))
-      .get();
-
-    if (!row) return undefined;
-
-    return {
-      ...row,
-      isActive: !!row.isActive,
-      ebayUsername: row.ebayUsername ?? null,
-    };
-  }
-
-  public async upsertEbayOAuthToken(input: EbayOAuthTokenInput): Promise<EbayOAuthTokenRow> {
-    const now = new Date().toISOString();
-
-    // Check for existing active token for this user+environment
-    const existing = this.db.select().from(ebayOAuthTokens)
-      .where(and(
-        eq(ebayOAuthTokens.userId, input.userId),
-        eq(ebayOAuthTokens.environment, input.environment),
-        eq(ebayOAuthTokens.isActive, true),
-      ))
-      .get();
-
-    if (existing) {
-      this.db.update(ebayOAuthTokens).set({
-        accessTokenEncrypted: input.accessTokenEncrypted,
-        refreshTokenEncrypted: input.refreshTokenEncrypted,
-        accessTokenExpiresAt: input.accessTokenExpiresAt,
-        refreshTokenExpiresAt: input.refreshTokenExpiresAt,
-        ebayUsername: input.ebayUsername ?? existing.ebayUsername,
-        scopes: input.scopes,
-        updatedAt: now,
-      }).where(eq(ebayOAuthTokens.id, existing.id)).run();
-
-      return {
-        ...existing,
-        accessTokenEncrypted: input.accessTokenEncrypted,
-        refreshTokenEncrypted: input.refreshTokenEncrypted,
-        accessTokenExpiresAt: input.accessTokenExpiresAt,
-        refreshTokenExpiresAt: input.refreshTokenExpiresAt,
-        ebayUsername: input.ebayUsername ?? existing.ebayUsername ?? null,
-        scopes: input.scopes,
-        isActive: true,
-        updatedAt: now,
-      };
-    }
-
-    const id = uuidv4();
-    const row: EbayOAuthTokenRow = {
-      id,
-      userId: input.userId,
-      environment: input.environment,
-      accessTokenEncrypted: input.accessTokenEncrypted,
-      refreshTokenEncrypted: input.refreshTokenEncrypted,
-      accessTokenExpiresAt: input.accessTokenExpiresAt,
-      refreshTokenExpiresAt: input.refreshTokenExpiresAt,
-      ebayUsername: input.ebayUsername ?? null,
-      scopes: input.scopes,
-      isActive: true,
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    this.db.insert(ebayOAuthTokens).values({
-      id: row.id,
-      userId: row.userId,
-      environment: row.environment,
-      accessTokenEncrypted: row.accessTokenEncrypted,
-      refreshTokenEncrypted: row.refreshTokenEncrypted,
-      accessTokenExpiresAt: row.accessTokenExpiresAt,
-      refreshTokenExpiresAt: row.refreshTokenExpiresAt,
-      ebayUsername: row.ebayUsername,
-      scopes: row.scopes,
-      isActive: row.isActive,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-    }).run();
-
-    return row;
-  }
-
-  public async deactivateEbayOAuthToken(userId: string, environment: EbayEnvironment): Promise<boolean> {
-    const now = new Date().toISOString();
-    const result = this.db.update(ebayOAuthTokens).set({
-      isActive: false,
-      updatedAt: now,
-    }).where(and(
-      eq(ebayOAuthTokens.userId, userId),
-      eq(ebayOAuthTokens.environment, environment),
-      eq(ebayOAuthTokens.isActive, true),
-    )).run();
-
-    return result.changes > 0;
-  }
-
-  public async updateEbayAccessToken(id: string, accessTokenEncrypted: string, accessTokenExpiresAt: string): Promise<void> {
-    const now = new Date().toISOString();
-    this.db.update(ebayOAuthTokens).set({
-      accessTokenEncrypted,
-      accessTokenExpiresAt,
-      updatedAt: now,
-    }).where(eq(ebayOAuthTokens.id, id)).run();
   }
 
   // ─── Lifecycle ───────────────────────────────────────────────────────────────
