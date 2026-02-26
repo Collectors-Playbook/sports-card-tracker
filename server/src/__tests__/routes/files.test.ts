@@ -32,6 +32,15 @@ describe('File Routes', () => {
       expect(res.body[0].type).toBe('jpg');
       expect(res.body[0].size).toBeGreaterThan(0);
     });
+
+    it('returns 500 when fileService throws', async () => {
+      jest.spyOn(ctx.fileService, 'listFiles').mockImplementationOnce(() => {
+        throw new Error('FS error');
+      });
+      const res = await request(ctx.app).get('/api/files/raw');
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to list raw files');
+    });
   });
 
   describe('GET /api/files/processed', () => {
@@ -39,6 +48,24 @@ describe('File Routes', () => {
       const res = await request(ctx.app).get('/api/files/processed');
       expect(res.status).toBe(200);
       expect(res.body).toEqual([]);
+    });
+
+    it('lists processed files after adding one', async () => {
+      const processedDir = path.join(ctx.tempDir, 'processed');
+      fs.writeFileSync(path.join(processedDir, 'output.jpg'), 'data');
+
+      const res = await request(ctx.app).get('/api/files/processed');
+      expect(res.status).toBe(200);
+      expect(res.body.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('returns 500 when fileService throws', async () => {
+      jest.spyOn(ctx.fileService, 'listFiles').mockImplementationOnce(() => {
+        throw new Error('FS error');
+      });
+      const res = await request(ctx.app).get('/api/files/processed');
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to list processed files');
     });
   });
 
@@ -53,6 +80,21 @@ describe('File Routes', () => {
 
     it('returns 404 for non-existent file', async () => {
       const res = await request(ctx.app).get('/api/files/raw/nope.jpg');
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe('GET /api/files/processed/:filename', () => {
+    it('serves a processed file', async () => {
+      const processedDir = path.join(ctx.tempDir, 'processed');
+      fs.writeFileSync(path.join(processedDir, 'proc-serve.jpg'), 'processed-content');
+
+      const res = await request(ctx.app).get('/api/files/processed/proc-serve.jpg');
+      expect(res.status).toBe(200);
+    });
+
+    it('returns 404 for non-existent file', async () => {
+      const res = await request(ctx.app).get('/api/files/processed/nope.jpg');
       expect(res.status).toBe(404);
     });
   });
@@ -86,6 +128,65 @@ describe('File Routes', () => {
 
       expect(res.status).toBe(400); // multer file filter rejection
     });
+
+    it('uploads multiple files', async () => {
+      const file1 = path.join(ctx.tempDir, 'multi1.jpg');
+      const file2 = path.join(ctx.tempDir, 'multi2.png');
+      fs.writeFileSync(file1, 'data1');
+      fs.writeFileSync(file2, 'data2');
+
+      const res = await request(ctx.app)
+        .post('/api/files/raw/upload')
+        .attach('files', file1)
+        .attach('files', file2);
+
+      expect(res.status).toBe(201);
+      expect(res.body.count).toBe(2);
+    });
+  });
+
+  describe('PUT /api/files/raw/:filename', () => {
+    it('replaces a raw file', async () => {
+      const rawDir = path.join(ctx.tempDir, 'raw');
+      fs.writeFileSync(path.join(rawDir, 'replace-me.jpg'), 'old data');
+
+      const newFile = path.join(ctx.tempDir, 'replacement.jpg');
+      fs.writeFileSync(newFile, 'new data');
+
+      const res = await request(ctx.app)
+        .put('/api/files/raw/replace-me.jpg')
+        .attach('file', newFile);
+
+      expect(res.status).toBe(200);
+      expect(res.body.name).toBe('replace-me.jpg');
+
+      // Verify file content was replaced
+      const content = fs.readFileSync(path.join(rawDir, 'replace-me.jpg'), 'utf-8');
+      expect(content).toBe('new data');
+    });
+
+    it('returns 404 when file does not exist', async () => {
+      const newFile = path.join(ctx.tempDir, 'newfile.jpg');
+      fs.writeFileSync(newFile, 'data');
+
+      const res = await request(ctx.app)
+        .put('/api/files/raw/nonexistent.jpg')
+        .attach('file', newFile);
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe('File not found');
+    });
+
+    it('returns 400 when no file provided', async () => {
+      const rawDir = path.join(ctx.tempDir, 'raw');
+      fs.writeFileSync(path.join(rawDir, 'no-upload.jpg'), 'data');
+
+      const res = await request(ctx.app)
+        .put('/api/files/raw/no-upload.jpg');
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('No file provided');
+    });
   });
 
   describe('DELETE /api/files/raw/:filename', () => {
@@ -100,6 +201,22 @@ describe('File Routes', () => {
 
     it('returns 404 for non-existent file', async () => {
       const res = await request(ctx.app).delete('/api/files/raw/nope.jpg');
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe('DELETE /api/files/processed/:filename', () => {
+    it('deletes a processed file', async () => {
+      const processedDir = path.join(ctx.tempDir, 'processed');
+      fs.writeFileSync(path.join(processedDir, 'del-proc.jpg'), 'data');
+
+      const res = await request(ctx.app).delete('/api/files/processed/del-proc.jpg');
+      expect(res.status).toBe(204);
+      expect(fs.existsSync(path.join(processedDir, 'del-proc.jpg'))).toBe(false);
+    });
+
+    it('returns 404 for non-existent file', async () => {
+      const res = await request(ctx.app).delete('/api/files/processed/nope.jpg');
       expect(res.status).toBe(404);
     });
   });
