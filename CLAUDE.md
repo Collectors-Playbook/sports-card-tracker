@@ -6,29 +6,29 @@ A React/TypeScript sports card collection management application that runs local
 ## Core Workflows
 
 ### 1. Image Processing Pipeline
-- Raw card photos are uploaded or placed in the `raw/` folder
+- Raw card photos are uploaded via drag-and-drop/click or placed in the `raw/` folder
 - The **Holding Pen** UI shows all raw images and auto-detects front/back pairs (via `-front`/`-back` filename suffixes)
 - Two-step identify/confirm workflow:
-  1. **Identify**: Anthropic Claude Vision API (`claude-sonnet-4-20250514`) analyzes the image and extracts card data (player, year, brand, set, card number, team, category, parallel, serial number, grading info, feature flags) with a confidence score
-  2. **Review & Confirm**: User reviews extracted data in the **Card Review Form**, corrects any errors, and confirms. Only then is the image copied to `processed/` and a card record created
+  1. **Identify**: Anthropic Claude Vision API (`claude-sonnet-4-20250514`) analyzes the image and extracts card data (player, year, brand, set, card number, team, category, parallel, serial number, grading info, feature flags) with a confidence score. This step does NOT save or copy files.
+  2. **Review & Confirm**: User reviews extracted data in the **Card Review Form**, corrects any errors, and confirms. Only then is the image copied to `processed/` and a card record created with `collectionType: 'Pending'` and `currentValue: 0`.
 - Front/back photo pairs are identified together for better accuracy and stored as `{card}-front.ext` / `{card}-back.ext`
 - Successfully confirmed images are **copied** to `processed/` and **renamed** based on content
-  - Naming format: `{Year}-{Brand}-{Set}-{PlayerName}-{CardNumber}.{ext}` (set name omitted if not detected)
-- Batch processing is also supported via job queue (skips the review step, uses confidence threshold)
-- Images that cannot be identified or fall below the confidence threshold (default 40%) are logged to `image-error.log`
-  - Format: `[YYYY-MM-DD HH:MM:SS] FILENAME: reason for failure`
+  - Naming format: `{Year}-{Brand}-{SetName}-{PlayerName}-{CardNumber}.{ext}` (set name omitted if not detected, spaces replaced with dashes)
+- Batch processing is also supported via async job queue (skips the review step, uses confidence threshold). Progress is broadcast to the frontend via SSE.
+- Processing failures are logged to database audit logs (not text files)
 - Confidence scoring: field-weighted score (0-100), levels: high (80%+), medium (60-80%), low (<60%)
+- **Comps are NOT generated during ingestion** — they must be triggered separately from the Processed Gallery
 
 ### 2. Comp Generation
-- For each card in `processed/`, comps are pulled from:
+- Comps are generated **on-demand**, not automatically during ingestion. Users trigger comp generation from the **Processed Gallery** (single card or bulk via job queue).
+- Comp sources:
   - **SportsCardsPro.com** - market values and price data
   - **eBay Sold Listings** - recent completed sales
   - **Card Ladder** (cardladder.com) - 100M+ historical sales from eBay, Goldin, Heritage, Fanatics, etc. Enterprise API available.
   - **Market Movers** (marketmoversapp.com) - millions of daily-updated sales records across major marketplaces. By Sports Card Investor.
-- Comp data is stored as individual text files in `processed/` (e.g., `2023-Topps-Chrome-Mike-Trout-1-comps.txt`)
+- Comp data is stored in the **database** and also written as text files in `processed/` (e.g., `2023-Topps-Chrome-Mike-Trout-1-comps.txt`)
 - Each comp file includes: card details, market values, recent sale prices, Card Ladder historical data, Market Movers pricing, average price across all sources, price range, date generated
-- Cards without comps are logged to `comp-error.log`
-  - Format: `[YYYY-MM-DD HH:MM:SS] FILENAME: source (SportsCardsPro|eBay|CardLadder|MarketMovers|All) - reason`
+- Bulk comp generation runs as an async job (`comp-generation` type) with SSE progress updates
 
 ### 3. eBay CSV Generation
 - Generates `ebay-draft-upload-batch.csv` for eBay bulk upload
@@ -112,8 +112,6 @@ project-root/
 │   └── ...
 ├── eBay-draft-listing-template.csv   # eBay upload template (reference)
 ├── ebay-draft-upload-batch.csv       # Generated eBay upload file (output)
-├── image-error.log                   # Failed image processing log
-├── comp-error.log                    # Failed comp generation log
 ├── server/                           # Express.js backend
 │   ├── src/
 │   │   ├── index.ts                  # Server bootstrap and route registration
@@ -193,8 +191,8 @@ cd server && npx tsc --noEmit  # Type-check server
 
 ### Error Handling Principles
 - Failures on individual cards must not halt the batch pipeline
-- All failures logged to appropriate error files (`image-error.log`, `comp-error.log`)
-- Re-running the pipeline on the same raw images should not create duplicates in `processed/`
+- Processing failures are logged to **database audit logs** (file-based error logs exist in `fileService` but are not used by the pipeline)
+- Re-running the pipeline on the same raw images should not create duplicates in `processed/` (duplicate detection on player + year + brand + card number, orphaned DB records auto-cleaned)
 
 ## Business Logic
 
@@ -233,15 +231,15 @@ cd server && npx tsc --noEmit  # Type-check server
 
 ### Common Issues
 1. **Data not persisting**: Check IndexedDB in browser DevTools
-2. **Image processing failures**: Check `image-error.log`
-3. **Missing comps**: Check `comp-error.log`
+2. **Image processing failures**: Check database audit logs (Admin UI pending, query via API)
+3. **Missing comps**: Comps are on-demand — trigger from Processed Gallery
 4. **CSV export issues**: Verify `eBay-draft-listing-template.csv` exists and is formatted correctly
 5. **Performance**: Large batches (100+ cards) may take time for comp generation
 
 ### Useful Tools
 - Browser DevTools > Application > IndexedDB
 - React Developer Tools extension
-- `image-error.log` and `comp-error.log` for pipeline debugging
+- Database audit logs for pipeline debugging
 - Console for error messages
 
 ## Known Limitations
@@ -251,4 +249,4 @@ cd server && npx tsc --noEmit  # Type-check server
 - **Audit UI Pending**: Audit logging is implemented server-side (issue #40) but has no admin UI yet
 
 ---
-*Last updated: 2026-02-22*
+*Last updated: 2026-02-27*
