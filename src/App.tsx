@@ -6,7 +6,6 @@ import Dashboard from './components/Dashboard/Dashboard';
 import CardList from './components/CardList/CardList';
 import CardForm from './components/CardForm/CardForm';
 import EnhancedCardForm from './components/EnhancedCardForm/EnhancedCardForm';
-import PhotoCardForm from './components/PhotoCardForm/PhotoCardForm';
 import CardDetail from './components/CardDetail/CardDetail';
 import AuthForm from './components/Auth/AuthForm';
 import AdminDashboard from './components/AdminDashboard/AdminDashboard';
@@ -30,7 +29,7 @@ import { logInfo } from './utils/logger';
 import './App.css';
 
 type View = 'dashboard' | 'inventory' | 'add-card' | 'holding-pen' | 'processed' | 'admin' | 'profile' | 'reports' | 'ebay' | 'backup' | 'users' | 'collections' | 'about' | 'audit-log' | 'grading' | 'grading-roi' | 'heatmap';
-type FormType = 'classic' | 'enhanced' | 'photo';
+type FormType = 'classic' | 'enhanced';
 
 const AppContent: React.FC = () => {
   const { state: authState } = useAuth();
@@ -168,22 +167,6 @@ const AppContent: React.FC = () => {
                 >
                   ⚡ Enhanced Form
                 </button>
-                <button
-                  onClick={() => setFormType('photo')}
-                  style={{
-                    padding: '10px 20px',
-                    borderRadius: '8px',
-                    border: formType === 'photo' ? '2px solid #f5a623' : '1px solid #e2e8f0',
-                    background: formType === 'photo' ? '#fef3d1' : '#ffffff',
-                    color: formType === 'photo' ? '#1a2b45' : '#4a5568',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    fontWeight: formType === 'photo' ? '600' : '400',
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  📸 Photo Scan
-                </button>
               </div>
             </div>
 
@@ -211,9 +194,6 @@ const AppContent: React.FC = () => {
                 }}
                 onCancel={handleFormCancel}
               />
-            )}
-            {formType === 'photo' && (
-              <PhotoCardForm onSuccess={handleFormSuccess} />
             )}
           </>
         );
