@@ -428,6 +428,34 @@ class ImageProcessingService {
     return `${year}-${brand}-${player}-${cardNumber}${ext}`;
   }
 
+  private static readonly GRADE_CONDITIONS: Record<string, string> = {
+    '10': '10: GEM MINT',
+    '9.5': '9.5: MINT+',
+    '9': '9: MINT',
+    '8.5': '8.5: NEAR MINT-MINT+',
+    '8': '8: NEAR MINT-MINT',
+    '7.5': '7.5: NEAR MINT+',
+    '7': '7: NEAR MINT',
+    '6.5': '6.5: EXCELLENT-MINT+',
+    '6': '6: EXCELLENT-MINT',
+    '5.5': '5.5: EXCELLENT+',
+    '5': '5: EXCELLENT',
+    '4.5': '4.5: VERY GOOD-EXCELLENT+',
+    '4': '4: VERY GOOD-EXCELLENT',
+    '3.5': '3.5: VERY GOOD+',
+    '3': '3: VERY GOOD',
+    '2.5': '2.5: GOOD+',
+    '2': '2: GOOD',
+    '1.5': '1.5: POOR+',
+    '1': '1: POOR',
+  };
+
+  private gradeToCondition(grade?: string): string {
+    if (!grade) return 'Graded';
+    const normalized = grade.trim();
+    return ImageProcessingService.GRADE_CONDITIONS[normalized] || 'Graded';
+  }
+
   private buildCardInput(data: ExtractedCardData, images: string[]): CardInput {
     return {
       player: data.player || 'Unknown',
@@ -437,7 +465,7 @@ class ImageProcessingService {
       category: data.category || 'Other',
       cardNumber: data.cardNumber || '',
       parallel: data.parallel,
-      condition: data.features?.isGraded ? 'Graded' : 'Raw',
+      condition: data.features?.isGraded ? this.gradeToCondition(data.grade) : 'RAW',
       gradingCompany: data.gradingCompany,
       setName: data.setName,
       serialNumber: data.serialNumber,
