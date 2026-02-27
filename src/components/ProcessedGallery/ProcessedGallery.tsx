@@ -4,6 +4,7 @@ import { Card } from '../../types';
 import ImageLightbox from '../HoldingPen/ImageLightbox';
 import CardReviewForm from '../CardReviewForm/CardReviewForm';
 import CompReportModal from './CompReportModal';
+import MoveCardsModal from '../MoveCardsModal/MoveCardsModal';
 import './ProcessedGallery.css';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
@@ -169,6 +170,8 @@ const ProcessedGallery: React.FC = () => {
   const [compReport, setCompReport] = useState<CompReport | null>(null);
   const [bulkCompLoading, setBulkCompLoading] = useState(false);
   const [popTiers, setPopTiers] = useState<Map<string, PopRarityTier>>(new Map());
+  const [moveCards, setMoveCards] = useState<Card[]>([]);
+  const [moveLoading, setMoveLoading] = useState(false);
 
   const fetchFiles = useCallback(async () => {
     try {
@@ -345,6 +348,37 @@ const ProcessedGallery: React.FC = () => {
     }
   };
 
+  const handleBulkMove = async () => {
+    const selectedPairs = pairs.filter(p => selectedIds.has(p.id));
+    if (selectedPairs.length === 0) return;
+    setMoveLoading(true);
+    try {
+      const cards: Card[] = [];
+      for (const pair of selectedPairs) {
+        const filename = pair.front?.name || pair.back?.name;
+        if (!filename) continue;
+        const card = await apiService.getCardByImage(filename);
+        cards.push(card);
+      }
+      if (cards.length === 0) {
+        setError('No card records found for selected files');
+        return;
+      }
+      setMoveCards(cards);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load card data for move');
+    } finally {
+      setMoveLoading(false);
+    }
+  };
+
+  const handleMoveConfirm = async (cardIds: string[], targetCollectionId: string) => {
+    await apiService.moveCardsToCollection(cardIds, targetCollectionId);
+    setMoveCards([]);
+    setSelectedIds(new Set());
+    await fetchFiles();
+  };
+
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
@@ -412,6 +446,13 @@ const ProcessedGallery: React.FC = () => {
                 onClick={handleBulkComps}
               >
                 {bulkCompLoading ? 'Generating...' : 'Generate Comps'}
+              </button>
+              <button
+                className="processed-gallery-bulk-btn move"
+                disabled={moveLoading}
+                onClick={handleBulkMove}
+              >
+                {moveLoading ? 'Loading...' : 'Move to Collection'}
               </button>
             </div>
           )}
@@ -588,6 +629,15 @@ const ProcessedGallery: React.FC = () => {
             setCompReport(updated);
             return updated;
           }}
+        />
+      )}
+
+      {/* Move to Collection Modal */}
+      {moveCards.length > 0 && (
+        <MoveCardsModal
+          cards={moveCards}
+          onClose={() => setMoveCards([])}
+          onMove={handleMoveConfirm}
         />
       )}
     </div>
