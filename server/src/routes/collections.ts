@@ -30,9 +30,10 @@ export function createCollectionRoutes(db: Database, auditService: AuditService)
       if (collection) {
         res.json(collection);
       } else {
-        // Auto-initialize and return
-        const newDefault = await db.initializeUserCollections(userId);
-        res.json(newDefault);
+        // Auto-initialize and return the default
+        const cols = await db.initializeUserCollections(userId);
+        const defaultCol = cols.find(c => c.isDefault) ?? cols[0];
+        res.json(defaultCol);
       }
     } catch (error) {
       console.error('Error getting default collection:', error);
@@ -199,8 +200,8 @@ export function createCollectionRoutes(db: Database, auditService: AuditService)
         return;
       }
 
-      const collection = await db.initializeUserCollections(userId);
-      res.json(collection);
+      const collections = await db.initializeUserCollections(userId);
+      res.json(collections);
     } catch (error) {
       console.error('Error initializing collections:', error);
       res.status(500).json({ error: 'Failed to initialize collections' });

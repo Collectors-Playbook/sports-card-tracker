@@ -157,14 +157,56 @@ describe('Database', () => {
       expect(stats.cardCount).toBe(2);
     });
 
-    it('initializes user collections', async () => {
-      const col = await db.initializeUserCollections(userId);
-      expect(col.name).toBe('My Collection');
-      expect(col.isDefault).toBe(true);
+    it('initializes user collections with Personal and eBay', async () => {
+      const cols = await db.initializeUserCollections(userId);
+      expect(cols).toHaveLength(2);
 
-      // Calling again returns the same collection
+      const personal = cols.find(c => c.name === 'Personal');
+      const ebay = cols.find(c => c.name === 'eBay');
+
+      expect(personal).toBeDefined();
+      expect(personal!.isDefault).toBe(true);
+      expect(personal!.color).toBe('#4F46E5');
+
+      expect(ebay).toBeDefined();
+      expect(ebay!.isDefault).toBe(false);
+      expect(ebay!.color).toBe('#22C55E');
+
+      // Calling again returns the same collections (idempotent)
       const same = await db.initializeUserCollections(userId);
-      expect(same.id).toBe(col.id);
+      expect(same).toHaveLength(2);
+      expect(same.find(c => c.name === 'Personal')!.id).toBe(personal!.id);
+    });
+
+    it('migrates legacy "My Collection" to Personal and adds eBay', async () => {
+      // Simulate a legacy user with only "My Collection"
+      const legacy = await db.createCollection({
+        userId,
+        name: 'My Collection',
+        description: 'Default collection for all cards',
+        icon: '',
+        color: '#4F46E5',
+        isDefault: true,
+        visibility: 'private',
+        tags: [],
+      });
+
+      const cols = await db.initializeUserCollections(userId);
+      expect(cols).toHaveLength(2);
+
+      const personal = cols.find(c => c.id === legacy.id);
+      expect(personal).toBeDefined();
+      expect(personal!.name).toBe('Personal');
+      expect(personal!.description).toBe('Personal collection cards');
+      expect(personal!.isDefault).toBe(true);
+
+      const ebay = cols.find(c => c.name === 'eBay');
+      expect(ebay).toBeDefined();
+      expect(ebay!.isDefault).toBe(false);
+
+      // Calling again is idempotent — no duplicates
+      const same = await db.initializeUserCollections(userId);
+      expect(same).toHaveLength(2);
     });
 
     it('deletes a collection', async () => {

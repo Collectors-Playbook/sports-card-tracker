@@ -25,6 +25,8 @@ const Collections: React.FC = () => {
   const loadCollections = async () => {
     try {
       setLoading(true);
+      // Ensure default collections exist (idempotent — migrates legacy users too)
+      await apiService.initializeCollections().catch(() => {});
       const userCollections = await apiService.getCollections();
       setCollections(userCollections);
 
