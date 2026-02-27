@@ -80,8 +80,11 @@ describe('EbayExportService', () => {
       await createInventoryCard();
       const result = await service.generateCsv(defaultOptions);
 
-      expect(result.filename).toBe('ebay-draft-upload-batch.csv');
+      expect(result.filename).toMatch(/^ebay-draft-\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}-\d{3}\.csv$/);
       expect(result.generatedAt).toBeDefined();
+      expect(result.draftId).toBeDefined();
+      expect(result.compPricedCards).toBeDefined();
+      expect(result.staleFallbackCards).toBeDefined();
 
       const csvContent = fs.readFileSync(service.getOutputPath(), 'utf-8');
       const headerLine = csvContent.split('\n')[0];

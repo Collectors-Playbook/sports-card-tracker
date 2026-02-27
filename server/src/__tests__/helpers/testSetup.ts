@@ -25,6 +25,7 @@ import { createEbayRoutes } from '../../routes/ebay';
 import { createAuditLogRoutes } from '../../routes/auditLogs';
 import { createAdminUserRoutes } from '../../routes/adminUsers';
 import { createGradingSubmissionRoutes } from '../../routes/gradingSubmissions';
+import { Config } from '../../config';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
@@ -87,7 +88,22 @@ export async function createTestApp(): Promise<TestContext> {
   app.use('/api/auth', createAuthRoutes(db, auditService));
   app.use('/api/comps', createCompRoutes(db, compService));
   app.use('/api/image-processing', createImageProcessingRoutes(db, imageProcessingService, fileService, auditService));
-  app.use('/api/ebay', createEbayRoutes(db, ebayExportService, auditService));
+  const testConfig: Config = {
+    port: 8000,
+    frontendUrl: 'http://localhost:3000',
+    dataDir: tempDir,
+    rawDir,
+    processedDir,
+    dbPath: ':memory:',
+    jwtSecret: 'test-secret',
+    jobPollInterval: 5000,
+    puppeteerEnabled: false,
+    puppeteerHeadless: true,
+    compCacheTtlMs: 86400000,
+    rateLimits: {},
+    ebayImageBaseUrl: 'http://localhost:8000',
+  };
+  app.use('/api/ebay', createEbayRoutes(db, ebayExportService, auditService, testConfig));
   app.use('/api/audit-logs', createAuditLogRoutes(auditService));
   app.use('/api/admin/users', createAdminUserRoutes(db, auditService));
   app.use('/api/grading-submissions', createGradingSubmissionRoutes(db, auditService));
