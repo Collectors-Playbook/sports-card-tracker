@@ -70,11 +70,13 @@ flowchart LR
     B -->|Bulk| D[Async comp-generation job]
     C --> E[CompService]
     D --> E
-    E --> F[SportsCardsPro]
-    E --> G[eBay Sold]
-    E --> H[Card Ladder]
+    E --> F[eBay Sold]
+    E --> G[PSA]
+    E --> H[130Point]
     E --> I[Market Movers]
-    F & G & H & I --> J[Results to DB + text file]
+    E --> J[Card Ladder]
+    E --> K[SportsCardsPro]
+    F & G & H & I & J & K --> L[Results to DB + text file]
 ```
 
 ## Step-by-Step Details
@@ -176,7 +178,9 @@ Comps are **not part of the ingestion pipeline**. After cards appear in the Proc
 - **Single card**: Click "Generate Comps" -- calls `POST /comps/generate`
 - **Bulk**: Select multiple cards, generate -- creates a `comp-generation` async job with SSE progress
 
-Comp results are stored in the database and written as text files in `processed/` (e.g., `2023-Topps-Chrome-Mike-Trout-1-comps.txt`).
+CompService runs all 6 adapters in parallel (PSA adapter skipped for non-PSA graded cards). Results are deduplicated across sources, weighted by recency and source reliability, and stored in the database plus written as text files in `processed/` (e.g., `2023-Topps-Chrome-Mike-Trout-1-comps.txt`).
+
+Source reliability weights (highest to lowest): eBay (1.0), PSA (0.95), 130Point (0.9), Market Movers (0.85), Card Ladder (0.8), SportsCardsPro (0.6).
 
 ## Key Files
 

@@ -21,11 +21,13 @@ A React/TypeScript sports card collection management application that runs local
 
 ### 2. Comp Generation
 - Comps are generated **on-demand**, not automatically during ingestion. Users trigger comp generation from the **Processed Gallery** (single card or bulk via job queue).
-- Comp sources:
-  - **SportsCardsPro.com** - market values and price data
-  - **eBay Sold Listings** - recent completed sales
-  - **Card Ladder** (cardladder.com) - 100M+ historical sales from eBay, Goldin, Heritage, Fanatics, etc. Enterprise API available.
-  - **Market Movers** (marketmoversapp.com) - millions of daily-updated sales records across major marketplaces. By Sports Card Investor.
+- Comp sources (6 adapters, run in parallel, ordered by reliability weight):
+  - **eBay Sold Listings** (1.0) - recent completed sales
+  - **PSA** (0.95) - PSA cert verification and sales data (skipped for non-PSA graded cards)
+  - **130Point** (0.9) - eBay sold data aggregator (oneThirtyPoint.com)
+  - **Market Movers** (0.85) - marketmoversapp.com, millions of daily-updated sales records across major marketplaces. By Sports Card Investor.
+  - **Card Ladder** (0.8) - cardladder.com, 100M+ historical sales from eBay, Goldin, Heritage, Fanatics, etc.
+  - **SportsCardsPro** (0.6) - market values and price data
 - Comp data is stored in the **database** and also written as text files in `processed/` (e.g., `2023-Topps-Chrome-Mike-Trout-1-comps.txt`)
 - Each comp file includes: card details, market values, recent sale prices, Card Ladder historical data, Market Movers pricing, average price across all sources, price range, date generated
 - Bulk comp generation runs as an async job (`comp-generation` type) with SSE progress updates
