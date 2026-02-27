@@ -1,7 +1,7 @@
 import BetterSqlite3 from 'better-sqlite3';
 import { drizzle, BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { eq, and, like, desc, asc, sql, count, lt, lte, inArray } from 'drizzle-orm';
-import { Card, CardInput, User, UserInput, Collection, CollectionInput, CollectionStats, Job, JobInput, JobStatus, AuditLogEntry, AuditLogInput, AuditLogQuery, GradingSubmission, GradingSubmissionInput, GradingStatus, GradingStats, CompReport, CompSale, CompSource, CompResult, StoredCompReport, PopulationData } from './types';
+import { Card, CardInput, User, UserInput, Collection, CollectionInput, CollectionStats, Job, JobInput, JobStatus, AuditLogEntry, AuditLogInput, AuditLogQuery, GradingSubmission, GradingSubmissionInput, GradingStatus, GradingStats, CompReport, CompSale, CompSource, CompResult, StoredCompReport, PopulationData, EbayExportDraft, EbayExportCardSummary } from './types';
 import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
 import * as schema from './db/schema';
@@ -10,7 +10,7 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 
-const { users, collections, cards, jobs, gradingSubmissions, auditLogs, compCache, cardCompReports, cardCompSources, popReportSnapshots, cardValueSnapshots } = schema;
+const { users, collections, cards, jobs, gradingSubmissions, auditLogs, compCache, cardCompReports, cardCompSources, popReportSnapshots, cardValueSnapshots, ebayExportDrafts } = schema;
 
 // Baseline SQL executed for in-memory databases (no migration journal needed)
 const BASELINE_SQL = `
@@ -202,6 +202,20 @@ CREATE TABLE IF NOT EXISTS card_value_snapshots (
 CREATE INDEX IF NOT EXISTS idx_value_snapshots_cardId ON card_value_snapshots (cardId);
 CREATE INDEX IF NOT EXISTS idx_value_snapshots_snapshotAt ON card_value_snapshots (snapshotAt);
 CREATE INDEX IF NOT EXISTS idx_value_snapshots_cardId_snapshotAt ON card_value_snapshots (cardId, snapshotAt);
+
+CREATE TABLE IF NOT EXISTS ebay_export_drafts (
+  id text PRIMARY KEY NOT NULL,
+  filename text NOT NULL,
+  totalCards integer NOT NULL,
+  skippedPcCards integer NOT NULL,
+  totalListingValue real NOT NULL,
+  compPricedCards integer DEFAULT 0 NOT NULL,
+  options text DEFAULT '{}' NOT NULL,
+  cardSummary text DEFAULT '[]' NOT NULL,
+  generatedAt text NOT NULL,
+  createdAt text NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ebay_drafts_generatedAt ON ebay_export_drafts (generatedAt);
 
 `;
 
@@ -1531,6 +1545,120 @@ class Database {
     }
 
     return count;
+  }
+
+  // ─── Batch Comp Reports ──────────────────────────────────────────────────────
+
+  public async getLatestCompReportsForCards(cardIds: string[]): Promise<Map<string, StoredCompReport>> {
+    if (cardIds.length === 0) return new Map();
+
+    // Fetch all comp reports for the given card IDs, ordered by generatedAt desc
+    const reportRows = this.db.select().from(cardCompReports)
+      .where(inArray(cardCompReports.cardId, cardIds))
+      .orderBy(desc(cardCompReports.generatedAt))
+      .all();
+
+    // Deduplicate to latest per card
+    const latestMap = new Map<string, typeof reportRows[0]>();
+    for (const row of reportRows) {
+      if (!latestMap.has(row.cardId)) {
+        latestMap.set(row.cardId, row);
+      }
+    }
+
+    // Batch fetch all sources for the selected reports
+    const reportIds = Array.from(latestMap.values()).map(r => r.id);
+    const allSources = reportIds.length > 0
+      ? this.db.select().from(cardCompSources).where(inArray(cardCompSources.reportId, reportIds)).all()
+      : [];
+
+    // Group sources by reportId
+    const sourcesByReport = new Map<string, (typeof allSources[0])[]>();
+    for (const s of allSources) {
+      const arr = sourcesByReport.get(s.reportId) || [];
+      arr.push(s);
+      sourcesByReport.set(s.reportId, arr);
+    }
+
+    // Build result map
+    const result = new Map<string, StoredCompReport>();
+    for (const [cardId, row] of latestMap) {
+      const sources = sourcesByReport.get(row.id) || [];
+      result.set(cardId, this.mapCompReportRow(row, sources));
+    }
+
+    return result;
+  }
+
+  // ─── eBay Export Drafts ─────────────────────────────────────────────────────
+
+  public async saveEbayExportDraft(draft: EbayExportDraft): Promise<void> {
+    this.db.insert(ebayExportDrafts).values({
+      id: draft.id,
+      filename: draft.filename,
+      totalCards: draft.totalCards,
+      skippedPcCards: draft.skippedPcCards,
+      totalListingValue: draft.totalListingValue,
+      compPricedCards: draft.compPricedCards,
+      options: draft.options as unknown as Record<string, unknown>,
+      cardSummary: draft.cardSummary as unknown as Record<string, unknown>[],
+      generatedAt: draft.generatedAt,
+      createdAt: draft.createdAt,
+    }).run();
+  }
+
+  public async getEbayExportDrafts(limit: number = 50, offset: number = 0): Promise<{ drafts: EbayExportDraft[]; total: number }> {
+    const rows = this.db.select().from(ebayExportDrafts)
+      .orderBy(desc(ebayExportDrafts.generatedAt))
+      .limit(limit)
+      .offset(offset)
+      .all();
+
+    const [{ total }] = this.db.select({ total: count() }).from(ebayExportDrafts).all();
+
+    return {
+      drafts: rows.map(r => ({
+        id: r.id,
+        filename: r.filename,
+        totalCards: r.totalCards,
+        skippedPcCards: r.skippedPcCards,
+        totalListingValue: r.totalListingValue,
+        compPricedCards: r.compPricedCards,
+        options: r.options as unknown as import('./types').EbayExportOptions,
+        cardSummary: r.cardSummary as unknown as EbayExportCardSummary[],
+        generatedAt: r.generatedAt,
+        createdAt: r.createdAt,
+      })),
+      total,
+    };
+  }
+
+  public async getEbayExportDraft(id: string): Promise<EbayExportDraft | undefined> {
+    const row = this.db.select().from(ebayExportDrafts)
+      .where(eq(ebayExportDrafts.id, id))
+      .get();
+
+    if (!row) return undefined;
+
+    return {
+      id: row.id,
+      filename: row.filename,
+      totalCards: row.totalCards,
+      skippedPcCards: row.skippedPcCards,
+      totalListingValue: row.totalListingValue,
+      compPricedCards: row.compPricedCards,
+      options: row.options as unknown as import('./types').EbayExportOptions,
+      cardSummary: row.cardSummary as unknown as EbayExportCardSummary[],
+      generatedAt: row.generatedAt,
+      createdAt: row.createdAt,
+    };
+  }
+
+  public async deleteEbayExportDraft(id: string): Promise<boolean> {
+    const result = this.db.delete(ebayExportDrafts)
+      .where(eq(ebayExportDrafts.id, id))
+      .run();
+    return result.changes > 0;
   }
 
   // ─── Lifecycle ───────────────────────────────────────────────────────────────

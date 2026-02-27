@@ -1,8 +1,9 @@
 import fs from 'fs';
 import path from 'path';
+import { v4 as uuidv4 } from 'uuid';
 import Database from '../database';
 import FileService from './fileService';
-import { Card, EbayExportOptions, EbayExportResult } from '../types';
+import { Card, EbayExportOptions, EbayExportResult, EbayExportCardSummary, StoredCompReport } from '../types';
 
 const EBAY_FE_HEADERS = [
   '*Action(SiteID=US|Country=US|Currency=USD|Version=1193)',
@@ -34,6 +35,11 @@ const EBAY_FE_HEADERS = [
 const OUTPUT_FILENAME = 'ebay-draft-upload-batch.csv';
 const TEMPLATE_FILENAME = 'eBay-draft-listing-template.csv';
 
+interface ResolvedPrice {
+  price: number;
+  source: string;
+}
+
 class EbayExportService {
   private db: Database;
   private fileService: FileService;
@@ -52,18 +58,47 @@ class EbayExportService {
     const inventoryCards = allCards.filter(c => c.collectionType === 'Inventory');
     const skippedPcCards = allCards.length - inventoryCards.length;
 
+    // Batch-fetch comp reports if comp pricing is enabled
+    const useCompPricing = options.useCompPricing !== false;
+    const compMaxAgeDays = options.compMaxAgeDays ?? 30;
+    let compReports = new Map<string, StoredCompReport>();
+    if (useCompPricing && inventoryCards.length > 0) {
+      compReports = await this.db.getLatestCompReportsForCards(
+        inventoryCards.map(c => c.id)
+      );
+    }
+
     const rows: string[] = [];
     rows.push(this.rowToCsvLine(EBAY_FE_HEADERS));
 
     let totalListingValue = 0;
+    let compPricedCards = 0;
+    let staleFallbackCards = 0;
+    const cardSummary: EbayExportCardSummary[] = [];
 
     for (let i = 0; i < inventoryCards.length; i++) {
       const card = inventoryCards[i];
-      const row = this.cardToRow(card, options);
+      const compReport = compReports.get(card.id);
+      const resolved = this.resolvePrice(card, compReport, compMaxAgeDays);
+
+      if (resolved.source.startsWith('comp-')) {
+        compPricedCards++;
+      } else if (resolved.source === 'stale-fallback') {
+        staleFallbackCards++;
+      }
+
+      const startPrice = resolved.price * options.priceMultiplier;
+      const row = this.cardToRow(card, options, startPrice);
       rows.push(this.rowToCsvLine(row));
 
-      const price = card.currentValue * options.priceMultiplier;
-      totalListingValue += price;
+      totalListingValue += startPrice;
+
+      cardSummary.push({
+        cardId: card.id,
+        player: card.player,
+        price: Math.round(startPrice * 100) / 100,
+        priceSource: resolved.source,
+      });
 
       if (onProgress) {
         await onProgress(
@@ -74,15 +109,43 @@ class EbayExportService {
     }
 
     const csvContent = rows.join('\n');
+    const generatedAt = new Date().toISOString();
+
+    // Write timestamped draft file
+    const timestamp = generatedAt.replace(/[:.]/g, '-').replace('T', '_').replace('Z', '');
+    const draftFilename = `ebay-draft-${timestamp}.csv`;
+    const draftPath = path.join(this.fileService.getDataDir(), draftFilename);
+    fs.writeFileSync(draftPath, csvContent, 'utf-8');
+
+    // Also write to the standard output path for backward compatibility
     const outputPath = this.getOutputPath();
     fs.writeFileSync(outputPath, csvContent, 'utf-8');
 
-    return {
-      filename: OUTPUT_FILENAME,
+    // Save draft record to database
+    const draftId = uuidv4();
+    const now = new Date().toISOString();
+    await this.db.saveEbayExportDraft({
+      id: draftId,
+      filename: draftFilename,
       totalCards: inventoryCards.length,
       skippedPcCards,
       totalListingValue: Math.round(totalListingValue * 100) / 100,
-      generatedAt: new Date().toISOString(),
+      compPricedCards,
+      options,
+      cardSummary,
+      generatedAt,
+      createdAt: now,
+    });
+
+    return {
+      filename: draftFilename,
+      totalCards: inventoryCards.length,
+      skippedPcCards,
+      totalListingValue: Math.round(totalListingValue * 100) / 100,
+      compPricedCards,
+      staleFallbackCards,
+      draftId,
+      generatedAt,
     };
   }
 
@@ -94,12 +157,54 @@ class EbayExportService {
     return path.join(this.fileService.getDataDir(), OUTPUT_FILENAME);
   }
 
+  getDraftPath(filename: string): string {
+    return path.join(this.fileService.getDataDir(), filename);
+  }
+
   templateExists(): boolean {
     return fs.existsSync(this.getTemplatePath());
   }
 
   outputExists(): boolean {
     return fs.existsSync(this.getOutputPath());
+  }
+
+  draftExists(filename: string): boolean {
+    return fs.existsSync(this.getDraftPath(filename));
+  }
+
+  deleteDraftFile(filename: string): void {
+    const filepath = this.getDraftPath(filename);
+    if (fs.existsSync(filepath)) {
+      fs.unlinkSync(filepath);
+    }
+  }
+
+  private resolvePrice(
+    card: Card,
+    compReport: StoredCompReport | undefined,
+    maxAgeDays: number
+  ): ResolvedPrice {
+    if (!compReport) {
+      return { price: card.currentValue, source: 'card-value' };
+    }
+
+    // Check freshness
+    const ageMs = Date.now() - new Date(compReport.generatedAt).getTime();
+    const ageDays = ageMs / (1000 * 60 * 60 * 24);
+    if (ageDays > maxAgeDays) {
+      return { price: card.currentValue, source: 'stale-fallback' };
+    }
+
+    if (compReport.popAdjustedAverage != null && compReport.popAdjustedAverage > 0) {
+      return { price: compReport.popAdjustedAverage, source: 'comp-pop' };
+    }
+
+    if (compReport.aggregateAverage != null && compReport.aggregateAverage > 0) {
+      return { price: compReport.aggregateAverage, source: 'comp-avg' };
+    }
+
+    return { price: card.currentValue, source: 'card-value' };
   }
 
   private async fetchCards(cardIds?: string[]): Promise<Card[]> {
@@ -114,19 +219,22 @@ class EbayExportService {
     return this.db.getAllCards({ collectionType: 'Inventory' });
   }
 
-  private cardToRow(card: Card, options: EbayExportOptions): string[] {
+  private cardToRow(card: Card, options: EbayExportOptions, startPrice: number): string[] {
+    const picUrl = this.buildPicUrl(card, options.imageBaseUrl);
+    const buyItNowPrice = startPrice * 0.95;
+
     return [
       'Add',
       this.getCategoryId(card.category),
       this.generateTitle(card),
       this.generateDescription(card),
       this.getConditionId(card.condition),
-      '',
+      picUrl,
       '',
       '1',
       'FixedPrice',
-      (card.currentValue * options.priceMultiplier).toFixed(2),
-      (card.currentValue * 0.95).toFixed(2),
+      startPrice.toFixed(2),
+      buyItNowPrice.toFixed(2),
       options.duration || 'GTC',
       options.location || 'USA',
       'Flat',
@@ -141,6 +249,16 @@ class EbayExportService {
       '',
       '1',
     ];
+  }
+
+  private buildPicUrl(card: Card, imageBaseUrl?: string): string {
+    if (!card.images || card.images.length === 0) return '';
+    const base = imageBaseUrl || '';
+    if (!base) return '';
+
+    return card.images
+      .map(img => `${base}/api/files/processed/${encodeURIComponent(img)}`)
+      .join('|');
   }
 
   private generateTitle(card: Card): string {

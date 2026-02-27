@@ -3,14 +3,15 @@ import Database from '../database';
 import EbayExportService from '../services/ebayExportService';
 import AuditService from '../services/auditService';
 import { AuthenticatedRequest } from '../types';
+import { Config } from '../config';
 
-export function createEbayRoutes(db: Database, ebayExportService: EbayExportService, auditService: AuditService): Router {
+export function createEbayRoutes(db: Database, ebayExportService: EbayExportService, auditService: AuditService, config: Config): Router {
   const router = Router();
 
   // POST /api/ebay/generate — Sync CSV generation
   router.post('/generate', async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const { priceMultiplier, shippingCost, duration, location, dispatchTime, cardIds } = req.body;
+      const { priceMultiplier, shippingCost, duration, location, dispatchTime, cardIds, imageBaseUrl, useCompPricing, compMaxAgeDays } = req.body;
 
       if (priceMultiplier == null || shippingCost == null) {
         res.status(400).json({ error: 'Missing required fields: priceMultiplier, shippingCost' });
@@ -24,6 +25,9 @@ export function createEbayRoutes(db: Database, ebayExportService: EbayExportServ
         location: location || 'USA',
         dispatchTime: dispatchTime || 1,
         cardIds,
+        imageBaseUrl: imageBaseUrl || config.ebayImageBaseUrl,
+        useCompPricing: useCompPricing !== false,
+        compMaxAgeDays: compMaxAgeDays ?? 30,
       });
 
       auditService.log(req, { action: 'ebay.generate', entity: 'export', details: { totalCards: result.totalCards } });
@@ -37,7 +41,7 @@ export function createEbayRoutes(db: Database, ebayExportService: EbayExportServ
   // POST /api/ebay/generate-async — Creates ebay-csv job for async processing
   router.post('/generate-async', async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const { priceMultiplier, shippingCost, duration, location, dispatchTime, cardIds } = req.body;
+      const { priceMultiplier, shippingCost, duration, location, dispatchTime, cardIds, imageBaseUrl, useCompPricing, compMaxAgeDays } = req.body;
 
       if (priceMultiplier == null || shippingCost == null) {
         res.status(400).json({ error: 'Missing required fields: priceMultiplier, shippingCost' });
@@ -46,7 +50,17 @@ export function createEbayRoutes(db: Database, ebayExportService: EbayExportServ
 
       const job = await db.createJob({
         type: 'ebay-csv',
-        payload: { priceMultiplier, shippingCost, duration, location, dispatchTime, cardIds },
+        payload: {
+          priceMultiplier,
+          shippingCost,
+          duration,
+          location,
+          dispatchTime,
+          cardIds,
+          imageBaseUrl: imageBaseUrl || config.ebayImageBaseUrl,
+          useCompPricing: useCompPricing !== false,
+          compMaxAgeDays: compMaxAgeDays ?? 30,
+        },
       });
 
       auditService.log(req, { action: 'ebay.generate_async', entity: 'job', entityId: job.id });
@@ -100,6 +114,64 @@ export function createEbayRoutes(db: Database, ebayExportService: EbayExportServ
     } catch (error) {
       console.error('Error checking eBay status:', error);
       res.status(500).json({ error: 'Failed to check eBay export status' });
+    }
+  });
+
+  // GET /api/ebay/drafts — List export drafts (paginated)
+  router.get('/drafts', async (_req: Request, res: Response) => {
+    try {
+      const limit = parseInt(_req.query.limit as string) || 50;
+      const offset = parseInt(_req.query.offset as string) || 0;
+      const result = await db.getEbayExportDrafts(limit, offset);
+      res.json(result);
+    } catch (error) {
+      console.error('Error listing eBay drafts:', error);
+      res.status(500).json({ error: 'Failed to list eBay export drafts' });
+    }
+  });
+
+  // GET /api/ebay/drafts/:id/download — Download a specific draft CSV
+  router.get('/drafts/:id/download', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const draft = await db.getEbayExportDraft(req.params.id);
+      if (!draft) {
+        res.status(404).json({ error: 'Draft not found' });
+        return;
+      }
+
+      if (!ebayExportService.draftExists(draft.filename)) {
+        res.status(404).json({ error: 'Draft CSV file not found on disk' });
+        return;
+      }
+
+      const filepath = ebayExportService.getDraftPath(draft.filename);
+      auditService.log(req, { action: 'ebay.download', entity: 'export', entityId: draft.id });
+      res.download(filepath, draft.filename);
+    } catch (error) {
+      console.error('Error downloading draft:', error);
+      res.status(500).json({ error: 'Failed to download draft CSV' });
+    }
+  });
+
+  // DELETE /api/ebay/drafts/:id — Delete a draft and its file
+  router.delete('/drafts/:id', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const draft = await db.getEbayExportDraft(req.params.id);
+      if (!draft) {
+        res.status(404).json({ error: 'Draft not found' });
+        return;
+      }
+
+      // Delete the file from disk
+      ebayExportService.deleteDraftFile(draft.filename);
+
+      // Delete from database
+      await db.deleteEbayExportDraft(draft.id);
+
+      res.json({ message: 'Draft deleted', id: draft.id });
+    } catch (error) {
+      console.error('Error deleting draft:', error);
+      res.status(500).json({ error: 'Failed to delete draft' });
     }
   });
 
