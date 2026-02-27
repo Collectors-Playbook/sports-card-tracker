@@ -6,6 +6,15 @@ import ImageUpload from '../ImageUpload/ImageUpload';
 import { logDebug, logInfo, logWarn, logError } from '../../utils/logger';
 import './CardForm.css';
 
+function resolveCondition(condition?: string, grade?: string): string {
+  if (condition === 'Raw') return 'RAW';
+  if (condition === 'Graded' && grade) {
+    const match = CONDITIONS.find(c => c.startsWith(grade.trim() + ':'));
+    if (match) return match;
+  }
+  return condition || CONDITIONS[0];
+}
+
 interface CardFormProps {
   card?: Card;
   onSuccess?: () => void;
@@ -93,13 +102,13 @@ const CardForm: React.FC<CardFormProps> = ({ card, onSuccess, onCancel }) => {
           category: cardData.category || '',
           cardNumber: cardData.cardNumber || '',
           parallel: cardData.parallel || '',
-          condition: cardData.condition || CONDITIONS[0],
+          condition: resolveCondition(cardData.condition, cardData.grade),
           gradingCompany: cardData.gradingCompany || '',
-          purchasePrice: cardData.purchasePrice || 0,
+          purchasePrice: Math.round((cardData.purchasePrice || 0) * 100) / 100,
           purchaseDate: purchaseDate,
-          sellPrice: cardData.sellPrice || undefined,
+          sellPrice: cardData.sellPrice ? Math.round(cardData.sellPrice * 100) / 100 : undefined,
           sellDate: sellDate,
-          currentValue: cardData.currentValue || 0,
+          currentValue: Math.round((cardData.currentValue || 0) * 100) / 100,
           notes: cardData.notes || '',
           collectionId: cardData.collectionId || '',
           collectionType: cardData.collectionType || 'Inventory'

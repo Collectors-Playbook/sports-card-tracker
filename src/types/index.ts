@@ -93,7 +93,7 @@ export interface SortOption {
   direction: 'asc' | 'desc';
 }
 
-export type ConditionGrade = 
+export type ConditionGrade =
   | 'RAW'
   | '10: GEM MINT'
   | '9.5: MINT+'
