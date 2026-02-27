@@ -6,6 +6,12 @@ import { BreakEvenCalculator } from '../BreakEvenCalculator/BreakEvenCalculator'
 import { GradingRoiAnalyzer } from '../GradingRoiAnalyzer/GradingRoiAnalyzer';
 import './CardDetail.css';
 
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+
+function cardImageUrl(filename: string): string {
+  return `${API_BASE_URL}/files/processed/${encodeURIComponent(filename)}`;
+}
+
 interface CardDetailProps {
   card: Card;
   onEdit?: (card: Card) => void;
@@ -94,19 +100,10 @@ const CardDetail: React.FC<CardDetailProps> = ({ card, onEdit, onClose }) => {
             <div className="card-images">
               <div className="image-viewer">
                 <img
-                  src={card.images && card.images.length > 0 ? card.images[imageIndex] : '/generic.png'}
+                  src={card.images && card.images.length > 0 ? cardImageUrl(card.images[imageIndex]) : '/generic.png'}
                   alt={`${card.player} card ${card.images && card.images.length > 0 ? imageIndex + 1 : ''}`}
                   className="card-image"
                 />
-                {card.images && card.images.length > 1 && (
-                  <div className="image-controls">
-                    <button onClick={prevImage} className="image-nav prev">‹</button>
-                    <span className="image-counter">
-                      {imageIndex + 1} of {card.images.length}
-                    </span>
-                    <button onClick={nextImage} className="image-nav next">›</button>
-                  </div>
-                )}
                 {card.images && card.images.length > 1 && (
                   <div className="image-thumbnails">
                     {card.images.map((image, index) => (
@@ -115,9 +112,18 @@ const CardDetail: React.FC<CardDetailProps> = ({ card, onEdit, onClose }) => {
                         className={`thumbnail ${index === imageIndex ? 'active' : ''}`}
                         onClick={() => setImageIndex(index)}
                       >
-                        <img src={image} alt={`Thumbnail ${index + 1}`} />
+                        <img src={cardImageUrl(image)} alt={`Thumbnail ${index + 1}`} />
                       </button>
                     ))}
+                  </div>
+                )}
+                {card.images && card.images.length > 1 && (
+                  <div className="image-controls">
+                    <button onClick={prevImage} className="image-nav prev">‹</button>
+                    <span className="image-counter">
+                      {imageIndex + 1} of {card.images.length}
+                    </span>
+                    <button onClick={nextImage} className="image-nav next">›</button>
                   </div>
                 )}
               </div>
