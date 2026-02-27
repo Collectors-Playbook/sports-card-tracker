@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useCards } from '../../context/ApiCardContext';
 import { Card } from '../../types';
 import BulkEbayExport from './BulkEbayExport';
+import EbayExportHistory from './EbayExportHistory';
 import { quickExportAllUnsoldCards, generateExportSummary } from '../../utils/quickEbayExport';
 import { instantExportAllUnsoldCards } from '../../utils/instantEbayExport';
 import './EbayListings.css';
@@ -509,10 +510,12 @@ const EbayListings: React.FC = () => {
         </div>
       )}
       
+      <EbayExportHistory />
+
       {showBulkExport && (
-        <BulkEbayExport 
-          cards={state.cards} 
-          onClose={() => setShowBulkExport(false)} 
+        <BulkEbayExport
+          cards={state.cards}
+          onClose={() => setShowBulkExport(false)}
         />
       )}
     </div>

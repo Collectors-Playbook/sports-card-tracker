@@ -383,6 +383,43 @@ class ApiService {
     return this.request('/ebay/status');
   }
 
+  public async getEbayExportDrafts(limit?: number, offset?: number): Promise<{
+    drafts: EbayExportDraftSummary[];
+    total: number;
+  }> {
+    const params = new URLSearchParams();
+    if (limit != null) params.append('limit', String(limit));
+    if (offset != null) params.append('offset', String(offset));
+    const qs = params.toString();
+    return this.request(`/ebay/drafts${qs ? `?${qs}` : ''}`);
+  }
+
+  public async downloadEbayDraft(draftId: string, filename: string): Promise<void> {
+    const url = `${API_BASE_URL}/ebay/drafts/${draftId}/download`;
+    const token = localStorage.getItem('token');
+    const response = await fetch(url, {
+      headers: {
+        ...(token && { 'Authorization': `Bearer ${token}` }),
+      },
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Download failed' }));
+      throw new Error(errorData.error || `HTTP ${response.status}`);
+    }
+    const blob = await response.blob();
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+  }
+
+  public async deleteEbayDraft(draftId: string): Promise<void> {
+    await this.request<void>(`/ebay/drafts/${draftId}`, { method: 'DELETE' });
+  }
+
   // ─── Processed Files ────────────────────────────────────────────────────
 
   public async getProcessedFiles(): Promise<{ name: string; size: number; modified: string; type: string }[]> {
@@ -928,6 +965,19 @@ export interface PopulationData {
   percentile: number;
   rarityTier: PopRarityTier;
   fetchedAt: string;
+}
+
+export interface EbayExportDraftSummary {
+  id: string;
+  filename: string;
+  totalCards: number;
+  skippedPcCards: number;
+  totalListingValue: number;
+  compPricedCards: number;
+  options: Record<string, unknown>;
+  cardSummary: { cardId: string; player: string; price: number; priceSource: string }[];
+  generatedAt: string;
+  createdAt: string;
 }
 
 export const apiService = new ApiService();
