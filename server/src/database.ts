@@ -718,20 +718,59 @@ class Database {
     return moved;
   }
 
-  public async initializeUserCollections(userId: string): Promise<Collection> {
+  public async initializeUserCollections(userId: string): Promise<Collection[]> {
     const existing = await this.getDefaultCollection(userId);
-    if (existing) return existing;
 
-    return this.createCollection({
+    if (existing) {
+      // Migrate legacy "My Collection" to "Personal"
+      if (existing.name === 'My Collection') {
+        await this.updateCollection(existing.id, {
+          name: 'Personal',
+          description: 'Personal collection cards',
+        });
+      }
+
+      // Create eBay collection if it doesn't exist
+      const allCols = await this.getAllCollections(userId);
+      if (!allCols.some(c => c.name === 'eBay')) {
+        await this.createCollection({
+          userId,
+          name: 'eBay',
+          description: 'Cards listed or to be listed on eBay',
+          icon: '',
+          color: '#22C55E',
+          isDefault: false,
+          visibility: 'private',
+          tags: [],
+        });
+      }
+
+      return this.getAllCollections(userId);
+    }
+
+    const personal = await this.createCollection({
       userId,
-      name: 'My Collection',
-      description: 'Default collection for all cards',
+      name: 'Personal',
+      description: 'Personal collection cards',
       icon: '',
       color: '#4F46E5',
       isDefault: true,
       visibility: 'private',
       tags: [],
     });
+
+    const ebay = await this.createCollection({
+      userId,
+      name: 'eBay',
+      description: 'Cards listed or to be listed on eBay',
+      icon: '',
+      color: '#22C55E',
+      isDefault: false,
+      visibility: 'private',
+      tags: [],
+    });
+
+    return [personal, ebay];
   }
 
   public async deleteCollection(id: string): Promise<boolean> {
