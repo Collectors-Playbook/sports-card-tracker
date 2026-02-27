@@ -76,6 +76,15 @@ describe('Image Processing Routes', () => {
       expect(res.body.payload.confidenceThreshold).toBe(60);
     });
 
+    it('includes collectionId in job payload', async () => {
+      const res = await request(ctx.app)
+        .post('/api/image-processing/process')
+        .send({ filenames: ['card.jpg'], collectionId: 'col-abc' })
+        .expect(201);
+
+      expect(res.body.payload.collectionId).toBe('col-abc');
+    });
+
     it('returns 500 when db.createJob throws', async () => {
       jest.spyOn(ctx.db, 'createJob').mockRejectedValueOnce(new Error('DB error'));
 
@@ -317,6 +326,24 @@ describe('Image Processing Routes', () => {
       );
       expect(modCalls.length).toBe(0);
       logSpy.mockRestore();
+    });
+
+    it('passes collectionId through to the created card', async () => {
+      createRawFile('coll-confirm.jpg');
+      const cardData = visionResult({ player: 'CollConfirm', cardNumber: '88' });
+
+      const res = await request(ctx.app)
+        .post('/api/image-processing/confirm')
+        .send({ filename: 'coll-confirm.jpg', cardData, collectionId: 'col-xyz' })
+        .expect(200);
+
+      expect(res.body.status).toBe('processed');
+      expect(res.body.cardId).toBeDefined();
+
+      // Verify the card was created with the correct collectionId
+      const card = await ctx.db.getCardById(res.body.cardId);
+      expect(card).toBeDefined();
+      expect(card!.collectionId).toBe('col-xyz');
     });
 
     it('returns 500 when confirmCard throws', async () => {

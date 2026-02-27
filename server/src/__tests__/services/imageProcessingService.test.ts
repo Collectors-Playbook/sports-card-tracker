@@ -309,6 +309,18 @@ describe('ImageProcessingService', () => {
       expect(result.status).toBe('failed');
       expect(result.error).toContain('Failed to copy');
     });
+
+    it('sets collectionId on the created card when provided', async () => {
+      createTestFile('card-coll.jpg');
+      const cardData = mockVisionResult({ player: 'CollTest', cardNumber: '50', collectionId: 'col-123' });
+
+      const result = await service.confirmCard('card-coll.jpg', cardData);
+      expect(result.status).toBe('processed');
+
+      const card = (await db.getAllCards()).find(c => c.id === result.cardId);
+      expect(card).toBeDefined();
+      expect(card!.collectionId).toBe('col-123');
+    });
   });
 
   describe('processSingleImage', () => {
@@ -385,6 +397,20 @@ describe('ImageProcessingService', () => {
       const result = await service.processSingleImage('card.jpg');
       expect(result.status).toBe('failed');
       expect(result.error).toContain('Failed to copy');
+    });
+
+    it('threads collectionId option to the created card', async () => {
+      createTestFile('coll-single.jpg');
+      mockVisionService.identifyCard.mockResolvedValue(
+        mockVisionResult({ player: 'CollSingle', cardNumber: '60' })
+      );
+
+      const result = await service.processSingleImage('coll-single.jpg', { collectionId: 'col-456' });
+      expect(result.status).toBe('processed');
+
+      const card = (await db.getAllCards()).find(c => c.id === result.cardId);
+      expect(card).toBeDefined();
+      expect(card!.collectionId).toBe('col-456');
     });
   });
 
@@ -541,6 +567,24 @@ describe('ImageProcessingService', () => {
       });
 
       expect(result.duplicates).toBe(1);
+    });
+
+    it('applies collectionId from payload to all created cards', async () => {
+      createTestFile('batch-coll1.jpg');
+      createTestFile('batch-coll2.jpg');
+      mockVisionService.identifyCard
+        .mockResolvedValueOnce(mockVisionResult({ player: 'BatchColl1', cardNumber: '70' }))
+        .mockResolvedValueOnce(mockVisionResult({ player: 'BatchColl2', cardNumber: '71' }));
+
+      const result = await service.processImages({
+        filenames: ['batch-coll1.jpg', 'batch-coll2.jpg'],
+        collectionId: 'col-789',
+      });
+
+      expect(result.processed).toBe(2);
+      const cards = await db.getAllCards();
+      expect(cards).toHaveLength(2);
+      expect(cards.every(c => c.collectionId === 'col-789')).toBe(true);
     });
 
     it('skips already processed paired files', async () => {
