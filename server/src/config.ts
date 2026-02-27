@@ -13,6 +13,7 @@ export interface Config {
   puppeteerHeadless: boolean;
   compCacheTtlMs: number;
   rateLimits: Record<string, number>;
+  ebayImageBaseUrl: string;
 }
 
 export function loadConfig(): Config {
@@ -31,6 +32,7 @@ export function loadConfig(): Config {
     puppeteerEnabled: process.env.PUPPETEER_ENABLED !== 'false',
     puppeteerHeadless: process.env.PUPPETEER_HEADLESS !== 'false',
     compCacheTtlMs: parseInt(process.env.COMP_CACHE_TTL_MS || '86400000', 10),
+    ebayImageBaseUrl: process.env.EBAY_IMAGE_BASE_URL || `http://localhost:${port}`,
     rateLimits: {
       eBay: parseInt(process.env.RATE_LIMIT_EBAY || '2000', 10),
       SportsCardsPro: parseInt(process.env.RATE_LIMIT_SPORTSCARDSPRO || '1000', 10),
