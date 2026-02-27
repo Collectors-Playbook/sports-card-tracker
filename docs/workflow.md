@@ -4,84 +4,77 @@
 
 The ingestion pipeline takes raw card photos and produces cataloged card records in the database with renamed images in the `processed/` directory. Comp generation is a separate, user-initiated step that happens after ingestion.
 
-## Pipeline Diagram
+## High-Level Pipeline
+
+```mermaid
+flowchart LR
+    A[Upload Photos] --> B[Holding Pen]
+    B --> C{Single or Batch?}
+    C -->|Single| D[Identify via Vision API]
+    D --> E[Review in CardReviewForm]
+    E --> F[Confirm]
+    C -->|Batch| G[Async Job Queue]
+    G --> H[Auto-identify and confirm]
+    F --> I[Copy and rename to processed/]
+    H --> I
+    I --> J[Card record in DB]
+    J --> K[Processed Gallery]
+    K -.->|On-demand| L[Generate Comps]
+```
+
+## Single Card Flow
 
 ```mermaid
 flowchart TD
-    subgraph Upload
-        A[User uploads photos<br/>drag-and-drop / click] --> B[Files land in raw/ directory]
-        A2[Photos placed directly<br/>in raw/ folder] --> B
-    end
+    A[User clicks Process<br/>on a card in Holding Pen] --> B[POST /image-processing/identify]
+    B --> C[Vision API extracts card data<br/>with confidence score]
+    C --> D[CardReviewForm opens<br/>with pre-filled fields]
+    D --> E{User decision}
+    E -->|Cancel| F[Back to Holding Pen]
+    E -->|Confirm| G[POST /image-processing/confirm]
+    G --> H{Duplicate check}
+    H -->|Orphaned record| I[Auto-clean orphan]
+    H -->|Real duplicate| J[Skip]
+    H -->|No duplicate| K[Copy raw to processed]
+    I --> K
+    K --> L[Rename to Year-Brand-Set-Player-Num.ext]
+    L --> M[Create card record<br/>collectionType = Pending<br/>currentValue = 0]
+    M --> N[Card in Processed Gallery]
+```
 
-    subgraph HoldingPen["Holding Pen"]
-        B --> C[Holding Pen UI lists raw files]
-        C --> D{Auto-detect<br/>front/back pairs}
-        D -->|front/back suffix found| E[Paired card group]
-        D -->|No suffix match| F[Standalone image]
-        E --> G{User action}
-        F --> G
-        G -->|Single card| H[Process]
-        G -->|Multi-select| I[Process Selected]
-    end
+## Batch Flow
 
-    subgraph SingleCard["Single Card Flow"]
-        H --> J[Identify]
-        J --> K[Claude Vision API analyzes image]
-        K --> L[Returns ExtractedCardData<br/>with confidence score]
-        L --> M[CardReviewForm modal opens<br/>with pre-filled data]
-        M --> N{User reviews and edits}
-        N -->|Confirm and Process| O[Confirm]
-        N -->|Cancel| C
-    end
+```mermaid
+flowchart TD
+    A[User selects multiple cards<br/>clicks Process Selected] --> B[POST /image-processing/process]
+    B --> C[Job created in queue]
+    C --> D[JobService picks up job]
+    D --> E[Group into pairs and singles]
+    E --> F[Vision API identifies next card]
+    F --> G{Confidence above threshold?}
+    G -->|Yes| H[Auto-confirm and save]
+    G -->|No| I[Mark as failed]
+    H --> J[SSE progress update]
+    I --> J
+    J --> K{More cards?}
+    K -->|Yes| F
+    K -->|No| L[Job complete notification]
+```
 
-    subgraph BatchFlow["Batch Flow"]
-        I --> P[Create async job]
-        P --> Q[JobService picks up job]
-        Q --> R[For each card or pair<br/>identify then auto-confirm]
-        R --> S{Confidence above<br/>threshold?}
-        S -->|Yes| T[Auto-confirm card]
-        S -->|No| U[Mark as failed]
-        T --> V[SSE progress broadcast]
-        U --> V
-        V --> W{More cards?}
-        W -->|Yes| R
-        W -->|No| X[Job complete notification]
-    end
+## Comp Generation (Separate Step)
 
-    subgraph Confirm["On Confirm"]
-        O --> Y[Duplicate detection<br/>player + year + brand + cardNumber]
-        T --> Y
-        Y --> Y2{Duplicate found?}
-        Y2 -->|Orphaned record| Y3[Auto-clean orphan<br/>then proceed]
-        Y2 -->|Real duplicate| Y4[Skip / mark duplicate]
-        Y2 -->|No duplicate| Z
-        Y3 --> Z[Copy image from raw/ to processed/]
-        Z --> Z2[Rename file to<br/>Year-Brand-Set-Player-CardNum.ext]
-        Z2 --> Z3[Create card record in DB<br/>collectionType Pending<br/>currentValue 0]
-        Z3 --> Z4[Card available in Processed Gallery]
-    end
-
-    subgraph Comps["Comp Generation (Separate Step)"]
-        Z4 -.->|User manually triggers| CG[Generate Comps]
-        Z4 -.->|Bulk via job queue| CG2[Bulk Generate Comps]
-        CG --> CS[CompService queries sources]
-        CG2 --> CS
-        CS --> CS1[SportsCardsPro.com]
-        CS --> CS2[eBay Sold Listings]
-        CS --> CS3[Card Ladder]
-        CS --> CS4[Market Movers]
-        CS1 --> CR[Results stored in DB<br/>plus text file in processed]
-        CS2 --> CR
-        CS3 --> CR
-        CS4 --> CR
-    end
-
-    style Upload fill:#1a1a2e,stroke:#4F46E5,color:#e0e0e0
-    style HoldingPen fill:#1a1a2e,stroke:#4F46E5,color:#e0e0e0
-    style SingleCard fill:#1a1a2e,stroke:#22C55E,color:#e0e0e0
-    style BatchFlow fill:#1a1a2e,stroke:#F59E0B,color:#e0e0e0
-    style Confirm fill:#1a1a2e,stroke:#8B5CF6,color:#e0e0e0
-    style Comps fill:#1a1a2e,stroke:#6B7280,stroke-dasharray: 5 5,color:#e0e0e0
+```mermaid
+flowchart LR
+    A[Card in Processed Gallery] --> B{Trigger}
+    B -->|Single| C[POST /comps/generate]
+    B -->|Bulk| D[Async comp-generation job]
+    C --> E[CompService]
+    D --> E
+    E --> F[SportsCardsPro]
+    E --> G[eBay Sold]
+    E --> H[Card Ladder]
+    E --> I[Market Movers]
+    F & G & H & I --> J[Results to DB + text file]
 ```
 
 ## Step-by-Step Details
