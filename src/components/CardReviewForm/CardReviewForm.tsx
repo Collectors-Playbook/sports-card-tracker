@@ -3,12 +3,19 @@ import { ExtractedCardData } from '../../services/api';
 import { CATEGORIES, GRADING_COMPANIES, getGradeScale, RAW_CONDITIONS } from '../../types';
 import './CardReviewForm.css';
 
+interface Collection {
+  id: string;
+  name: string;
+}
+
 interface CardReviewFormProps {
   initialData: ExtractedCardData;
   imageUrls: { front?: string; back?: string };
   mode: 'review' | 'edit';
   cardId?: string;
   saving?: boolean;
+  collections?: Collection[];
+  defaultCollectionId?: string;
   onSave: (data: ExtractedCardData) => void;
   onCancel: () => void;
 }
@@ -18,9 +25,12 @@ const CardReviewForm: React.FC<CardReviewFormProps> = ({
   imageUrls,
   mode,
   saving = false,
+  collections,
+  defaultCollectionId,
   onSave,
   onCancel,
 }) => {
+  const [collectionId, setCollectionId] = useState(initialData.collectionId || defaultCollectionId || '');
   const [player, setPlayer] = useState(initialData.player || '');
   const [year, setYear] = useState(initialData.year || '');
   const [brand, setBrand] = useState(initialData.brand || '');
@@ -71,6 +81,7 @@ const CardReviewForm: React.FC<CardReviewFormProps> = ({
       serialNumber: serialNumber || undefined,
       gradingCompany: gradingCompany || undefined,
       grade: grade || undefined,
+      collectionId: collectionId || undefined,
       features: {
         isRookie,
         isAutograph,
@@ -203,6 +214,24 @@ const CardReviewForm: React.FC<CardReviewFormProps> = ({
                   </select>
                 </div>
               </div>
+
+              {collections && collections.length > 0 && (
+                <div className="card-review-row">
+                  <div className="card-review-field">
+                    <label htmlFor="cr-collection">Collection</label>
+                    <select
+                      id="cr-collection"
+                      value={collectionId}
+                      onChange={e => setCollectionId(e.target.value)}
+                    >
+                      <option value="">None</option>
+                      {collections.map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
 
               <div className="card-review-row">
                 <div className="card-review-field">

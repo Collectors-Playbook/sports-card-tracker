@@ -308,6 +308,7 @@ export interface ImageProcessingPayload {
   filenames: string[];
   skipExisting?: boolean;
   confidenceThreshold?: number;
+  collectionId?: string;
 }
 
 export interface ImageProcessingResult {
@@ -340,6 +341,7 @@ export interface ExtractedCardData {
   serialNumber?: string;
   gradingCompany?: string;
   grade?: string;
+  collectionId?: string;
   features?: CardFeatures;
   confidence?: DetectionConfidence;
   rawText?: string;

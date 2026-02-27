@@ -21,6 +21,9 @@ export interface ExtractedCardData {
   gradingCompany?: string;
   grade?: string;
   certNumber?: string;
+
+  // Collection
+  collectionId?: string;
   
   // Special Features
   features?: CardFeatures;

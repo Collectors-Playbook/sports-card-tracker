@@ -15,6 +15,7 @@ export interface ExtractedCardData {
   serialNumber?: string;
   gradingCompany?: string;
   grade?: string;
+  collectionId?: string;
   condition?: string;
   features?: {
     isRookie: boolean;
@@ -447,10 +448,10 @@ class ApiService {
     }
   }
 
-  public async processRawImages(filenames: string[]): Promise<{ id: string; type: string; status: string }> {
+  public async processRawImages(filenames: string[], collectionId?: string): Promise<{ id: string; type: string; status: string }> {
     return this.request('/image-processing/process', {
       method: 'POST',
-      body: JSON.stringify({ filenames }),
+      body: JSON.stringify({ filenames, collectionId }),
     });
   }
 

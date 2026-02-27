@@ -58,7 +58,7 @@ class ImageProcessingService {
     onProgress?: (progress: number, completedItems: number) => Promise<void>
   ): Promise<ImageProcessingResult> {
     const startTime = Date.now();
-    const { filenames, skipExisting = true, confidenceThreshold = 40 } = payload;
+    const { filenames, skipExisting = true, confidenceThreshold = 40, collectionId } = payload;
     const result: ImageProcessingResult = {
       totalFiles: filenames.length,
       processed: 0,
@@ -75,7 +75,7 @@ class ImageProcessingService {
     for (const [frontFile, backFile] of pairs) {
       try {
         const itemResult = await this.processPairedImages(
-          frontFile, backFile, { skipExisting, confidenceThreshold }
+          frontFile, backFile, { skipExisting, confidenceThreshold, collectionId }
         );
         result.results.push(itemResult);
         this.updateCounts(result, itemResult);
@@ -102,6 +102,7 @@ class ImageProcessingService {
         const itemResult = await this.processSingleImage(filename, {
           skipExisting,
           confidenceThreshold,
+          collectionId,
         });
         result.results.push(itemResult);
         this.updateCounts(result, itemResult);
@@ -265,14 +266,15 @@ class ImageProcessingService {
 
   async processSingleImage(
     filename: string,
-    options: { skipExisting?: boolean; confidenceThreshold?: number } = {}
+    options: { skipExisting?: boolean; confidenceThreshold?: number; collectionId?: string } = {}
   ): Promise<ImageProcessingItemResult> {
-    const { skipExisting = true, confidenceThreshold = 40 } = options;
+    const { skipExisting = true, confidenceThreshold = 40, collectionId } = options;
     const rawDir = this.fileService.getRawDir();
     const filePath = path.join(rawDir, filename);
 
     // Use Anthropic Vision to identify the card
     const data = await this.visionService.identifyCard(filePath);
+    if (collectionId) data.collectionId = collectionId;
 
     // Check confidence
     const confidence = data.confidence?.score ?? 0;
@@ -339,9 +341,9 @@ class ImageProcessingService {
   private async processPairedImages(
     frontFile: string,
     backFile: string,
-    options: { skipExisting?: boolean; confidenceThreshold?: number }
+    options: { skipExisting?: boolean; confidenceThreshold?: number; collectionId?: string }
   ): Promise<ImageProcessingItemResult> {
-    const { skipExisting = true, confidenceThreshold = 40 } = options;
+    const { skipExisting = true, confidenceThreshold = 40, collectionId } = options;
     const rawDir = this.fileService.getRawDir();
 
     // Use Anthropic Vision to identify the card from both images
@@ -349,6 +351,7 @@ class ImageProcessingService {
       path.join(rawDir, frontFile),
       path.join(rawDir, backFile)
     );
+    if (collectionId) data.collectionId = collectionId;
 
     const confidence = data.confidence?.score ?? 0;
 
@@ -450,6 +453,7 @@ class ImageProcessingService {
       images,
       notes: '',
       collectionType: 'Pending',
+      collectionId: data.collectionId,
     };
   }
 

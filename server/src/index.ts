@@ -148,12 +148,13 @@ jobService.registerHandler('ebay-csv', async (job, updateProgress) => {
 
 // Register image-processing job handler
 jobService.registerHandler('image-processing', async (job, updateProgress) => {
-  const payload = job.payload as unknown as { filenames: string[]; skipExisting?: boolean; confidenceThreshold?: number };
+  const payload = job.payload as unknown as { filenames: string[]; skipExisting?: boolean; confidenceThreshold?: number; collectionId?: string };
   const result = await imageProcessingService.processImages(
     {
       filenames: payload.filenames || [],
       skipExisting: payload.skipExisting,
       confidenceThreshold: payload.confidenceThreshold,
+      collectionId: payload.collectionId,
     },
     updateProgress
   );
