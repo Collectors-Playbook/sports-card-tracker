@@ -32,7 +32,7 @@ export function createImageProcessingRoutes(
   // POST /api/image-processing/process -- async via job queue
   router.post('/process', async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const { filenames, skipExisting, confidenceThreshold } = req.body;
+      const { filenames, skipExisting, confidenceThreshold, collectionId } = req.body;
 
       if (!filenames || !Array.isArray(filenames) || filenames.length === 0) {
         res.status(400).json({ error: 'filenames must be a non-empty array' });
@@ -41,7 +41,7 @@ export function createImageProcessingRoutes(
 
       const job = await db.createJob({
         type: 'image-processing',
-        payload: { filenames, skipExisting, confidenceThreshold },
+        payload: { filenames, skipExisting, confidenceThreshold, collectionId },
       });
 
       auditService.log(req, { action: 'image.process_batch', entity: 'job', entityId: job.id, details: { fileCount: filenames.length } });
@@ -55,7 +55,7 @@ export function createImageProcessingRoutes(
   // POST /api/image-processing/process-sync -- process single file synchronously
   router.post('/process-sync', async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const { filename, confidenceThreshold } = req.body;
+      const { filename, confidenceThreshold, collectionId } = req.body;
 
       if (!filename || typeof filename !== 'string') {
         res.status(400).json({ error: 'filename is required' });
@@ -64,6 +64,7 @@ export function createImageProcessingRoutes(
 
       const result = await imageProcessingService.processSingleImage(filename, {
         confidenceThreshold,
+        collectionId,
       });
 
       auditService.log(req, { action: 'image.process_sync', entity: 'file', entityId: filename, details: { status: result.status, cardId: result.cardId } });
@@ -146,7 +147,7 @@ export function createImageProcessingRoutes(
   // POST /api/image-processing/confirm -- commit user-reviewed card data
   router.post('/confirm', async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const { filename, backFile, cardData, originalData } = req.body;
+      const { filename, backFile, cardData, originalData, collectionId } = req.body;
 
       if (!filename || typeof filename !== 'string') {
         res.status(400).json({ error: 'filename is required' });
@@ -155,6 +156,11 @@ export function createImageProcessingRoutes(
       if (!cardData || typeof cardData !== 'object') {
         res.status(400).json({ error: 'cardData is required' });
         return;
+      }
+
+      // Merge collectionId into cardData if provided at the top level
+      if (collectionId && !cardData.collectionId) {
+        cardData.collectionId = collectionId;
       }
 
       // Event #5 — user modifications diff
