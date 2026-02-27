@@ -7,6 +7,12 @@ import MoveCardsModal from '../MoveCardsModal/MoveCardsModal';
 import { apiService } from '../../services/api';
 import './CardList.css';
 
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+
+function cardImageUrl(filename: string): string {
+  return `${API_BASE_URL}/files/processed/${encodeURIComponent(filename)}`;
+}
+
 interface CardListProps {
   onCardSelect?: (card: Card) => void;
   onEditCard?: (card: Card) => void;
@@ -352,7 +358,7 @@ const CardList: React.FC<CardListProps> = ({ onCardSelect, onEditCard, selectedC
               <div className="card-image-section">
                 <div className="card-image-container">
                   <img 
-                    src={card.images && card.images.length > 0 ? card.images[0] : '/generic.png'} 
+                    src={card.images && card.images.length > 0 ? cardImageUrl(card.images[0]) : '/generic.png'}
                     alt={`${card.player} card`} 
                     className="card-main-image" 
                   />

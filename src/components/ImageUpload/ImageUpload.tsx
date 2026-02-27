@@ -2,6 +2,17 @@ import React, { useState, useRef, useCallback, memo } from 'react';
 import { validateImageFile, compressImage } from '../../utils/imageUtils';
 import './ImageUpload.css';
 
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+
+function imageSrc(image: string): string {
+  // Data URLs and absolute URLs are already displayable
+  if (image.startsWith('data:') || image.startsWith('http') || image.startsWith('/')) {
+    return image;
+  }
+  // Bare filenames need the API prefix
+  return `${API_BASE_URL}/files/processed/${encodeURIComponent(image)}`;
+}
+
 interface ImageUploadProps {
   images: string[];
   onImagesChange: (images: string[]) => void;
@@ -112,7 +123,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
         
         {images.map((image, index) => (
           <div key={index} className="uploaded-image">
-            <img src={image} alt={`Card ${index + 1}`} />
+            <img src={imageSrc(image)} alt={`Card ${index + 1}`} />
             <button
               type="button"
               onClick={() => handleRemoveImage(index)}
