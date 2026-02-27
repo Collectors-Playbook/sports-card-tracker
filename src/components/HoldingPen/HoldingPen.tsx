@@ -113,6 +113,8 @@ const HoldingPen: React.FC = () => {
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [collections, setCollections] = useState<{ id: string; name: string }[]>([]);
+  const [defaultCollectionId, setDefaultCollectionId] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { permission, enabled, setEnabled, requestPermission, notify } = useNotifications();
   const { on: onSSE } = useSSE(activeJobId !== null);
@@ -133,6 +135,15 @@ const HoldingPen: React.FC = () => {
   useEffect(() => {
     fetchFiles();
   }, [fetchFiles]);
+
+  useEffect(() => {
+    apiService.getCollections()
+      .then(cols => setCollections(cols.map((c: any) => ({ id: c.id, name: c.name }))))
+      .catch(() => {});
+    apiService.getDefaultCollection()
+      .then(col => { if (col?.id) setDefaultCollectionId(col.id); })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     requestPermission();
@@ -287,7 +298,7 @@ const HoldingPen: React.FC = () => {
 
     setProcessing(new Set(selectedIds));
     try {
-      const job = await apiService.processRawImages(allFilenames);
+      const job = await apiService.processRawImages(allFilenames, defaultCollectionId || undefined);
       setActiveJobId(job.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Bulk processing failed');
@@ -565,6 +576,8 @@ const HoldingPen: React.FC = () => {
           }}
           mode="review"
           saving={reviewSaving}
+          collections={collections}
+          defaultCollectionId={defaultCollectionId}
           onSave={handleReviewConfirm}
           onCancel={() => setReviewTarget(null)}
         />
