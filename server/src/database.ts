@@ -733,10 +733,16 @@ class Database {
 
   public async moveCardsToCollection(cardIds: string[], targetCollectionId: string): Promise<number> {
     const updatedAt = new Date().toISOString();
+
+    // Determine collectionType based on target collection
+    const targetCollection = await this.getCollectionById(targetCollectionId);
+    const collectionType = targetCollection?.isDefault ? 'PC' : 'Inventory';
+
     let moved = 0;
     for (const cardId of cardIds) {
       const result = this.db.update(cards).set({
         collectionId: targetCollectionId,
+        collectionType,
         updatedAt,
       }).where(eq(cards.id, cardId)).run();
       if (result.changes > 0) moved++;
