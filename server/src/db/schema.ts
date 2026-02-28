@@ -211,6 +211,20 @@ export const ebayExportDrafts = sqliteTable('ebay_export_drafts', {
   index('idx_ebay_drafts_generatedAt').on(table.generatedAt),
 ]);
 
+// ─── Card Image Uploads ─────────────────────────────────────────────────
+
+export const cardImageUploads = sqliteTable('card_image_uploads', {
+  id: text('id').primaryKey(),
+  cardId: text('cardId').notNull().references(() => cards.id, { onDelete: 'cascade' }),
+  filename: text('filename').notNull(),
+  remoteUrl: text('remoteUrl').notNull(),
+  fileHash: text('fileHash').notNull(),
+  uploadedAt: text('uploadedAt').notNull(),
+}, (table) => [
+  index('idx_image_uploads_cardId').on(table.cardId),
+  index('idx_image_uploads_filename').on(table.filename),
+]);
+
 // ─── Card Value Snapshots ────────────────────────────────────────────────
 
 export const cardValueSnapshots = sqliteTable('card_value_snapshots', {

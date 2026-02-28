@@ -1,7 +1,7 @@
 import BetterSqlite3 from 'better-sqlite3';
 import { drizzle, BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { eq, and, like, desc, asc, sql, count, lt, lte, inArray } from 'drizzle-orm';
-import { Card, CardInput, User, UserInput, Collection, CollectionInput, CollectionStats, Job, JobInput, JobStatus, AuditLogEntry, AuditLogInput, AuditLogQuery, GradingSubmission, GradingSubmissionInput, GradingStatus, GradingStats, CompReport, CompSale, CompSource, CompResult, StoredCompReport, PopulationData, EbayExportDraft, EbayExportCardSummary } from './types';
+import { Card, CardInput, User, UserInput, Collection, CollectionInput, CollectionStats, Job, JobInput, JobStatus, AuditLogEntry, AuditLogInput, AuditLogQuery, GradingSubmission, GradingSubmissionInput, GradingStatus, GradingStats, CompReport, CompSale, CompSource, CompResult, StoredCompReport, PopulationData, EbayExportDraft, EbayExportCardSummary, ImageUpload } from './types';
 import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
 import * as schema from './db/schema';
@@ -10,7 +10,7 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 
-const { users, collections, cards, jobs, gradingSubmissions, auditLogs, compCache, cardCompReports, cardCompSources, popReportSnapshots, cardValueSnapshots, ebayExportDrafts } = schema;
+const { users, collections, cards, jobs, gradingSubmissions, auditLogs, compCache, cardCompReports, cardCompSources, popReportSnapshots, cardValueSnapshots, ebayExportDrafts, cardImageUploads } = schema;
 
 // Baseline SQL executed for in-memory databases (no migration journal needed)
 const BASELINE_SQL = `
@@ -202,6 +202,18 @@ CREATE TABLE IF NOT EXISTS card_value_snapshots (
 CREATE INDEX IF NOT EXISTS idx_value_snapshots_cardId ON card_value_snapshots (cardId);
 CREATE INDEX IF NOT EXISTS idx_value_snapshots_snapshotAt ON card_value_snapshots (snapshotAt);
 CREATE INDEX IF NOT EXISTS idx_value_snapshots_cardId_snapshotAt ON card_value_snapshots (cardId, snapshotAt);
+
+CREATE TABLE IF NOT EXISTS card_image_uploads (
+  id text PRIMARY KEY NOT NULL,
+  cardId text NOT NULL,
+  filename text NOT NULL,
+  remoteUrl text NOT NULL,
+  fileHash text NOT NULL,
+  uploadedAt text NOT NULL,
+  FOREIGN KEY (cardId) REFERENCES cards(id) ON UPDATE no action ON DELETE cascade
+);
+CREATE INDEX IF NOT EXISTS idx_image_uploads_cardId ON card_image_uploads (cardId);
+CREATE INDEX IF NOT EXISTS idx_image_uploads_filename ON card_image_uploads (filename);
 
 CREATE TABLE IF NOT EXISTS ebay_export_drafts (
   id text PRIMARY KEY NOT NULL,
@@ -1663,6 +1675,79 @@ class Database {
       .where(eq(ebayExportDrafts.id, id))
       .run();
     return result.changes > 0;
+  }
+
+  // ─── Card Image Uploads ────────────────────────────────────────────────────
+
+  public async saveImageUpload(upload: { cardId: string; filename: string; remoteUrl: string; fileHash: string }): Promise<ImageUpload> {
+    const now = new Date().toISOString();
+    // Upsert by cardId + filename
+    const existing = this.db.select().from(cardImageUploads)
+      .where(and(eq(cardImageUploads.cardId, upload.cardId), eq(cardImageUploads.filename, upload.filename)))
+      .get();
+
+    if (existing) {
+      this.db.update(cardImageUploads)
+        .set({ remoteUrl: upload.remoteUrl, fileHash: upload.fileHash, uploadedAt: now })
+        .where(eq(cardImageUploads.id, existing.id))
+        .run();
+      return { ...existing, remoteUrl: upload.remoteUrl, fileHash: upload.fileHash, uploadedAt: now };
+    }
+
+    const id = uuidv4();
+    const record: ImageUpload = { id, ...upload, uploadedAt: now };
+    this.db.insert(cardImageUploads).values(record).run();
+    return record;
+  }
+
+  public async getImageUploadsByCardIds(cardIds: string[]): Promise<Map<string, ImageUpload[]>> {
+    if (cardIds.length === 0) return new Map();
+    const rows = this.db.select().from(cardImageUploads)
+      .where(inArray(cardImageUploads.cardId, cardIds))
+      .all();
+
+    const map = new Map<string, ImageUpload[]>();
+    for (const row of rows) {
+      const arr = map.get(row.cardId) || [];
+      arr.push(row);
+      map.set(row.cardId, arr);
+    }
+    return map;
+  }
+
+  public async getRemoteUrlMap(filenames: string[]): Promise<Map<string, string>> {
+    if (filenames.length === 0) return new Map();
+    const rows = this.db.select({ filename: cardImageUploads.filename, remoteUrl: cardImageUploads.remoteUrl })
+      .from(cardImageUploads)
+      .where(inArray(cardImageUploads.filename, filenames))
+      .all();
+
+    const map = new Map<string, string>();
+    for (const row of rows) {
+      map.set(row.filename, row.remoteUrl);
+    }
+    return map;
+  }
+
+  public async deleteImageUploads(cardId: string): Promise<void> {
+    this.db.delete(cardImageUploads).where(eq(cardImageUploads.cardId, cardId)).run();
+  }
+
+  public async getUploadSyncStatus(): Promise<{ total: number; synced: number; unsynced: number }> {
+    // Total images across all inventory cards
+    const allCards = this.db.select({ images: cards.images }).from(cards).all();
+    let totalImages = 0;
+    for (const card of allCards) {
+      const imgs = card.images as unknown as string[];
+      if (Array.isArray(imgs)) {
+        totalImages += imgs.filter(img => !img.endsWith('-comps.txt')).length;
+      }
+    }
+
+    // Count uploaded
+    const [{ synced }] = this.db.select({ synced: count() }).from(cardImageUploads).all();
+
+    return { total: totalImages, synced, unsynced: Math.max(0, totalImages - synced) };
   }
 
   // ─── Lifecycle ───────────────────────────────────────────────────────────────

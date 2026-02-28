@@ -23,6 +23,48 @@
   margin: 0;
 }
 
+.processed-gallery-header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+/* ─── SCP Upload ────────────────────────────────────────────────────────── */
+
+.processed-gallery-scp-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.processed-gallery-scp-status {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.processed-gallery-scp-btn {
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  border: none;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  background: var(--primary-color, #4f8ef7);
+  color: #fff;
+  transition: background var(--transition-base);
+}
+
+.processed-gallery-scp-btn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.processed-gallery-scp-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* ─── Error ──────────────────────────────────────────────────────────────── */
 
 .processed-gallery-error {
@@ -323,6 +365,15 @@
 }
 
 .processed-gallery-action-btn.comps:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.processed-gallery-action-btn.upload:hover {
+  color: var(--primary-color, #4f8ef7);
+}
+
+.processed-gallery-action-btn.upload:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }

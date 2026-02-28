@@ -14,6 +14,12 @@ export interface Config {
   compCacheTtlMs: number;
   rateLimits: Record<string, number>;
   ebayImageBaseUrl: string;
+  gcpScpHost: string;
+  gcpScpUser: string;
+  gcpScpPort: number;
+  gcpScpKeyPath: string;
+  gcpScpRemoteDir: string;
+  gcpImageBaseUrl: string;
 }
 
 export function loadConfig(): Config {
@@ -33,6 +39,12 @@ export function loadConfig(): Config {
     puppeteerHeadless: process.env.PUPPETEER_HEADLESS !== 'false',
     compCacheTtlMs: parseInt(process.env.COMP_CACHE_TTL_MS || '86400000', 10),
     ebayImageBaseUrl: process.env.EBAY_IMAGE_BASE_URL || `http://localhost:${port}`,
+    gcpScpHost: process.env.GCP_SCP_HOST || '',
+    gcpScpUser: process.env.GCP_SCP_USER || '',
+    gcpScpPort: parseInt(process.env.GCP_SCP_PORT || '22', 10),
+    gcpScpKeyPath: process.env.GCP_SCP_KEY_PATH || '',
+    gcpScpRemoteDir: process.env.GCP_SCP_REMOTE_DIR || '',
+    gcpImageBaseUrl: process.env.GCP_IMAGE_BASE_URL || '',
     rateLimits: {
       eBay: parseInt(process.env.RATE_LIMIT_EBAY || '2000', 10),
       SportsCardsPro: parseInt(process.env.RATE_LIMIT_SPORTSCARDSPRO || '1000', 10),

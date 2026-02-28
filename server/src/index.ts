@@ -30,13 +30,14 @@ import AnthropicVisionService from './services/anthropicVisionService';
 import ImageProcessingService from './services/imageProcessingService';
 import ImageCropService from './services/imageCropService';
 import EbayExportService from './services/ebayExportService';
+import ScpUploadService from './services/scpUploadService';
 import AuditService from './services/auditService';
 import { createEbayRoutes } from './routes/ebay';
 import { createAuditLogRoutes } from './routes/auditLogs';
 import { createCollectionRoutes } from './routes/collections';
 import { createAdminUserRoutes } from './routes/adminUsers';
 import { createGradingSubmissionRoutes } from './routes/gradingSubmissions';
-import { EbayExportOptions } from './types';
+import { EbayExportOptions, ScpUploadPayload } from './types';
 
 dotenv.config();
 
@@ -69,6 +70,7 @@ const imageCropService = new ImageCropService();
 const auditService = new AuditService(db);
 const imageProcessingService = new ImageProcessingService(fileService, db, visionService, imageCropService, auditService);
 const ebayExportService = new EbayExportService(db, fileService);
+const scpUploadService = new ScpUploadService(db, fileService, config);
 
 // Create Express app
 const app = express();
@@ -86,7 +88,7 @@ app.use(optionalAuth);
 // Routes
 app.use('/api/health', createHealthRoutes(db, fileService));
 app.use('/api/cards', createCardRoutes(db, auditService));
-app.use('/api/files', createFileRoutes(fileService, auditService));
+app.use('/api/files', createFileRoutes(fileService, auditService, db, scpUploadService));
 app.use('/api/jobs', createJobRoutes(db, auditService));
 app.use('/api/events', createEventRoutes(eventService));
 app.use('/api/auth', createAuthRoutes(db, auditService));
@@ -165,6 +167,13 @@ jobService.registerHandler('image-processing', async (job, updateProgress) => {
   return result as unknown as Record<string, unknown>;
 });
 
+// Register scp-upload job handler
+jobService.registerHandler('scp-upload', async (job, updateProgress) => {
+  const payload = job.payload as unknown as ScpUploadPayload;
+  const result = await scpUploadService.uploadCardImages(payload.cardIds, updateProgress);
+  return result as unknown as Record<string, unknown>;
+});
+
 // Start server (only when run directly, not when imported for testing)
 if (require.main === module) {
   (async () => {
@@ -214,4 +223,4 @@ if (require.main === module) {
   })();
 }
 
-export { app, db, fileService, eventService, jobService, compService, browserService, compCacheService, visionService, imageCropService, imageProcessingService, ebayExportService, auditService };
+export { app, db, fileService, eventService, jobService, compService, browserService, compCacheService, visionService, imageCropService, imageProcessingService, ebayExportService, scpUploadService, auditService };

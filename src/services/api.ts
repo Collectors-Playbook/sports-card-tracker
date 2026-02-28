@@ -420,6 +420,19 @@ class ApiService {
     await this.request<void>(`/ebay/drafts/${draftId}`, { method: 'DELETE' });
   }
 
+  // ─── SCP Image Upload ───────────────────────────────────────────────────
+
+  public async getScpStatus(): Promise<{ total: number; synced: number; unsynced: number; configured: boolean }> {
+    return this.request('/files/scp-status');
+  }
+
+  public async triggerScpUpload(cardIds?: string[]): Promise<{ uploaded?: number; skipped?: number; failed?: number; errors?: string[]; jobId?: string; message?: string }> {
+    return this.request('/files/scp-upload', {
+      method: 'POST',
+      body: JSON.stringify(cardIds ? { cardIds } : {}),
+    });
+  }
+
   // ─── Processed Files ────────────────────────────────────────────────────
 
   public async getProcessedFiles(): Promise<{ name: string; size: number; modified: string; type: string }[]> {

@@ -417,10 +417,11 @@ class ImageProcessingService {
   }
 
   buildProcessedFilename(data: ExtractedCardData, ext: string): string {
+    const sanitize = (s: string) => s.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9._-]/g, '').replace(/-{2,}/g, '-');
     const year = data.year || 'Unknown';
-    const brand = (data.brand || 'Unknown').replace(/\s+/g, '-');
-    const setName = data.setName ? data.setName.replace(/\s+/g, '-') : '';
-    const player = (data.player || 'Unknown').replace(/\s+/g, '-');
+    const brand = sanitize(data.brand || 'Unknown');
+    const setName = data.setName ? sanitize(data.setName) : '';
+    const player = sanitize(data.player || 'Unknown');
     const cardNumber = data.cardNumber || '0';
     if (setName) {
       return `${year}-${brand}-${setName}-${player}-${cardNumber}${ext}`;

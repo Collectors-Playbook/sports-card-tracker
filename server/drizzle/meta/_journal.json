@@ -57,6 +57,13 @@
       "when": 1772496000000,
       "tag": "0008_ebay_export_drafts",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1772582400000,
+      "tag": "0009_card_image_uploads",
+      "breakpoints": true
     }
   ]
 }

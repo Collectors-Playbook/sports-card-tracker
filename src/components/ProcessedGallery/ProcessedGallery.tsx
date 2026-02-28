@@ -172,6 +172,9 @@ const ProcessedGallery: React.FC = () => {
   const [popTiers, setPopTiers] = useState<Map<string, PopRarityTier>>(new Map());
   const [moveCards, setMoveCards] = useState<Card[]>([]);
   const [moveLoading, setMoveLoading] = useState(false);
+  const [scpUploading, setScpUploading] = useState(false);
+  const [scpUploadingId, setScpUploadingId] = useState<string | null>(null);
+  const [scpStatus, setScpStatus] = useState<{ total: number; synced: number; unsynced: number; configured: boolean } | null>(null);
 
   const fetchFiles = useCallback(async () => {
     try {
@@ -200,6 +203,12 @@ const ProcessedGallery: React.FC = () => {
         }
         if (tiers.size > 0) setPopTiers(tiers);
       } catch { /* pop summary is non-critical */ }
+
+      // Fetch SCP upload status
+      try {
+        const status = await apiService.getScpStatus();
+        setScpStatus(status);
+      } catch { /* scp status is non-critical */ }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load files');
     } finally {
@@ -379,6 +388,50 @@ const ProcessedGallery: React.FC = () => {
     await fetchFiles();
   };
 
+  const handleScpUpload = async () => {
+    setScpUploading(true);
+    try {
+      const result = await apiService.triggerScpUpload();
+      if (result.jobId) {
+        alert(`Upload job created. ${result.message || 'Check back shortly.'}`);
+      } else {
+        const parts: string[] = [];
+        if (result.uploaded) parts.push(`${result.uploaded} uploaded`);
+        if (result.skipped) parts.push(`${result.skipped} skipped`);
+        if (result.failed) parts.push(`${result.failed} failed`);
+        alert(`SCP upload complete: ${parts.join(', ')}`);
+      }
+      // Refresh status
+      const status = await apiService.getScpStatus();
+      setScpStatus(status);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'SCP upload failed');
+    } finally {
+      setScpUploading(false);
+    }
+  };
+
+  const handleScpUploadCard = async (pair: CardPair) => {
+    const filename = pair.front?.name || pair.back?.name;
+    if (!filename) return;
+    setScpUploadingId(pair.id);
+    try {
+      const card = await apiService.getCardByImage(filename);
+      const result = await apiService.triggerScpUpload([card.id]);
+      const parts: string[] = [];
+      if (result.uploaded) parts.push(`${result.uploaded} uploaded`);
+      if (result.skipped) parts.push(`${result.skipped} skipped`);
+      if (result.failed) parts.push(`${result.failed} failed`);
+      alert(`Upload complete: ${parts.join(', ')}`);
+      const status = await apiService.getScpStatus();
+      setScpStatus(status);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'SCP upload failed');
+    } finally {
+      setScpUploadingId(null);
+    }
+  };
+
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
@@ -410,10 +463,28 @@ const ProcessedGallery: React.FC = () => {
   return (
     <div className="processed-gallery-container">
       <div className="processed-gallery-header">
-        <h2>Processed Cards</h2>
-        <p className="processed-gallery-subtitle">
-          {pairs.length} card{pairs.length !== 1 ? 's' : ''} ({files.filter(f => /\.(jpg|jpeg|png|gif|webp|bmp|tiff)$/i.test(f.name)).length} image{files.filter(f => /\.(jpg|jpeg|png|gif|webp|bmp|tiff)$/i.test(f.name)).length !== 1 ? 's' : ''}) identified and ready
-        </p>
+        <div className="processed-gallery-header-top">
+          <div>
+            <h2>Processed Cards</h2>
+            <p className="processed-gallery-subtitle">
+              {pairs.length} card{pairs.length !== 1 ? 's' : ''} ({files.filter(f => /\.(jpg|jpeg|png|gif|webp|bmp|tiff)$/i.test(f.name)).length} image{files.filter(f => /\.(jpg|jpeg|png|gif|webp|bmp|tiff)$/i.test(f.name)).length !== 1 ? 's' : ''}) identified and ready
+            </p>
+          </div>
+          {scpStatus?.configured && (
+            <div className="processed-gallery-scp-actions">
+              <span className="processed-gallery-scp-status">
+                {scpStatus.synced}/{scpStatus.total} synced
+              </span>
+              <button
+                className="processed-gallery-scp-btn"
+                disabled={scpUploading || scpStatus.unsynced === 0}
+                onClick={handleScpUpload}
+              >
+                {scpUploading ? 'Uploading...' : `Upload to GCP (${scpStatus.unsynced})`}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {error && (
@@ -559,6 +630,16 @@ const ProcessedGallery: React.FC = () => {
                 >
                   {compLoadingId === pair.id ? 'Loading...' : 'Comps'}
                 </button>
+                {scpStatus?.configured && (
+                  <button
+                    className="processed-gallery-action-btn upload"
+                    title="Upload to GCP"
+                    disabled={scpUploadingId === pair.id}
+                    onClick={() => handleScpUploadCard(pair)}
+                  >
+                    {scpUploadingId === pair.id ? 'Uploading...' : 'Upload'}
+                  </button>
+                )}
                 <button
                   className="processed-gallery-action-btn delete"
                   title="Delete"
