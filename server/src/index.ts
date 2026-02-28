@@ -92,7 +92,7 @@ app.use('/api/events', createEventRoutes(eventService));
 app.use('/api/auth', createAuthRoutes(db, auditService));
 app.use('/api/comps', createCompRoutes(db, compService));
 app.use('/api/image-processing', createImageProcessingRoutes(db, imageProcessingService, fileService, auditService));
-app.use('/api/ebay', createEbayRoutes(db, ebayExportService, auditService));
+app.use('/api/ebay', createEbayRoutes(db, ebayExportService, auditService, config));
 app.use('/api/audit-logs', createAuditLogRoutes(auditService));
 app.use('/api/collections', createCollectionRoutes(db, auditService));
 app.use('/api/admin/users', createAdminUserRoutes(db, auditService));
@@ -142,6 +142,10 @@ jobService.registerHandler('comp-generation', async (job, updateProgress) => {
 // Register ebay-csv job handler
 jobService.registerHandler('ebay-csv', async (job, updateProgress) => {
   const payload = job.payload as unknown as EbayExportOptions;
+  // Ensure imageBaseUrl falls back to config
+  if (!payload.imageBaseUrl) {
+    payload.imageBaseUrl = config.ebayImageBaseUrl;
+  }
   const result = await ebayExportService.generateCsv(payload, updateProgress);
   return result as unknown as Record<string, unknown>;
 });

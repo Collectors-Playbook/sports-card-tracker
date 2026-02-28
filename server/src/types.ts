@@ -292,6 +292,9 @@ export interface EbayExportOptions {
   location: string;
   dispatchTime: number;
   cardIds?: string[];
+  imageBaseUrl?: string;
+  useCompPricing?: boolean;
+  compMaxAgeDays?: number;
 }
 
 export interface EbayExportResult {
@@ -299,7 +302,30 @@ export interface EbayExportResult {
   totalCards: number;
   skippedPcCards: number;
   totalListingValue: number;
+  compPricedCards: number;
+  staleFallbackCards: number;
+  draftId: string;
   generatedAt: string;
+}
+
+export interface EbayExportDraft {
+  id: string;
+  filename: string;
+  totalCards: number;
+  skippedPcCards: number;
+  totalListingValue: number;
+  compPricedCards: number;
+  options: EbayExportOptions;
+  cardSummary: EbayExportCardSummary[];
+  generatedAt: string;
+  createdAt: string;
+}
+
+export interface EbayExportCardSummary {
+  cardId: string;
+  player: string;
+  price: number;
+  priceSource: string;
 }
 
 // ─── Image Processing ───────────────────────────────────────────────────────

@@ -194,6 +194,23 @@ export const popReportSnapshots = sqliteTable('pop_report_snapshots', {
   index('idx_pop_snapshots_fetchedAt').on(table.fetchedAt),
 ]);
 
+// ─── eBay Export Drafts ────────────────────────────────────────────────
+
+export const ebayExportDrafts = sqliteTable('ebay_export_drafts', {
+  id: text('id').primaryKey(),
+  filename: text('filename').notNull(),
+  totalCards: integer('totalCards').notNull(),
+  skippedPcCards: integer('skippedPcCards').notNull(),
+  totalListingValue: real('totalListingValue').notNull(),
+  compPricedCards: integer('compPricedCards').notNull().default(0),
+  options: text('options', { mode: 'json' }).$type<Record<string, unknown>>().notNull().default({}),
+  cardSummary: text('cardSummary', { mode: 'json' }).$type<Record<string, unknown>[]>().notNull().default([]),
+  generatedAt: text('generatedAt').notNull(),
+  createdAt: text('createdAt').notNull(),
+}, (table) => [
+  index('idx_ebay_drafts_generatedAt').on(table.generatedAt),
+]);
+
 // ─── Card Value Snapshots ────────────────────────────────────────────────
 
 export const cardValueSnapshots = sqliteTable('card_value_snapshots', {

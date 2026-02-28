@@ -500,3 +500,110 @@
 .score-circle[data-score-tier="low"] {
   opacity: 0.8;
 }
+
+/* Export History */
+.export-history {
+  margin: 24px 0;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 20px;
+}
+
+.export-history h3 {
+  margin: 0 0 16px;
+  font-size: 1.1rem;
+  color: #1a202c;
+}
+
+.export-history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.export-history-table th {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 2px solid #e2e8f0;
+  color: #718096;
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.export-history-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #edf2f7;
+  color: #2d3748;
+}
+
+.export-history-table tbody tr:hover {
+  background: #f7fafc;
+}
+
+.filename-cell {
+  font-family: monospace;
+  font-size: 0.8rem;
+  color: #718096;
+}
+
+.actions-cell {
+  white-space: nowrap;
+}
+
+.btn-download-draft,
+.btn-delete-draft {
+  padding: 4px 10px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  margin-right: 6px;
+}
+
+.btn-download-draft {
+  background: #4299e1;
+  color: #fff;
+}
+
+.btn-download-draft:hover {
+  background: #3182ce;
+}
+
+.btn-delete-draft {
+  background: #fc8181;
+  color: #fff;
+}
+
+.btn-delete-draft:hover {
+  background: #f56565;
+}
+
+.btn-delete-draft:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.export-history-loading,
+.export-history-error,
+.export-history-empty {
+  padding: 20px;
+  text-align: center;
+  color: #718096;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  margin: 24px 0;
+}
+
+.export-history-error button {
+  margin-top: 8px;
+  padding: 6px 16px;
+  background: #4299e1;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
