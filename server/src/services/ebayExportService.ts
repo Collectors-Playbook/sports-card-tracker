@@ -69,6 +69,19 @@ class EbayExportService {
       );
     }
 
+    // Batch-fetch remote URLs for image uploads
+    const allImageFilenames: string[] = [];
+    for (const card of inventoryCards) {
+      if (card.images) {
+        for (const img of card.images) {
+          if (!img.endsWith('-comps.txt')) {
+            allImageFilenames.push(img);
+          }
+        }
+      }
+    }
+    const remoteUrlMap = await this.db.getRemoteUrlMap(allImageFilenames);
+
     const rows: string[] = [];
     rows.push(this.rowToCsvLine(EBAY_FE_HEADERS));
 
@@ -89,7 +102,7 @@ class EbayExportService {
       }
 
       const startPrice = resolved.price * options.priceMultiplier;
-      const row = this.cardToRow(card, options, startPrice);
+      const row = this.cardToRow(card, options, startPrice, remoteUrlMap);
       rows.push(this.rowToCsvLine(row));
 
       totalListingValue += startPrice;
@@ -220,8 +233,8 @@ class EbayExportService {
     return this.db.getAllCards({ collectionType: 'Inventory' });
   }
 
-  private cardToRow(card: Card, options: EbayExportOptions, startPrice: number): string[] {
-    const picUrl = this.buildPicUrl(card, options.imageBaseUrl);
+  private cardToRow(card: Card, options: EbayExportOptions, startPrice: number, remoteUrlMap?: Map<string, string>): string[] {
+    const picUrl = this.buildPicUrl(card, options.imageBaseUrl, remoteUrlMap);
     const buyItNowPrice = startPrice * 0.95;
 
     return [
@@ -253,13 +266,21 @@ class EbayExportService {
     ];
   }
 
-  private buildPicUrl(card: Card, imageBaseUrl?: string): string {
+  private buildPicUrl(card: Card, imageBaseUrl?: string, remoteUrlMap?: Map<string, string>): string {
     if (!card.images || card.images.length === 0) return '';
     const base = imageBaseUrl || '';
-    if (!base) return '';
 
     return card.images
-      .map(img => `${base}/api/files/processed/${encodeURIComponent(img)}`)
+      .filter(img => !img.endsWith('-comps.txt'))
+      .map(img => {
+        // Prefer remote URL if available
+        const remoteUrl = remoteUrlMap?.get(img);
+        if (remoteUrl) return remoteUrl;
+        // Fall back to local API path
+        if (!base) return '';
+        return `${base}/api/files/processed/${encodeURIComponent(img)}`;
+      })
+      .filter(url => url !== '')
       .join('|');
   }
 
