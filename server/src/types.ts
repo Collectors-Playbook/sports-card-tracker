@@ -287,7 +287,7 @@ export interface PopRequest {
 
 export interface EbayExportOptions {
   priceMultiplier: number;
-  shippingCost: number;
+  shippingCost?: number;
   duration: string;
   location: string;
   dispatchTime: number;
