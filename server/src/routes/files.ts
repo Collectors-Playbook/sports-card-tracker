@@ -3,13 +3,15 @@ import multer from 'multer';
 import path from 'path';
 import FileService from '../services/fileService';
 import AuditService from '../services/auditService';
-import { AuthenticatedRequest } from '../types';
+import ScpUploadService from '../services/scpUploadService';
+import Database from '../database';
+import { AuthenticatedRequest, ScpUploadPayload } from '../types';
 
 const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tiff'];
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 const MAX_FILES = 50;
 
-export function createFileRoutes(fileService: FileService, auditService: AuditService): Router {
+export function createFileRoutes(fileService: FileService, auditService: AuditService, db?: Database, scpUploadService?: ScpUploadService): Router {
   const router = Router();
 
   const storage = multer.diskStorage({
@@ -192,6 +194,57 @@ export function createFileRoutes(fileService: FileService, auditService: AuditSe
     fileService.clearLog(req.params.logname);
     auditService.log(req, { action: 'log.clear', entity: 'log', entityId: req.params.logname });
     res.status(204).send();
+  });
+
+  // SCP upload status
+  router.get('/scp-status', async (_req: Request, res: Response) => {
+    if (!db) {
+      res.status(500).json({ error: 'Database not available' });
+      return;
+    }
+    try {
+      const status = await db.getUploadSyncStatus();
+      res.json({ ...status, configured: scpUploadService?.isConfigured() ?? false });
+    } catch (error) {
+      console.error('Error getting SCP status:', error);
+      res.status(500).json({ error: 'Failed to get SCP upload status' });
+    }
+  });
+
+  // Trigger SCP upload
+  router.post('/scp-upload', async (req: AuthenticatedRequest, res: Response) => {
+    if (!scpUploadService) {
+      res.status(500).json({ error: 'SCP service not available' });
+      return;
+    }
+    if (!scpUploadService.isConfigured()) {
+      res.status(503).json({ error: 'GCP SCP is not configured. Set GCP_SCP_HOST in .env' });
+      return;
+    }
+
+    const payload: ScpUploadPayload = req.body || {};
+
+    // For bulk uploads (no specific cardIds or many cards), use job queue
+    if (db && (!payload.cardIds || payload.cardIds.length > 10)) {
+      try {
+        const job = await db.createJob({ type: 'scp-upload', payload: payload as unknown as Record<string, unknown> });
+        res.status(202).json({ jobId: job.id, message: 'SCP upload job created' });
+      } catch (error) {
+        console.error('Error creating SCP upload job:', error);
+        res.status(500).json({ error: 'Failed to create SCP upload job' });
+      }
+      return;
+    }
+
+    // For small batches, run synchronously — always force re-upload for explicit requests
+    try {
+      const result = await scpUploadService.uploadCardImages(payload.cardIds, undefined, true);
+      res.json(result);
+    } catch (error) {
+      console.error('Error during SCP upload:', error);
+      const msg = error instanceof Error ? error.message : 'SCP upload failed';
+      res.status(500).json({ error: msg });
+    }
   });
 
   return router;
