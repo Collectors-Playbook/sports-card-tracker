@@ -1,10 +1,10 @@
-import React, { useState, useMemo, memo, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, memo, useCallback } from 'react';
 import { useCards } from '../../context/ApiCardContext';
 import { Card, FilterOptions, SortOption, COLLECTION_TYPES } from '../../types';
 import { BulkEbayExport } from '../EbayListing/BulkEbayExport';
 import LoadingSkeleton from '../LoadingSkeleton/LoadingSkeleton';
 import MoveCardsModal from '../MoveCardsModal/MoveCardsModal';
-import { apiService } from '../../services/api';
+import { apiService, PopRarityTier } from '../../services/api';
 import './CardList.css';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
@@ -28,6 +28,24 @@ const CardList: React.FC<CardListProps> = ({ onCardSelect, onEditCard, selectedC
   const [selectedCollection, setSelectedCollection] = useState<any>(null);
   const [selectedCards, setSelectedCards] = useState<Set<string>>(new Set());
   const [showMoveModal, setShowMoveModal] = useState(false);
+  const [popTiers, setPopTiers] = useState<Map<string, PopRarityTier>>(new Map());
+  const [popPrices, setPopPrices] = useState<Map<string, number>>(new Map());
+
+  // Load pop tiers and prices
+  useEffect(() => {
+    apiService.getPopSummary().then(summary => {
+      const tiers = new Map<string, PopRarityTier>();
+      const prices = new Map<string, number>();
+      for (const entry of summary) {
+        tiers.set(entry.cardId, entry.rarityTier);
+        if (entry.popAdjustedAverage != null && entry.popAdjustedAverage > 0) {
+          prices.set(entry.cardId, entry.popAdjustedAverage);
+        }
+      }
+      if (tiers.size > 0) setPopTiers(tiers);
+      if (prices.size > 0) setPopPrices(prices);
+    }).catch(() => { /* non-critical */ });
+  }, []);
 
   // Load collection info when selectedCollectionId changes
   React.useEffect(() => {
@@ -372,6 +390,24 @@ const CardList: React.FC<CardListProps> = ({ onCardSelect, onEditCard, selectedC
               
               <div className="card-player-name">
                 <h4>{card.player}</h4>
+                <p className="card-detail-line">
+                  {card.year} {card.brand}{card.setName ? ` ${card.setName}` : ''} #{card.cardNumber}
+                </p>
+                <div className="card-pills">
+                  {popTiers.has(card.id) && (
+                    <span className={`card-pop-badge card-pop-${popTiers.get(card.id)}`}>
+                      {popTiers.get(card.id) === 'ultra-low' ? 'Ultra-Low Pop' :
+                       popTiers.get(card.id) === 'low' ? 'Low Pop' :
+                       popTiers.get(card.id) === 'medium' ? 'Med Pop' :
+                       popTiers.get(card.id) === 'high' ? 'High Pop' : 'Very High Pop'}
+                    </span>
+                  )}
+                  {popPrices.has(card.id) && (
+                    <span className="card-pop-price-badge">
+                      ${popPrices.get(card.id)!.toFixed(2)}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           </div>

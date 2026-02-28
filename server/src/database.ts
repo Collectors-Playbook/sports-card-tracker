@@ -746,17 +746,20 @@ class Database {
 
       // Create eBay collection if it doesn't exist
       const allCols = await this.getAllCollections(userId);
-      if (!allCols.some(c => c.name === 'eBay')) {
+      const ebayCol = allCols.find(c => c.name === 'eBay');
+      if (!ebayCol) {
         await this.createCollection({
           userId,
           name: 'eBay',
           description: 'Cards listed or to be listed on eBay',
           icon: '',
-          color: '#22C55E',
+          color: '#0064D2',
           isDefault: false,
           visibility: 'private',
           tags: [],
         });
+      } else if (ebayCol.color === '#22C55E') {
+        await this.updateCollection(ebayCol.id, { color: '#0064D2' });
       }
 
       return this.getAllCollections(userId);
@@ -778,7 +781,7 @@ class Database {
       name: 'eBay',
       description: 'Cards listed or to be listed on eBay',
       icon: '',
-      color: '#22C55E',
+      color: '#0064D2',
       isDefault: false,
       visibility: 'private',
       tags: [],
@@ -1295,12 +1298,13 @@ class Database {
     return results;
   }
 
-  public async getPopSummary(): Promise<{ cardId: string; rarityTier: string; images: string[] }[]> {
+  public async getPopSummary(): Promise<{ cardId: string; rarityTier: string; popAdjustedAverage: number | null; images: string[] }[]> {
     // Get the latest comp report per card that has popData, joined with card images
     const rows = this.db
       .select({
         cardId: cardCompReports.cardId,
         popData: cardCompReports.popData,
+        popAdjustedAverage: cardCompReports.popAdjustedAverage,
         images: cards.images,
         generatedAt: cardCompReports.generatedAt,
       })
@@ -1312,7 +1316,7 @@ class Database {
 
     // Dedupe to latest report per card
     const seen = new Set<string>();
-    const results: { cardId: string; rarityTier: string; images: string[] }[] = [];
+    const results: { cardId: string; rarityTier: string; popAdjustedAverage: number | null; images: string[] }[] = [];
     for (const row of rows) {
       if (seen.has(row.cardId)) continue;
       seen.add(row.cardId);
@@ -1320,7 +1324,7 @@ class Database {
         const pop = JSON.parse(row.popData!) as PopulationData;
         if (pop.rarityTier) {
           const images = Array.isArray(row.images) ? row.images as string[] : JSON.parse(row.images as string || '[]');
-          results.push({ cardId: row.cardId, rarityTier: pop.rarityTier, images });
+          results.push({ cardId: row.cardId, rarityTier: pop.rarityTier, popAdjustedAverage: row.popAdjustedAverage ?? null, images });
         }
       } catch { /* skip malformed */ }
     }
