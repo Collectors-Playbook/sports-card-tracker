@@ -80,18 +80,28 @@ describe('EbayExportService', () => {
       await createInventoryCard();
       const result = await service.generateCsv(defaultOptions);
 
-      expect(result.filename).toMatch(/^ebay-draft-\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}-\d{3}\.csv$/);
+      expect(result.filename).toMatch(/^ebay-draft-upload-\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}-\d{3}\.csv$/);
       expect(result.generatedAt).toBeDefined();
       expect(result.draftId).toBeDefined();
       expect(result.compPricedCards).toBeDefined();
       expect(result.staleFallbackCards).toBeDefined();
 
       const csvContent = fs.readFileSync(service.getOutputPath(), 'utf-8');
-      const headerLine = csvContent.split('\n')[0];
-      expect(headerLine).toContain('*Action(SiteID=US|Country=US|Currency=USD|Version=1193)');
+      const lines = csvContent.split('\n');
+
+      // First 4 lines are #INFO preamble rows
+      expect(lines[0]).toContain('#INFO');
+      expect(lines[1]).toContain('#INFO');
+      expect(lines[2]).toContain('#INFO');
+      expect(lines[3]).toContain('#INFO');
+
+      // Line 5 (index 4) is the header row
+      const headerLine = lines[4];
+      expect(headerLine).toContain('Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8)');
       expect(headerLine).toContain('Custom label (SKU)');
-      expect(headerLine).toContain('*Category');
-      expect(headerLine).toContain('*Title');
+      expect(headerLine).toContain('Category ID');
+      expect(headerLine).toContain('Price');
+      expect(headerLine).toContain('Format');
     });
 
     it('generates correct row count for Inventory cards', async () => {
@@ -110,7 +120,7 @@ describe('EbayExportService', () => {
       const draftRows = csvContent.split('\n').filter(l => l.startsWith('Draft,'));
       expect(draftRows.length).toBe(2);
       // Header row
-      expect(csvContent).toContain('*Action(SiteID=US|Country=US|Currency=USD|Version=1193)');
+      expect(csvContent).toContain('Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8)');
     });
 
     it('excludes PC cards', async () => {
@@ -174,8 +184,8 @@ describe('EbayExportService', () => {
       });
 
       const csvContent = fs.readFileSync(service.getOutputPath(), 'utf-8');
-      const dataLine = csvContent.split('\n')[1];
-      // Extract title — it's the 3rd column. Find it by parsing
+      // Data rows start after 4 #INFO rows + 1 header row (index 5)
+      const dataLine = csvContent.split('\n').filter(l => l.startsWith('Draft,'))[0];
       // The title should end with ... if truncated
       expect(dataLine).toContain('...');
     });
@@ -217,7 +227,7 @@ describe('EbayExportService', () => {
 
       const csvContent = fs.readFileSync(service.getOutputPath(), 'utf-8');
       const lines = csvContent.split('\n').filter(l => l.trim());
-      expect(lines.length).toBe(1); // header only
+      expect(lines.length).toBe(5); // 4 #INFO rows + 1 header row
     });
 
     it('calls onProgress callback', async () => {
@@ -241,7 +251,7 @@ describe('EbayExportService', () => {
 
   describe('templateExists / outputExists', () => {
     it('reports template existence correctly', () => {
-      // Template is at dataDir/eBay-draft-listing-template.csv
+      // Template is at dataDir/ebay-draft.csv
       const templatePath = service.getTemplatePath();
       // Initially no template in temp dir
       const exists = service.templateExists();
