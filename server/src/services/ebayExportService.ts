@@ -7,6 +7,7 @@ import { Card, EbayExportOptions, EbayExportResult, EbayExportCardSummary, Store
 
 const EBAY_FE_HEADERS = [
   '*Action(SiteID=US|Country=US|Currency=USD|Version=1193)',
+  'Custom label (SKU)',
   '*Category',
   '*Title',
   '*Description',
@@ -224,11 +225,12 @@ class EbayExportService {
     const buyItNowPrice = startPrice * 0.95;
 
     return [
-      'Add',
+      'Draft',
+      this.generateSku(card),
       this.getCategoryId(card.category),
       this.generateTitle(card),
       this.generateDescription(card),
-      this.getConditionId(card.condition),
+      this.getConditionId(card),
       picUrl,
       '',
       '1',
@@ -261,26 +263,47 @@ class EbayExportService {
       .join('|');
   }
 
+  private generateSku(card: Card): string {
+    const lastName = card.player.split(' ').pop()?.toUpperCase() || 'UNKNOWN';
+    const year = card.year.toString();
+    const cardNum = card.cardNumber;
+
+    if (card.isGraded && card.gradingCompany && card.grade) {
+      const grade = card.grade.replace('.', '');
+      return `${lastName}-${year}-${cardNum}-${card.gradingCompany}${grade}`;
+    }
+
+    return `${lastName}-${year}-${cardNum}-RAW`;
+  }
+
   private generateTitle(card: Card): string {
     const parts: string[] = [];
 
     parts.push(`${card.year} ${card.brand}`);
+
+    if (card.setName) {
+      parts.push(card.setName);
+    }
+
     parts.push(card.player);
-    parts.push(`#${card.cardNumber}`);
 
     if (card.parallel) {
       parts.push(card.parallel);
     }
 
-    if (card.notes?.toLowerCase().includes('rookie')) {
+    parts.push(`#${card.cardNumber}`);
+
+    if (card.gradingCompany && card.grade) {
+      parts.push(`${card.gradingCompany} ${card.grade}`);
+    }
+
+    if (card.isRookie) {
       parts.push('RC');
     }
 
-    if (card.gradingCompany) {
-      parts.push(`${card.gradingCompany} ${card.condition}`);
+    if (card.team) {
+      parts.push(card.team);
     }
-
-    parts.push(card.category);
 
     let title = parts.join(' ');
     if (title.length > 80) {
@@ -293,71 +316,82 @@ class EbayExportService {
   private generateDescription(card: Card): string {
     const sections: string[] = [];
 
-    sections.push(`<h2>${card.year} ${card.brand} ${card.player} #${card.cardNumber}</h2>`);
+    // Header line
+    const setDisplay = card.setName ? ` ${card.setName}` : '';
+    sections.push(`<p><b>${card.year} ${card.brand}${setDisplay} ${card.player} #${card.cardNumber}</b></p>`);
 
-    sections.push('<table style="width:100%; border-collapse: collapse;">');
-    sections.push(`<tr><td style="padding:5px; border:1px solid #ddd;"><strong>Year:</strong></td><td style="padding:5px; border:1px solid #ddd;">${card.year}</td></tr>`);
-    sections.push(`<tr><td style="padding:5px; border:1px solid #ddd;"><strong>Brand:</strong></td><td style="padding:5px; border:1px solid #ddd;">${card.brand}</td></tr>`);
-    sections.push(`<tr><td style="padding:5px; border:1px solid #ddd;"><strong>Player:</strong></td><td style="padding:5px; border:1px solid #ddd;">${card.player}</td></tr>`);
-    sections.push(`<tr><td style="padding:5px; border:1px solid #ddd;"><strong>Team:</strong></td><td style="padding:5px; border:1px solid #ddd;">${card.team}</td></tr>`);
-    sections.push(`<tr><td style="padding:5px; border:1px solid #ddd;"><strong>Card Number:</strong></td><td style="padding:5px; border:1px solid #ddd;">#${card.cardNumber}</td></tr>`);
+    // Grade line
+    if (card.isGraded && card.gradingCompany && card.grade) {
+      let gradeLine = `<p><b>Grade:</b> ${card.gradingCompany} ${card.grade}`;
+      if (card.serialNumber) {
+        gradeLine += `<br><b>Serial Numbered:</b> ${card.serialNumber}`;
+      }
+      gradeLine += '</p>';
+      sections.push(gradeLine);
+    } else if (card.serialNumber) {
+      sections.push(`<p><b>Serial Numbered:</b> ${card.serialNumber}</p>`);
+    }
 
+    // Features line (pipe-separated)
+    const features: string[] = [];
     if (card.parallel) {
-      sections.push(`<tr><td style="padding:5px; border:1px solid #ddd;"><strong>Parallel/Variation:</strong></td><td style="padding:5px; border:1px solid #ddd;">${card.parallel}</td></tr>`);
+      features.push(card.parallel);
+    }
+    if (card.isRookie) {
+      features.push('Rookie Card');
+    }
+    if (card.isAutograph) {
+      features.push('Autograph');
+    }
+    if (card.isRelic) {
+      features.push('Game-Used Relic');
+    }
+    if (features.length > 0) {
+      sections.push(`<p>${features.join(' | ')}</p>`);
     }
 
-    sections.push(`<tr><td style="padding:5px; border:1px solid #ddd;"><strong>Condition:</strong></td><td style="padding:5px; border:1px solid #ddd;">${card.condition}</td></tr>`);
-
-    if (card.gradingCompany) {
-      sections.push(`<tr><td style="padding:5px; border:1px solid #ddd;"><strong>Grading Company:</strong></td><td style="padding:5px; border:1px solid #ddd;">${card.gradingCompany}</td></tr>`);
+    // Team
+    if (card.team) {
+      sections.push(`<p>${card.team}</p>`);
     }
 
-    sections.push('</table>');
-
+    // Notes
     if (card.notes) {
-      sections.push('<h3>Additional Information:</h3>');
       sections.push(`<p>${card.notes}</p>`);
     }
 
-    sections.push('<h3>Shipping & Handling:</h3>');
-    sections.push('<ul>');
-    sections.push('<li>Card shipped in protective sleeve and toploader</li>');
-    sections.push('<li>Bubble mailer with tracking</li>');
-    sections.push('<li>Ships within 1 business day</li>');
-    sections.push('</ul>');
+    // Shipping
+    if (card.isGraded && card.gradingCompany) {
+      sections.push(`<p>Card ships in ${card.gradingCompany} protective case with tracking.</p>`);
+    } else {
+      sections.push('<p>Card shipped in protective sleeve and toploader with tracking.</p>');
+    }
 
-    sections.push('<h3>Please Note:</h3>');
-    sections.push('<p>See photos for exact condition. All cards are authentic and from a smoke-free environment.</p>');
-
-    return sections.join('\n');
+    return sections.join('');
   }
 
   private getCategoryId(category: string): string {
-    const categoryMap: Record<string, string> = {
-      'Baseball': '261328',
-      'Basketball': '261329',
-      'Football': '261330',
-      'Hockey': '261331',
-      'Soccer': '261333',
-      'Pokemon': '183454',
-      'Other': '261324',
-    };
-    return categoryMap[category] || '261324';
+    if (category === 'Pokemon') {
+      return '183454';
+    }
+    return '215';
   }
 
-  private getConditionId(condition: string): string {
-    if (condition.includes('10') || condition.includes('GEM')) {
-      return '275000';
-    } else if (condition.includes('9.5')) {
-      return '275001';
-    } else if (condition.includes('9')) {
-      return '275002';
-    } else if (condition.includes('8')) {
-      return '275003';
-    } else if (condition.includes('7')) {
-      return '275004';
-    } else if (condition === 'RAW') {
-      return '3000';
+  private getConditionId(card: Card): string {
+    if (card.isGraded && card.grade) {
+      const grade = card.grade;
+      if (grade.includes('10') || grade.includes('GEM')) {
+        return '2750';
+      } else if (grade.includes('9.5')) {
+        return '2750';
+      } else if (grade.includes('9')) {
+        return '2750';
+      } else if (grade.includes('8')) {
+        return '2750';
+      } else if (grade.includes('7')) {
+        return '2750';
+      }
+      return '2750';
     }
     return '3000';
   }
