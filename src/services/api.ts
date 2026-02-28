@@ -330,7 +330,7 @@ class ApiService {
 
   public async generateEbayCsv(options: {
     priceMultiplier: number;
-    shippingCost: number;
+    shippingCost?: number;
     duration?: string;
     location?: string;
     dispatchTime?: number;
@@ -350,7 +350,7 @@ class ApiService {
 
   public async generateEbayCsvAsync(options: {
     priceMultiplier: number;
-    shippingCost: number;
+    shippingCost?: number;
     duration?: string;
     location?: string;
     dispatchTime?: number;
