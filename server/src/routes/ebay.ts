@@ -13,14 +13,14 @@ export function createEbayRoutes(db: Database, ebayExportService: EbayExportServ
     try {
       const { priceMultiplier, shippingCost, duration, location, dispatchTime, cardIds, imageBaseUrl, useCompPricing, compMaxAgeDays } = req.body;
 
-      if (priceMultiplier == null || shippingCost == null) {
-        res.status(400).json({ error: 'Missing required fields: priceMultiplier, shippingCost' });
+      if (priceMultiplier == null) {
+        res.status(400).json({ error: 'Missing required field: priceMultiplier' });
         return;
       }
 
       const result = await ebayExportService.generateCsv({
         priceMultiplier,
-        shippingCost,
+        shippingCost: shippingCost ?? 0,
         duration: duration || 'GTC',
         location: location || 'USA',
         dispatchTime: dispatchTime || 1,
@@ -43,8 +43,8 @@ export function createEbayRoutes(db: Database, ebayExportService: EbayExportServ
     try {
       const { priceMultiplier, shippingCost, duration, location, dispatchTime, cardIds, imageBaseUrl, useCompPricing, compMaxAgeDays } = req.body;
 
-      if (priceMultiplier == null || shippingCost == null) {
-        res.status(400).json({ error: 'Missing required fields: priceMultiplier, shippingCost' });
+      if (priceMultiplier == null) {
+        res.status(400).json({ error: 'Missing required field: priceMultiplier' });
         return;
       }
 
@@ -52,7 +52,7 @@ export function createEbayRoutes(db: Database, ebayExportService: EbayExportServ
         type: 'ebay-csv',
         payload: {
           priceMultiplier,
-          shippingCost,
+          shippingCost: shippingCost ?? 0,
           duration,
           location,
           dispatchTime,
@@ -97,7 +97,7 @@ export function createEbayRoutes(db: Database, ebayExportService: EbayExportServ
       }
 
       const templatePath = ebayExportService.getTemplatePath();
-      res.download(templatePath, 'eBay-draft-listing-template.csv');
+      res.download(templatePath, 'ebay-draft.csv');
     } catch (error) {
       console.error('Error downloading template:', error);
       res.status(500).json({ error: 'Failed to download template' });

@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useCards } from '../../context/ApiCardContext';
 import { Card } from '../../types';
-import BulkEbayExport from './BulkEbayExport';
 import EbayExportHistory from './EbayExportHistory';
+import apiService from '../../services/api';
 import { quickExportAllUnsoldCards, generateExportSummary } from '../../utils/quickEbayExport';
 import { instantExportAllUnsoldCards } from '../../utils/instantEbayExport';
 import './EbayListings.css';
@@ -27,7 +27,7 @@ const EbayListings: React.FC = () => {
   const [minProfit, setMinProfit] = useState<number>(0);
   const [showOnlyUnsold, setShowOnlyUnsold] = useState<boolean>(true);
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
-  const [showBulkExport, setShowBulkExport] = useState<boolean>(false);
+  const [ebayExporting, setEbayExporting] = useState<boolean>(false);
   // Removed automatic export functionality
 
   const evaluateCard = (card: Card): ListingRecommendation | null => {
@@ -193,6 +193,29 @@ const EbayListings: React.FC = () => {
     return sportMap[card.category] || sportMap['Other'];
   };
 
+  const handleBulkEbayExport = async () => {
+    setEbayExporting(true);
+    try {
+      const result = await apiService.generateEbayCsv({
+        priceMultiplier: 0.9,
+      });
+
+      const blob = await apiService.downloadEbayCsv();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = result.filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(`Export failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setEbayExporting(false);
+    }
+  };
+
   const recommendations = useMemo(() => {
     const unsoldCards = showOnlyUnsold 
       ? state.cards.filter(card => !card.sellDate)
@@ -327,11 +350,12 @@ const EbayListings: React.FC = () => {
           >
             🚀 Export with Details
           </button>
-          <button 
+          <button
             className="btn-bulk-export"
-            onClick={() => setShowBulkExport(true)}
+            onClick={handleBulkEbayExport}
+            disabled={ebayExporting}
           >
-            ⚙️ Custom Options
+            {ebayExporting ? 'Exporting...' : '⚙️ Bulk eBay Export'}
           </button>
         </div>
       </div>
@@ -512,12 +536,6 @@ const EbayListings: React.FC = () => {
       
       <EbayExportHistory />
 
-      {showBulkExport && (
-        <BulkEbayExport
-          cards={state.cards}
-          onClose={() => setShowBulkExport(false)}
-        />
-      )}
     </div>
   );
 };

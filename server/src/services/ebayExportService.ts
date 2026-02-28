@@ -5,36 +5,29 @@ import Database from '../database';
 import FileService from './fileService';
 import { Card, EbayExportOptions, EbayExportResult, EbayExportCardSummary, StoredCompReport } from '../types';
 
-const EBAY_FE_HEADERS = [
-  '*Action(SiteID=US|Country=US|Currency=USD|Version=1193)',
+const TEMPLATE_HEADERS = [
+  'Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8)',
   'Custom label (SKU)',
-  '*Category',
-  '*Title',
-  '*Description',
-  '*ConditionID',
-  '*PicURL',
-  'Product:UPC',
-  '*Quantity',
-  '*Format',
-  '*StartPrice',
-  'BuyItNowPrice',
-  '*Duration',
-  '*Location',
-  'ShippingType',
-  'ShippingService-1:Option',
-  'ShippingService-1:Cost',
-  'PaymentMethods',
-  '*DispatchTimeMax',
-  '*ReturnsAcceptedOption',
-  'ReturnsWithinOption',
-  'RefundOption',
-  'ShippingCostPaidByOption',
-  'PayPalEmailAddress',
-  'UseTaxTable',
+  'Category ID',
+  'Title',
+  'UPC',
+  'Price',
+  'Quantity',
+  'Item photo URL',
+  'Condition ID',
+  'Description',
+  'Format',
+];
+
+const DEFAULT_INFO_ROWS = [
+  '#INFO,Version=0.0.2,Template= eBay-draft-listings-template_US,,,,,,,,',
+  '#INFO Action and Category ID are required fields. 1) Set Action to Draft 2) Please find the category ID for your listings here: https://pages.ebay.com/sellerinformation/news/categorychanges.html,,,,,,,,,,',
+  '"#INFO After you\'ve successfully uploaded your draft from the Seller Hub Reports tab, complete your drafts to active listings here: https://www.ebay.com/sh/lst/drafts",,,,,,,,,,',
+  '#INFO,,,,,,,,,,',
 ];
 
 const OUTPUT_FILENAME = 'ebay-draft-upload-batch.csv';
-const TEMPLATE_FILENAME = 'eBay-draft-listing-template.csv';
+const TEMPLATE_FILENAME = 'ebay-draft.csv';
 
 interface ResolvedPrice {
   price: number;
@@ -82,8 +75,9 @@ class EbayExportService {
     }
     const remoteUrlMap = await this.db.getRemoteUrlMap(allImageFilenames);
 
-    const rows: string[] = [];
-    rows.push(this.rowToCsvLine(EBAY_FE_HEADERS));
+    const infoRows = this.readInfoRows();
+    const rows: string[] = [...infoRows];
+    rows.push(this.rowToCsvLine(TEMPLATE_HEADERS));
 
     let totalListingValue = 0;
     let compPricedCards = 0;
@@ -102,7 +96,7 @@ class EbayExportService {
       }
 
       const startPrice = resolved.price * options.priceMultiplier;
-      const row = this.cardToRow(card, options, startPrice, remoteUrlMap);
+      const row = this.cardToRow(card, options, startPrice, remoteUrlMap, compReport);
       rows.push(this.rowToCsvLine(row));
 
       totalListingValue += startPrice;
@@ -127,7 +121,7 @@ class EbayExportService {
 
     // Write timestamped draft file
     const timestamp = generatedAt.replace(/[:.]/g, '-').replace('T', '_').replace('Z', '');
-    const draftFilename = `ebay-draft-${timestamp}.csv`;
+    const draftFilename = `ebay-draft-upload-${timestamp}.csv`;
     const draftPath = path.join(this.fileService.getDataDir(), draftFilename);
     fs.writeFileSync(draftPath, csvContent, 'utf-8');
 
@@ -221,6 +215,28 @@ class EbayExportService {
     return { price: card.currentValue, source: 'card-value' };
   }
 
+  private readInfoRows(): string[] {
+    try {
+      const templatePath = this.getTemplatePath();
+      if (!fs.existsSync(templatePath)) {
+        return [...DEFAULT_INFO_ROWS];
+      }
+      const content = fs.readFileSync(templatePath, 'utf-8');
+      const lines = content.split('\n');
+      const infoLines: string[] = [];
+      for (const line of lines) {
+        if (line.startsWith('#INFO') || line.startsWith('"#INFO')) {
+          infoLines.push(line);
+        } else {
+          break;
+        }
+      }
+      return infoLines.length > 0 ? infoLines : [...DEFAULT_INFO_ROWS];
+    } catch {
+      return [...DEFAULT_INFO_ROWS];
+    }
+  }
+
   private async fetchCards(cardIds?: string[]): Promise<Card[]> {
     if (cardIds && cardIds.length > 0) {
       const cards: Card[] = [];
@@ -233,36 +249,19 @@ class EbayExportService {
     return this.db.getAllCards({ collectionType: 'Inventory' });
   }
 
-  private cardToRow(card: Card, options: EbayExportOptions, startPrice: number, remoteUrlMap?: Map<string, string>): string[] {
-    const picUrl = this.buildPicUrl(card, options.imageBaseUrl, remoteUrlMap);
-    const buyItNowPrice = startPrice * 0.95;
-
+  private cardToRow(card: Card, options: EbayExportOptions, startPrice: number, _remoteUrlMap?: Map<string, string>, compReport?: StoredCompReport): string[] {
     return [
       'Draft',
       this.generateSku(card),
       this.getCategoryId(card.category),
       this.generateTitle(card),
-      this.generateDescription(card),
-      this.getConditionId(card),
-      picUrl,
       '',
-      '1',
-      'FixedPrice',
       startPrice.toFixed(2),
-      buyItNowPrice.toFixed(2),
-      options.duration || 'GTC',
-      options.location || 'USA',
-      'Flat',
-      'USPS First Class',
-      options.shippingCost.toFixed(2),
-      'PayPal',
-      (options.dispatchTime || 1).toString(),
-      'ReturnsAccepted',
-      'Days_30',
-      'MoneyBack',
-      'Buyer',
-      '',
       '1',
+      '',
+      this.getConditionId(card),
+      this.generateDescription(card, compReport),
+      'FixedPrice',
     ];
   }
 
@@ -334,16 +333,20 @@ class EbayExportService {
     return title;
   }
 
-  private generateDescription(card: Card): string {
+  private generateDescription(card: Card, compReport?: StoredCompReport): string {
     const sections: string[] = [];
 
     // Header line
     const setDisplay = card.setName ? ` ${card.setName}` : '';
     sections.push(`<p><b>${card.year} ${card.brand}${setDisplay} ${card.player} #${card.cardNumber}</b></p>`);
 
-    // Grade line
+    // Grade line with condition label
     if (card.isGraded && card.gradingCompany && card.grade) {
-      let gradeLine = `<p><b>Grade:</b> ${card.gradingCompany} ${card.grade}`;
+      const condLabel = this.getConditionLabel(card.gradingCompany, card.grade);
+      const gradeDisplay = condLabel
+        ? `${card.gradingCompany} ${card.grade} ${condLabel}`
+        : `${card.gradingCompany} ${card.grade}`;
+      let gradeLine = `<p><b>Grade:</b> ${gradeDisplay}`;
       if (card.serialNumber) {
         gradeLine += `<br><b>Serial Numbered:</b> ${card.serialNumber}`;
       }
@@ -367,13 +370,47 @@ class EbayExportService {
     if (card.isRelic) {
       features.push('Game-Used Relic');
     }
+    if (card.isNumbered && !card.serialNumber) {
+      features.push('Numbered');
+    }
     if (features.length > 0) {
       sections.push(`<p>${features.join(' | ')}</p>`);
     }
 
-    // Team
+    // Team + sport context
+    const teamParts: string[] = [];
     if (card.team) {
-      sections.push(`<p>${card.team}</p>`);
+      teamParts.push(card.team);
+    }
+    if (card.category && card.category !== 'Other') {
+      teamParts.push(card.category);
+    }
+    if (teamParts.length > 0) {
+      sections.push(`<p>${teamParts.join(' | ')}</p>`);
+    }
+
+    // Vintage tag
+    if (card.year < 1990) {
+      sections.push('<p><b>VINTAGE</b></p>');
+    }
+
+    // Comp pricing context
+    if (compReport) {
+      const priceParts: string[] = [];
+      if (compReport.aggregateAverage != null && compReport.aggregateAverage > 0) {
+        priceParts.push(`Avg Market Value: $${compReport.aggregateAverage.toFixed(2)}`);
+      }
+      if (compReport.aggregateLow != null && compReport.aggregateHigh != null
+          && compReport.aggregateLow > 0 && compReport.aggregateHigh > 0) {
+        priceParts.push(`Recent Sales Range: $${compReport.aggregateLow.toFixed(2)} - $${compReport.aggregateHigh.toFixed(2)}`);
+      }
+      const sourceCount = compReport.sources?.filter(s => !s.error && s.sales.length > 0).length;
+      if (sourceCount && sourceCount > 0) {
+        priceParts.push(`Based on ${sourceCount} market source${sourceCount > 1 ? 's' : ''}`);
+      }
+      if (priceParts.length > 0) {
+        sections.push(`<p><b>Market Data:</b> ${priceParts.join(' | ')}</p>`);
+      }
     }
 
     // Notes
@@ -389,6 +426,42 @@ class EbayExportService {
     }
 
     return sections.join('');
+  }
+
+  private getConditionLabel(company: string, grade: string): string {
+    const num = parseFloat(grade);
+    if (isNaN(num)) return '';
+
+    if (company === 'PSA') {
+      if (num === 10) return 'GEM MINT';
+      if (num === 9) return 'MINT';
+      if (num === 8) return 'NM-MT';
+      if (num === 7) return 'NM';
+      if (num === 6) return 'EX-MT';
+      if (num === 5) return 'EX';
+      if (num === 4) return 'VG-EX';
+      if (num === 3) return 'VG';
+      if (num === 2) return 'GOOD';
+      if (num === 1) return 'PR';
+    } else if (company === 'BGS' || company === 'SGC') {
+      if (num >= 10) return 'PRISTINE';
+      if (num >= 9.5) return 'GEM MINT';
+      if (num >= 9) return 'MINT';
+      if (num >= 8.5) return 'NM-MT+';
+      if (num >= 8) return 'NM-MT';
+      if (num >= 7.5) return 'NM+';
+      if (num >= 7) return 'NM';
+    } else if (company === 'CGC') {
+      if (num >= 10) return 'PRISTINE';
+      if (num >= 9.5) return 'MINT+';
+      if (num >= 9) return 'MINT';
+      if (num >= 8.5) return 'NM-MT+';
+      if (num >= 8) return 'NM-MT';
+      if (num >= 7.5) return 'NM+';
+      if (num >= 7) return 'NM';
+    }
+
+    return '';
   }
 
   private getCategoryId(category: string): string {

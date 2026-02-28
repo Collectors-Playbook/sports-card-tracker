@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useEffect, memo, useCallback } from 'react';
 import { useCards } from '../../context/ApiCardContext';
 import { Card, FilterOptions, SortOption, COLLECTION_TYPES } from '../../types';
-import { BulkEbayExport } from '../EbayListing/BulkEbayExport';
 import LoadingSkeleton from '../LoadingSkeleton/LoadingSkeleton';
 import MoveCardsModal from '../MoveCardsModal/MoveCardsModal';
 import { apiService, PopRarityTier } from '../../services/api';
@@ -24,7 +23,7 @@ const CardList: React.FC<CardListProps> = ({ onCardSelect, onEditCard, selectedC
   const [filters, setFilters] = useState<FilterOptions>({});
   const [sortOption, setSortOption] = useState<SortOption>({ field: 'createdAt', direction: 'desc' });
   const [searchTerm, setSearchTerm] = useState('');
-  const [showBulkEbay, setShowBulkEbay] = useState(false);
+  const [ebayExporting, setEbayExporting] = useState(false);
   const [selectedCollection, setSelectedCollection] = useState<any>(null);
   const [selectedCards, setSelectedCards] = useState<Set<string>>(new Set());
   const [showMoveModal, setShowMoveModal] = useState(false);
@@ -148,6 +147,34 @@ const CardList: React.FC<CardListProps> = ({ onCardSelect, onEditCard, selectedC
   const clearSelection = useCallback(() => {
     setSelectedCards(new Set());
   }, []);
+
+  const handleBulkEbayExport = useCallback(async () => {
+    setEbayExporting(true);
+    try {
+      const cardIds = selectedCards.size > 0
+        ? Array.from(selectedCards)
+        : filteredAndSortedCards.map(c => c.id);
+
+      const result = await apiService.generateEbayCsv({
+        priceMultiplier: 0.9,
+        cardIds,
+      });
+
+      const blob = await apiService.downloadEbayCsv();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = result.filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(`Export failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setEbayExporting(false);
+    }
+  }, [selectedCards, filteredAndSortedCards]);
 
   const handleMoveCards = useCallback(async (cardIds: string[], targetCollectionId: string) => {
     try {
@@ -295,8 +322,8 @@ const CardList: React.FC<CardListProps> = ({ onCardSelect, onEditCard, selectedC
           <button onClick={clearFilters} className="clear-filters-btn">
             Clear Filters
           </button>
-          <button onClick={() => setShowBulkEbay(true)} className="bulk-ebay-btn">
-            🛒 Bulk eBay Export
+          <button onClick={handleBulkEbayExport} className="bulk-ebay-btn" disabled={ebayExporting}>
+            {ebayExporting ? 'Exporting...' : '🛒 Bulk eBay Export'}
           </button>
         </div>
 
@@ -423,13 +450,6 @@ const CardList: React.FC<CardListProps> = ({ onCardSelect, onEditCard, selectedC
             </button>
           )}
         </div>
-      )}
-      
-      {showBulkEbay && (
-        <BulkEbayExport 
-          cards={filteredAndSortedCards} 
-          onClose={() => setShowBulkEbay(false)} 
-        />
       )}
       
       {showMoveModal && selectedCards.size > 0 && (

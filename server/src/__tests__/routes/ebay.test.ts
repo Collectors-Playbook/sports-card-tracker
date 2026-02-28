@@ -39,7 +39,7 @@ describe('eBay Routes', () => {
         });
 
       expect(res.status).toBe(200);
-      expect(res.body.filename).toBe('ebay-draft-upload-batch.csv');
+      expect(res.body.filename).toMatch(/^ebay-draft-upload-\d{4}-\d{2}-\d{2}_/);
       expect(res.body.totalCards).toBeGreaterThanOrEqual(1);
       expect(res.body.generatedAt).toBeDefined();
       expect(typeof res.body.totalListingValue).toBe('number');
@@ -62,13 +62,23 @@ describe('eBay Routes', () => {
       expect(res.body.skippedPcCards).toBe(1);
     });
 
-    it('returns 400 for missing fields', async () => {
+    it('succeeds without shippingCost (defaults to 0)', async () => {
+      await createInventoryCard({ player: 'No Shipping' });
       const res = await request(ctx.app)
         .post('/api/ebay/generate')
         .send({ priceMultiplier: 0.9 });
 
+      expect(res.status).toBe(200);
+      expect(res.body.totalCards).toBeGreaterThanOrEqual(1);
+    });
+
+    it('returns 400 for missing priceMultiplier', async () => {
+      const res = await request(ctx.app)
+        .post('/api/ebay/generate')
+        .send({});
+
       expect(res.status).toBe(400);
-      expect(res.body.error).toMatch(/Missing required fields/);
+      expect(res.body.error).toMatch(/Missing required field/);
     });
 
     it('filters by cardIds correctly', async () => {
@@ -103,13 +113,13 @@ describe('eBay Routes', () => {
       expect(res.body.id).toBeDefined();
     });
 
-    it('returns 400 for missing fields', async () => {
+    it('returns 400 for missing priceMultiplier', async () => {
       const res = await request(ctx.app)
         .post('/api/ebay/generate-async')
         .send({});
 
       expect(res.status).toBe(400);
-      expect(res.body.error).toMatch(/Missing required fields/);
+      expect(res.body.error).toMatch(/Missing required field/);
     });
   });
 
@@ -142,7 +152,7 @@ describe('eBay Routes', () => {
   describe('GET /api/ebay/template', () => {
     it('returns 404 when template is missing', async () => {
       const res = await request(ctx.app).get('/api/ebay/template');
-      // Template is at tempDir/eBay-draft-listing-template.csv, won't exist unless we create it
+      // Template is at tempDir/ebay-draft.csv, won't exist unless we create it
       expect(res.status).toBe(404);
     });
 
