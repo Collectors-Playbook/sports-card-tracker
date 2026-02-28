@@ -87,7 +87,16 @@ const CollectionCard: React.FC<CollectionCardProps> = ({
 
       <div className="collection-header">
         <div className="collection-icon" style={{ backgroundColor: collection.color + '30' }}>
-          {collection.icon}
+          {collection.icon || (collection.name === 'eBay' ? (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 120" width="48" height="20">
+              <text x="0" y="95" fontFamily="Arial, Helvetica, sans-serif" fontWeight="bold" fontSize="105">
+                <tspan fill="#E53238">e</tspan>
+                <tspan fill="#0064D2">b</tspan>
+                <tspan fill="#F5AF02">a</tspan>
+                <tspan fill="#86B817">y</tspan>
+              </text>
+            </svg>
+          ) : null)}
         </div>
         {!isBulkDeleteMode && (
           <div className="collection-actions" ref={menuRef}>
