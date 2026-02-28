@@ -102,6 +102,12 @@ export async function createTestApp(): Promise<TestContext> {
     compCacheTtlMs: 86400000,
     rateLimits: {},
     ebayImageBaseUrl: 'http://localhost:8000',
+    gcpScpHost: '',
+    gcpScpUser: '',
+    gcpScpPort: 22,
+    gcpScpKeyPath: '',
+    gcpScpRemoteDir: '',
+    gcpImageBaseUrl: '',
   };
   app.use('/api/ebay', createEbayRoutes(db, ebayExportService, auditService, testConfig));
   app.use('/api/audit-logs', createAuditLogRoutes(auditService));
