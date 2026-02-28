@@ -328,6 +328,28 @@ export interface EbayExportCardSummary {
   priceSource: string;
 }
 
+// ─── Image Upload (SCP) ─────────────────────────────────────────────────────
+
+export interface ImageUpload {
+  id: string;
+  cardId: string;
+  filename: string;
+  remoteUrl: string;
+  fileHash: string;
+  uploadedAt: string;
+}
+
+export interface ScpUploadPayload {
+  cardIds?: string[];
+}
+
+export interface ScpUploadResult {
+  uploaded: number;
+  skipped: number;
+  failed: number;
+  errors: string[];
+}
+
 // ─── Image Processing ───────────────────────────────────────────────────────
 
 export interface ImageProcessingPayload {
