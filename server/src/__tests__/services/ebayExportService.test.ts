@@ -89,6 +89,7 @@ describe('EbayExportService', () => {
       const csvContent = fs.readFileSync(service.getOutputPath(), 'utf-8');
       const headerLine = csvContent.split('\n')[0];
       expect(headerLine).toContain('*Action(SiteID=US|Country=US|Currency=USD|Version=1193)');
+      expect(headerLine).toContain('Custom label (SKU)');
       expect(headerLine).toContain('*Category');
       expect(headerLine).toContain('*Title');
     });
@@ -105,9 +106,9 @@ describe('EbayExportService', () => {
       expect(result.totalCards).toBe(2);
 
       const csvContent = fs.readFileSync(service.getOutputPath(), 'utf-8');
-      // Count rows by looking for 'Add,' at start of CSV records (data rows start with Add)
-      const addRows = csvContent.split('\n').filter(l => l.startsWith('Add,'));
-      expect(addRows.length).toBe(2);
+      // Count rows by looking for 'Draft,' at start of CSV records (data rows start with Draft)
+      const draftRows = csvContent.split('\n').filter(l => l.startsWith('Draft,'));
+      expect(draftRows.length).toBe(2);
       // Header row
       expect(csvContent).toContain('*Action(SiteID=US|Country=US|Currency=USD|Version=1193)');
     });
