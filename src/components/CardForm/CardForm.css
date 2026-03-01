@@ -248,6 +248,23 @@
   gap: 8px;
 }
 
+.comp-export-btn {
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  border: 1px solid #6c757d;
+  border-radius: 4px;
+  background: white;
+  color: #6c757d;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s, color 0.2s;
+}
+
+.comp-export-btn:hover {
+  background: #6c757d;
+  color: white;
+}
+
 .comp-refresh-btn {
   padding: 6px 14px;
   font-size: 0.8rem;

@@ -38,6 +38,130 @@ function formatCompDateTime(dateStr: string): string {
   });
 }
 
+function compReportToText(report: CompReport): string {
+  const lines: string[] = [];
+  lines.push(`Card: ${report.player} ${report.year} ${report.brand} #${report.cardNumber}`);
+  if (report.condition) lines.push(`Condition: ${report.condition}`);
+  lines.push(`Generated: ${formatCompDateTime(report.generatedAt)}`);
+  lines.push('');
+
+  if (report.aggregateAverage !== null) {
+    lines.push('=== Aggregate ===');
+    lines.push(`Average: ${formatCompPrice(report.aggregateAverage)}`);
+    if (report.aggregateLow !== null) lines.push(`Low: ${formatCompPrice(report.aggregateLow)}`);
+    if (report.aggregateHigh !== null) lines.push(`High: ${formatCompPrice(report.aggregateHigh)}`);
+    lines.push('');
+  }
+
+  if (report.popData) {
+    lines.push('=== Population Report ===');
+    lines.push(`${report.popData.gradingCompany} ${report.popData.targetGrade} Pop: ${report.popData.targetGradePop}`);
+    lines.push(`Total Graded: ${report.popData.totalGraded}`);
+    lines.push(`Percentile: Top ${report.popData.percentile}%`);
+    lines.push(`Rarity Tier: ${report.popData.rarityTier}`);
+    if (report.popMultiplier != null && report.popAdjustedAverage != null) {
+      const pct = Math.round((report.popMultiplier - 1) * 100);
+      lines.push(`Pop-Adjusted Average: ${formatCompPrice(report.popAdjustedAverage)} (${pct >= 0 ? '+' : ''}${pct}%)`);
+    }
+    lines.push('');
+  }
+
+  for (const source of report.sources) {
+    if (source.error) continue;
+    lines.push(`--- ${source.source} ---`);
+    {
+      if (source.marketValue !== null) lines.push(`Market Value: ${formatCompPrice(source.marketValue)}`);
+      if (source.averagePrice !== null) lines.push(`Average Price: ${formatCompPrice(source.averagePrice)}`);
+      if (source.low !== null && source.high !== null) lines.push(`Range: ${formatCompPrice(source.low)} - ${formatCompPrice(source.high)}`);
+      if (source.sales.length > 0) {
+        lines.push('Recent Sales:');
+        for (const sale of source.sales.slice(0, 5)) {
+          const grade = sale.grade ? `, ${sale.grade}` : '';
+          lines.push(`  ${formatCompDate(sale.date)}  ${sale.venue}${grade}  ${formatCompPrice(sale.price)}`);
+        }
+      }
+    }
+    lines.push('');
+  }
+
+  return lines.join('\n');
+}
+
+function compReportToHtml(report: CompReport): string {
+  const p = (v: number | null) => v === null ? '--' : '$' + v.toFixed(2);
+  const d = (s: string) => formatCompDate(s);
+
+  let html = `<html><head><title>Comp Report - ${report.player}</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 700px; margin: 30px auto; color: #333; font-size: 14px; }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  .subtitle { color: #666; margin-bottom: 20px; }
+  .agg { display: flex; gap: 12px; margin-bottom: 20px; }
+  .agg-item { flex: 1; text-align: center; padding: 14px; background: #f0f7ff; border-radius: 6px; }
+  .agg-label { display: block; font-size: 11px; color: #6c757d; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+  .agg-value { display: block; font-size: 20px; font-weight: 700; }
+  .pop { background: #f8f9fa; border-radius: 6px; padding: 12px; margin-bottom: 20px; }
+  .pop-title { font-weight: 600; }
+  .pop-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; text-transform: uppercase; background: #d4edda; color: #155724; margin-left: 8px; }
+  .pop-stats { font-size: 13px; color: #555; margin: 6px 0; }
+  .pop-adjusted { font-weight: 600; margin-top: 6px; }
+  .source { border: 1px solid #e9ecef; border-radius: 6px; padding: 12px; margin-bottom: 10px; }
+  .source-header { display: flex; justify-content: space-between; font-weight: 600; margin-bottom: 4px; }
+  .source-mv { color: #007bff; }
+  .source-error { color: #dc3545; }
+  .source-stats { font-size: 13px; color: #555; margin-bottom: 6px; }
+  .sales-hdr { font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; border-top: 1px solid #f0f0f0; padding-top: 6px; }
+  .sale { display: flex; gap: 12px; font-size: 13px; padding: 2px 0; }
+  .sale-date { color: #6c757d; min-width: 100px; }
+  .sale-venue { color: #555; min-width: 80px; }
+  .sale-grade { color: #007bff; font-weight: 500; }
+  .sale-price { margin-left: auto; font-weight: 600; }
+  .footer { margin-top: 20px; font-size: 12px; color: #999; text-align: right; }
+  @media print { body { margin: 10px; } }
+</style></head><body>`;
+
+  html += `<h1>${report.player}</h1>`;
+  html += `<div class="subtitle">${report.year} ${report.brand} #${report.cardNumber}${report.condition ? ' &middot; ' + report.condition : ''}</div>`;
+
+  html += `<div class="agg">`;
+  html += `<div class="agg-item"><span class="agg-label">Average</span><span class="agg-value">${p(report.aggregateAverage)}</span></div>`;
+  html += `<div class="agg-item"><span class="agg-label">Low</span><span class="agg-value">${p(report.aggregateLow)}</span></div>`;
+  html += `<div class="agg-item"><span class="agg-label">High</span><span class="agg-value">${p(report.aggregateHigh)}</span></div>`;
+  html += `</div>`;
+
+  if (report.popData) {
+    html += `<div class="pop">`;
+    html += `<span class="pop-title">Population Report</span><span class="pop-badge">${report.popData.rarityTier}</span>`;
+    html += `<div class="pop-stats">${report.popData.gradingCompany} ${report.popData.targetGrade} Pop: ${report.popData.targetGradePop} &nbsp; Total Graded: ${report.popData.totalGraded} &nbsp; Top ${report.popData.percentile}%</div>`;
+    if (report.popAdjustedAverage != null && report.popMultiplier != null) {
+      const pct = Math.round((report.popMultiplier - 1) * 100);
+      html += `<div class="pop-adjusted">Pop-Adjusted: ${p(report.popAdjustedAverage)} (${pct >= 0 ? '+' : ''}${pct}%)</div>`;
+    }
+    html += `</div>`;
+  }
+
+  for (const source of report.sources) {
+    if (source.error) continue;
+    html += `<div class="source"><div class="source-header"><span>${source.source}</span>`;
+    if (source.marketValue !== null) html += `<span class="source-mv">${p(source.marketValue)}</span>`;
+    html += `</div>`;
+    html += `<div class="source-stats">Avg: ${p(source.averagePrice)} &nbsp; Low: ${p(source.low)} &nbsp; High: ${p(source.high)}</div>`;
+    if (source.sales.length > 0) {
+      html += `<div class="sales-hdr">Recent Sales</div>`;
+      for (const sale of source.sales.slice(0, 5)) {
+        html += `<div class="sale"><span class="sale-date">${d(sale.date)}</span><span class="sale-venue">${sale.venue}</span>`;
+        if (sale.grade) html += `<span class="sale-grade">${sale.grade}</span>`;
+        html += `<span class="sale-price">${p(sale.price)}</span></div>`;
+      }
+    }
+    html += `</div>`;
+  }
+
+  html += `<div class="footer">Generated ${formatCompDateTime(report.generatedAt)}</div>`;
+  html += `</body></html>`;
+  return html;
+}
+
 function getCompRarityClass(tier: PopRarityTier): string {
   switch (tier) {
     case 'ultra-low':
@@ -378,6 +502,30 @@ const CardForm: React.FC<CardFormProps> = ({ card, onSuccess, onCancel }) => {
     }
   };
 
+  const handleExportText = () => {
+    if (!compReport) return;
+    const text = compReportToText(compReport);
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${compReport.year}-${compReport.brand}-${compReport.player.replace(/\s+/g, '-')}-${compReport.cardNumber}-comps.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportPdf = () => {
+    if (!compReport) return;
+    const html = compReportToHtml(compReport);
+    const win = window.open('', '_blank');
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+    win.onload = () => win.print();
+  };
+
   return (
     <div className="card-form-container">
       <div className="card-form">
@@ -601,6 +749,24 @@ const CardForm: React.FC<CardFormProps> = ({ card, onSuccess, onCancel }) => {
               <div className="comp-section-header" onClick={() => setCompExpanded(!compExpanded)}>
                 <h3>Comp Data {compExpanded ? '\u25B2' : '\u25BC'}</h3>
                 <div className="comp-section-actions">
+                  {compReport && (
+                    <>
+                      <button
+                        type="button"
+                        className="comp-export-btn"
+                        onClick={(e) => { e.stopPropagation(); handleExportText(); }}
+                      >
+                        Export TXT
+                      </button>
+                      <button
+                        type="button"
+                        className="comp-export-btn"
+                        onClick={(e) => { e.stopPropagation(); handleExportPdf(); }}
+                      >
+                        Export PDF
+                      </button>
+                    </>
+                  )}
                   <button
                     type="button"
                     className="comp-refresh-btn"
@@ -664,7 +830,7 @@ const CardForm: React.FC<CardFormProps> = ({ card, onSuccess, onCancel }) => {
                       )}
 
                       <div className="comp-sources">
-                        {compReport.sources.map(source => (
+                        {compReport.sources.filter(s => !s.error).map(source => (
                           <CompSourceRow key={source.source} result={source} />
                         ))}
                       </div>
