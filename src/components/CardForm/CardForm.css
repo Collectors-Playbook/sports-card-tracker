@@ -216,3 +216,284 @@
   color: #dc3545;
   margin-left: 2px;
 }
+
+/* ─── Comp Data Section ────────────────────────────────────────────────── */
+
+.comp-section {
+  margin-top: 20px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.comp-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #f8f9fa;
+  cursor: pointer;
+  user-select: none;
+}
+
+.comp-section-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.comp-section-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.comp-refresh-btn {
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  border: 1px solid #007bff;
+  border-radius: 4px;
+  background: white;
+  color: #007bff;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s, color 0.2s;
+}
+
+.comp-refresh-btn:hover:not(:disabled) {
+  background: #007bff;
+  color: white;
+}
+
+.comp-refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.comp-section-body {
+  padding: 16px;
+}
+
+.comp-loading,
+.comp-empty {
+  color: #6c757d;
+  font-size: 0.9rem;
+  text-align: center;
+  padding: 20px 0;
+  margin: 0;
+}
+
+/* Aggregate prices */
+.comp-aggregate {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.comp-aggregate-item {
+  flex: 1;
+  text-align: center;
+  padding: 12px;
+  background: #f0f7ff;
+  border-radius: 6px;
+}
+
+.comp-aggregate-label {
+  display: block;
+  font-size: 0.75rem;
+  color: #6c757d;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.comp-aggregate-value {
+  display: block;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #333;
+}
+
+/* Population report */
+.comp-pop-section {
+  background: #f8f9fa;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.comp-pop-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.comp-pop-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #333;
+}
+
+.comp-pop-badge {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.comp-rarity-low {
+  background: #d4edda;
+  color: #155724;
+}
+
+.comp-rarity-medium {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.comp-rarity-high {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.comp-pop-stats {
+  display: flex;
+  gap: 16px;
+  font-size: 0.8rem;
+  color: #555;
+  flex-wrap: wrap;
+}
+
+.comp-pop-adjusted {
+  margin-top: 8px;
+  font-weight: 600;
+  color: #333;
+  font-size: 0.9rem;
+}
+
+.comp-pop-multiplier {
+  color: #28a745;
+  margin-left: 4px;
+  font-size: 0.8rem;
+}
+
+/* Per-source sections */
+.comp-sources {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.comp-source {
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+
+.comp-source-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.comp-source-name {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: #333;
+}
+
+.comp-source-market-value {
+  font-weight: 600;
+  color: #007bff;
+  font-size: 0.85rem;
+}
+
+.comp-source-error {
+  color: #dc3545;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.comp-source-error-msg {
+  color: #dc3545;
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.comp-source-stats {
+  display: flex;
+  gap: 16px;
+  font-size: 0.8rem;
+  color: #555;
+}
+
+.comp-sales {
+  margin-top: 8px;
+  border-top: 1px solid #f0f0f0;
+  padding-top: 6px;
+}
+
+.comp-sales-header {
+  font-size: 0.75rem;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.comp-sale-row {
+  display: flex;
+  gap: 12px;
+  font-size: 0.8rem;
+  padding: 2px 0;
+  align-items: center;
+}
+
+.comp-sale-date {
+  color: #6c757d;
+  min-width: 90px;
+}
+
+.comp-sale-venue {
+  color: #555;
+  min-width: 60px;
+}
+
+.comp-sale-grade {
+  color: #007bff;
+  font-weight: 500;
+  min-width: 40px;
+}
+
+.comp-sale-price {
+  font-weight: 600;
+  color: #333;
+  margin-left: auto;
+}
+
+.comp-generated-at {
+  margin-top: 12px;
+  font-size: 0.75rem;
+  color: #999;
+  text-align: right;
+}
+
+@media (max-width: 768px) {
+  .comp-aggregate {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .comp-pop-stats {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .comp-source-stats {
+    flex-direction: column;
+    gap: 2px;
+  }
+}
