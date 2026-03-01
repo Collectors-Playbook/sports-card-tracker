@@ -176,7 +176,7 @@ const CompReportModal: React.FC<CompReportModalProps> = ({ report, onClose, onRe
 
         {/* Per-source sections */}
         <div className="comp-report-sources">
-          {currentReport.sources.map(source => (
+          {currentReport.sources.filter(s => !s.error).map(source => (
             <SourceSection key={source.source} result={source} />
           ))}
         </div>
