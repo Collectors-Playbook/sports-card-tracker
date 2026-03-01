@@ -86,6 +86,7 @@ export interface FilterOptions {
   minValue?: number;
   maxValue?: number;
   collectionType?: string;
+  soldStatus?: 'sold' | 'unsold';
 }
 
 export interface SortOption {
