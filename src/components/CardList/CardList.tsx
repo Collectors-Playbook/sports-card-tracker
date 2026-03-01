@@ -94,8 +94,12 @@ const CardList: React.FC<CardListProps> = ({ onCardSelect, onEditCard, selectedC
 
       const matchesMaxValue = !filters.maxValue || card.currentValue <= filters.maxValue;
 
+      const matchesSoldStatus = !filters.soldStatus ||
+        (filters.soldStatus === 'sold' ? !!card.sellDate : !card.sellDate);
+
       return matchesCollectionType && matchesSearch && matchesPlayer && matchesTeam && matchesYear &&
-             matchesBrand && matchesCategory && matchesCondition && matchesMinValue && matchesMaxValue;
+             matchesBrand && matchesCategory && matchesCondition && matchesMinValue && matchesMaxValue &&
+             matchesSoldStatus;
     });
 
     filtered.sort((a, b) => {
@@ -317,6 +321,16 @@ const CardList: React.FC<CardListProps> = ({ onCardSelect, onEditCard, selectedC
             {COLLECTION_TYPES.map(ct => (
               <option key={ct.value} value={ct.value}>{ct.label}</option>
             ))}
+          </select>
+
+          <select
+            value={filters.soldStatus || ''}
+            onChange={(e) => setFilters({...filters, soldStatus: (e.target.value || undefined) as 'sold' | 'unsold' | undefined})}
+            className="filter-select"
+          >
+            <option value="">Sold & Unsold</option>
+            <option value="unsold">Unsold</option>
+            <option value="sold">Sold</option>
           </select>
 
           <button onClick={clearFilters} className="clear-filters-btn">

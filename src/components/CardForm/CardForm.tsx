@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { useCards } from '../../context/ApiCardContext';
 import { Card, CardFormData, CollectionType, CONDITIONS, CATEGORIES, GRADING_COMPANIES, COLLECTION_TYPES } from '../../types';
+import { apiService, CompReport, CompResult, PopRarityTier } from '../../services/api';
 import ImageUpload from '../ImageUpload/ImageUpload';
 import { logDebug, logInfo, logWarn, logError } from '../../utils/logger';
 import './CardForm.css';
@@ -15,6 +16,84 @@ function resolveCondition(condition?: string, grade?: string): string {
   return condition || CONDITIONS[0];
 }
 
+function formatCompPrice(value: number | null): string {
+  if (value === null) return '--';
+  return '$' + value.toFixed(2);
+}
+
+function formatCompDate(dateStr: string): string {
+  if (!dateStr) return '--';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function formatCompDateTime(dateStr: string): string {
+  if (!dateStr) return '--';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric',
+    hour: 'numeric', minute: '2-digit', hour12: true,
+  });
+}
+
+function getCompRarityClass(tier: PopRarityTier): string {
+  switch (tier) {
+    case 'ultra-low':
+    case 'low':
+      return 'comp-rarity-low';
+    case 'medium':
+      return 'comp-rarity-medium';
+    case 'high':
+    case 'very-high':
+      return 'comp-rarity-high';
+  }
+}
+
+const CompSourceRow: React.FC<{ result: CompResult }> = ({ result }) => {
+  if (result.error) {
+    return (
+      <div className="comp-source">
+        <div className="comp-source-header">
+          <span className="comp-source-name">{result.source}</span>
+          <span className="comp-source-error">Error</span>
+        </div>
+        <p className="comp-source-error-msg">{result.error}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="comp-source">
+      <div className="comp-source-header">
+        <span className="comp-source-name">{result.source}</span>
+        {result.marketValue !== null && (
+          <span className="comp-source-market-value">{formatCompPrice(result.marketValue)}</span>
+        )}
+      </div>
+      <div className="comp-source-stats">
+        <span>Avg: {formatCompPrice(result.averagePrice)}</span>
+        <span>Low: {formatCompPrice(result.low)}</span>
+        <span>High: {formatCompPrice(result.high)}</span>
+      </div>
+      {result.sales.length > 0 && (
+        <div className="comp-sales">
+          <div className="comp-sales-header">Recent Sales</div>
+          {result.sales.slice(0, 5).map((sale, i) => (
+            <div key={i} className="comp-sale-row">
+              <span className="comp-sale-date">{formatCompDate(sale.date)}</span>
+              <span className="comp-sale-venue">{sale.venue}</span>
+              {sale.grade && <span className="comp-sale-grade">{sale.grade}</span>}
+              <span className="comp-sale-price">{formatCompPrice(sale.price)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 interface CardFormProps {
   card?: Card;
   onSuccess?: () => void;
@@ -27,7 +106,10 @@ const CardForm: React.FC<CardFormProps> = ({ card, onSuccess, onCancel }) => {
   const isEditing = !!card;
   const [images, setImages] = useState<string[]>([]);
   const [collections, setCollections] = useState<any[]>([]);
-  
+  const [compReport, setCompReport] = useState<CompReport | null>(null);
+  const [compLoading, setCompLoading] = useState(false);
+  const [compExpanded, setCompExpanded] = useState(true);
+
   logDebug('CardForm', 'Component initialized', { isEditing, cardId: card?.id });
 
   const {
@@ -66,7 +148,6 @@ const CardForm: React.FC<CardFormProps> = ({ card, onSuccess, onCancel }) => {
   useEffect(() => {
     const loadCollections = async () => {
       try {
-        const { apiService } = await import('../../services/api');
         const userCollections = await apiService.getCollections();
         setCollections(userCollections);
       } catch (error) {
@@ -75,6 +156,26 @@ const CardForm: React.FC<CardFormProps> = ({ card, onSuccess, onCancel }) => {
     };
     loadCollections();
   }, []);
+
+  // Load comp data when editing
+  useEffect(() => {
+    if (!card?.id) {
+      setCompReport(null);
+      return;
+    }
+    const loadComps = async () => {
+      setCompLoading(true);
+      try {
+        const report = await apiService.getStoredComps(card.id);
+        setCompReport(report);
+      } catch {
+        setCompReport(null);
+      } finally {
+        setCompLoading(false);
+      }
+    };
+    loadComps();
+  }, [card?.id]);
 
   const resetForm = useCallback((cardData?: Card) => {
     logDebug('CardForm', 'resetForm called', { hasCardData: !!cardData, cardId: cardData?.id });
@@ -261,6 +362,19 @@ const CardForm: React.FC<CardFormProps> = ({ card, onSuccess, onCancel }) => {
     } catch (error) {
       logError('CardForm', 'Error saving card', error as Error, data);
       alert(`Error saving card: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  const handleRefreshComps = async () => {
+    if (!card?.id || compLoading) return;
+    setCompLoading(true);
+    try {
+      const report = await apiService.refreshComps(card.id);
+      setCompReport(report);
+    } catch {
+      // keep existing report
+    } finally {
+      setCompLoading(false);
     }
   };
 
@@ -481,6 +595,89 @@ const CardForm: React.FC<CardFormProps> = ({ card, onSuccess, onCancel }) => {
               placeholder="Enter any additional notes about this card..."
             />
           </div>
+
+          {isEditing && (
+            <div className="comp-section full-width">
+              <div className="comp-section-header" onClick={() => setCompExpanded(!compExpanded)}>
+                <h3>Comp Data {compExpanded ? '\u25B2' : '\u25BC'}</h3>
+                <div className="comp-section-actions">
+                  <button
+                    type="button"
+                    className="comp-refresh-btn"
+                    onClick={(e) => { e.stopPropagation(); handleRefreshComps(); }}
+                    disabled={compLoading}
+                  >
+                    {compLoading ? 'Loading...' : compReport ? 'Refresh Comps' : 'Generate Comps'}
+                  </button>
+                </div>
+              </div>
+
+              {compExpanded && (
+                <div className="comp-section-body">
+                  {compLoading && !compReport && (
+                    <p className="comp-loading">Loading comp data...</p>
+                  )}
+
+                  {!compLoading && !compReport && (
+                    <p className="comp-empty">No comp data available. Click "Generate Comps" to fetch pricing data.</p>
+                  )}
+
+                  {compReport && (
+                    <>
+                      <div className="comp-aggregate">
+                        <div className="comp-aggregate-item">
+                          <span className="comp-aggregate-label">Average</span>
+                          <span className="comp-aggregate-value">{formatCompPrice(compReport.aggregateAverage)}</span>
+                        </div>
+                        <div className="comp-aggregate-item">
+                          <span className="comp-aggregate-label">Low</span>
+                          <span className="comp-aggregate-value">{formatCompPrice(compReport.aggregateLow)}</span>
+                        </div>
+                        <div className="comp-aggregate-item">
+                          <span className="comp-aggregate-label">High</span>
+                          <span className="comp-aggregate-value">{formatCompPrice(compReport.aggregateHigh)}</span>
+                        </div>
+                      </div>
+
+                      {compReport.popData && (
+                        <div className="comp-pop-section">
+                          <div className="comp-pop-header">
+                            <span className="comp-pop-title">Population Report</span>
+                            <span className={`comp-pop-badge ${getCompRarityClass(compReport.popData.rarityTier)}`}>
+                              {compReport.popData.rarityTier}
+                            </span>
+                          </div>
+                          <div className="comp-pop-stats">
+                            <span>{compReport.popData.gradingCompany} {compReport.popData.targetGrade} Pop: {compReport.popData.targetGradePop}</span>
+                            <span>Total Graded: {compReport.popData.totalGraded}</span>
+                            <span>Top {compReport.popData.percentile}%</span>
+                          </div>
+                          {compReport.popAdjustedAverage != null && compReport.popMultiplier != null && (
+                            <div className="comp-pop-adjusted">
+                              Pop-Adjusted: {formatCompPrice(compReport.popAdjustedAverage)}
+                              <span className="comp-pop-multiplier">
+                                ({compReport.popMultiplier >= 1 ? '+' : ''}{Math.round((compReport.popMultiplier - 1) * 100)}%)
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="comp-sources">
+                        {compReport.sources.map(source => (
+                          <CompSourceRow key={source.source} result={source} />
+                        ))}
+                      </div>
+
+                      <div className="comp-generated-at">
+                        Generated {formatCompDateTime(compReport.generatedAt)}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="form-actions">
             <button

@@ -181,7 +181,24 @@ const ProcessedGallery: React.FC = () => {
       setError(null);
       const processedFiles = await apiService.getProcessedFiles();
       setFiles(processedFiles);
-      const grouped = groupIntoPairs(processedFiles);
+      const allPairs = groupIntoPairs(processedFiles);
+
+      // Filter out cards that have been moved to a collection (no longer Pending)
+      const allCards = await apiService.getAllCards();
+      const movedImagePrefixes = new Set<string>();
+      for (const card of allCards) {
+        if (card.collectionType !== 'Pending') {
+          for (const img of card.images || []) {
+            if (img.endsWith('-comps.txt')) continue;
+            const ext = '.' + img.split('.').pop();
+            let base = img.slice(0, img.length - ext.length);
+            if (base.endsWith('-front')) base = base.slice(0, -6);
+            else if (base.endsWith('-back')) base = base.slice(0, -5);
+            movedImagePrefixes.add(base);
+          }
+        }
+      }
+      const grouped = allPairs.filter(p => !movedImagePrefixes.has(p.id));
       setPairs(grouped);
 
       // Hydrate pop tiers from stored comp reports
