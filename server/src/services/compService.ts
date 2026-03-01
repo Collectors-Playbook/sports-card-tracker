@@ -480,18 +480,15 @@ class CompService {
     lines.push('');
 
     for (const source of report.sources) {
+      if (source.error) continue;
       lines.push(`--- ${source.source} ---`);
-      if (source.error) {
-        lines.push(`Error: ${source.error}`);
-      } else {
-        if (source.marketValue !== null) lines.push(`Market Value: $${source.marketValue.toFixed(2)}`);
-        if (source.averagePrice !== null) lines.push(`Average Price: $${source.averagePrice.toFixed(2)}`);
-        if (source.low !== null && source.high !== null) lines.push(`Range: $${source.low.toFixed(2)} - $${source.high.toFixed(2)}`);
-        if (source.sales.length > 0) {
-          lines.push('Recent Sales:');
-          for (const sale of source.sales) {
-            lines.push(`  ${sale.date} - $${sale.price.toFixed(2)} (${sale.venue}${sale.grade ? `, ${sale.grade}` : ''})`);
-          }
+      if (source.marketValue !== null) lines.push(`Market Value: $${source.marketValue.toFixed(2)}`);
+      if (source.averagePrice !== null) lines.push(`Average Price: $${source.averagePrice.toFixed(2)}`);
+      if (source.low !== null && source.high !== null) lines.push(`Range: $${source.low.toFixed(2)} - $${source.high.toFixed(2)}`);
+      if (source.sales.length > 0) {
+        lines.push('Recent Sales:');
+        for (const sale of source.sales) {
+          lines.push(`  ${sale.date} - $${sale.price.toFixed(2)} (${sale.venue}${sale.grade ? `, ${sale.grade}` : ''})`);
         }
       }
       lines.push('');
