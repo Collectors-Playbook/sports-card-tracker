@@ -69,16 +69,14 @@ function compReportToText(report: CompReport): string {
   for (const source of report.sources) {
     if (source.error) continue;
     lines.push(`--- ${source.source} ---`);
-    {
-      if (source.marketValue !== null) lines.push(`Market Value: ${formatCompPrice(source.marketValue)}`);
-      if (source.averagePrice !== null) lines.push(`Average Price: ${formatCompPrice(source.averagePrice)}`);
-      if (source.low !== null && source.high !== null) lines.push(`Range: ${formatCompPrice(source.low)} - ${formatCompPrice(source.high)}`);
-      if (source.sales.length > 0) {
-        lines.push('Recent Sales:');
-        for (const sale of source.sales.slice(0, 5)) {
-          const grade = sale.grade ? `, ${sale.grade}` : '';
-          lines.push(`  ${formatCompDate(sale.date)}  ${sale.venue}${grade}  ${formatCompPrice(sale.price)}`);
-        }
+    if (source.marketValue !== null) lines.push(`Market Value: ${formatCompPrice(source.marketValue)}`);
+    if (source.averagePrice !== null) lines.push(`Average Price: ${formatCompPrice(source.averagePrice)}`);
+    if (source.low !== null && source.high !== null) lines.push(`Range: ${formatCompPrice(source.low)} - ${formatCompPrice(source.high)}`);
+    if (source.sales.length > 0) {
+      lines.push('Recent Sales:');
+      for (const sale of source.sales.slice(0, 5)) {
+        const grade = sale.grade ? `, ${sale.grade}` : '';
+        lines.push(`  ${formatCompDate(sale.date)}  ${sale.venue}${grade}  ${formatCompPrice(sale.price)}`);
       }
     }
     lines.push('');
@@ -444,6 +442,8 @@ const CardForm: React.FC<CardFormProps> = ({ card, onSuccess, onCancel }) => {
       }
       
       const cardData: Card = {
+        // Preserve all existing fields (vision-extracted data, feature flags, etc.)
+        ...(card || {}),
         id: card?.id || `card-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         userId: card?.userId || '', // Will be set by the database
         collectionId: data.collectionId || undefined, // Will use default if not specified
