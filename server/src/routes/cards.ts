@@ -156,7 +156,8 @@ export function createCardRoutes(db: Database, auditService: AuditService): Rout
     try {
       const cardInput: CardInput = req.body;
 
-      const requiredFields = ['player', 'team', 'year', 'brand', 'category', 'cardNumber', 'condition', 'purchasePrice', 'purchaseDate', 'currentValue'];
+      // team is optional on update — vision API may not detect it for all cards
+      const requiredFields = ['player', 'year', 'brand', 'category', 'cardNumber', 'condition', 'purchasePrice', 'purchaseDate', 'currentValue'];
       for (const field of requiredFields) {
         if (cardInput[field as keyof CardInput] === undefined || cardInput[field as keyof CardInput] === null || cardInput[field as keyof CardInput] === '') {
           res.status(400).json({ error: `Missing required field: ${field}` });
@@ -169,6 +170,9 @@ export function createCardRoutes(db: Database, auditService: AuditService): Rout
       }
       if (!cardInput.notes) {
         cardInput.notes = '';
+      }
+      if (!cardInput.team) {
+        cardInput.team = '';
       }
 
       const card = await db.updateCard(req.params.id, cardInput);
