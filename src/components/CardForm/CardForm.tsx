@@ -404,15 +404,18 @@ const CardForm: React.FC<CardFormProps> = ({ card, onSuccess, onCancel }) => {
     logInfo('CardForm', 'Form submitted', data);
     
     try {
-      // Validate required fields
-      if (!data.player || !data.team || !data.brand || !data.category || !data.cardNumber) {
-        const missingFields = [];
-        if (!data.player) missingFields.push('player');
-        if (!data.team) missingFields.push('team');
-        if (!data.brand) missingFields.push('brand');
-        if (!data.category) missingFields.push('category');
-        if (!data.cardNumber) missingFields.push('cardNumber');
-        
+      // Validate required fields (team optional when editing — vision API may not detect it)
+      const requiredChecks: [boolean, string][] = [
+        [!data.player, 'player'],
+        [!data.brand, 'brand'],
+        [!data.category, 'category'],
+        [!data.cardNumber, 'cardNumber'],
+      ];
+      if (!isEditing) {
+        requiredChecks.push([!data.team, 'team']);
+      }
+      const missingFields = requiredChecks.filter(([missing]) => missing).map(([, name]) => name);
+      if (missingFields.length > 0) {
         logWarn('CardForm', 'Required fields missing', { missingFields });
         throw new Error(`Required fields are missing: ${missingFields.join(', ')}`);
       }
@@ -552,11 +555,11 @@ const CardForm: React.FC<CardFormProps> = ({ card, onSuccess, onCancel }) => {
             </div>
 
             <div className="form-group">
-              <label htmlFor="team">Team *</label>
+              <label htmlFor="team">Team {!isEditing && '*'}</label>
               <input
                 id="team"
                 type="text"
-                {...register('team', { required: true })}
+                {...register('team', { required: !isEditing })}
                 placeholder="Enter team name"
               />
             </div>
