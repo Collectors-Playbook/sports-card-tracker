@@ -1,7 +1,7 @@
 import BetterSqlite3 from 'better-sqlite3';
 import { drizzle, BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { eq, and, like, desc, asc, sql, count, lt, lte, inArray } from 'drizzle-orm';
-import { Card, CardInput, User, UserInput, Collection, CollectionInput, CollectionStats, Job, JobInput, JobStatus, AuditLogEntry, AuditLogInput, AuditLogQuery, GradingSubmission, GradingSubmissionInput, GradingStatus, GradingStats, CompReport, CompSale, CompSource, CompResult, StoredCompReport, PopulationData, EbayExportDraft, EbayExportCardSummary, ImageUpload } from './types';
+import { Card, CardInput, User, UserInput, Collection, CollectionInput, CollectionStats, Job, JobInput, JobStatus, AuditLogEntry, AuditLogInput, AuditLogQuery, GradingSubmission, GradingSubmissionInput, GradingStatus, GradingStats, CompReport, CompSale, CompSource, CompResult, StoredCompReport, PopulationData, EbayExportDraft, EbayExportCardSummary, ImageUpload, StorageLocation } from './types';
 import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
 import * as schema from './db/schema';
@@ -72,6 +72,7 @@ CREATE TABLE IF NOT EXISTS cards (
   currentValue real NOT NULL,
   images text DEFAULT '[]' NOT NULL,
   notes text DEFAULT '' NOT NULL,
+  storageLocation text,
   createdAt text NOT NULL,
   updatedAt text NOT NULL
 );
@@ -357,6 +358,7 @@ class Database {
       purchaseDate: cardInput.purchaseDate,
       sellPrice: cardInput.sellPrice,
       sellDate: cardInput.sellDate,
+      storageLocation: cardInput.storageLocation || null,
       currentValue: cardInput.currentValue,
       images: cardInput.images || [],
       notes: cardInput.notes || '',
@@ -392,6 +394,7 @@ class Database {
       sellDate: card.sellDate || null,
       currentValue: card.currentValue,
       images: card.images,
+      storageLocation: card.storageLocation || null,
       notes: card.notes,
       createdAt: card.createdAt,
       updatedAt: card.updatedAt,
@@ -437,6 +440,7 @@ class Database {
       sellPrice: cardInput.sellPrice || null,
       sellDate: cardInput.sellDate || null,
       currentValue: cardInput.currentValue,
+      storageLocation: cardInput.storageLocation !== undefined ? (cardInput.storageLocation || null) : existing.storageLocation,
       images: cardInput.images || [],
       notes: cardInput.notes || '',
       updatedAt,
@@ -485,6 +489,7 @@ class Database {
       isGraded: !!(row.isGraded),
       sellPrice: row.sellPrice ?? undefined,
       sellDate: row.sellDate ?? undefined,
+      storageLocation: (row.storageLocation as StorageLocation | null) ?? null,
       images: row.images ?? [],
       notes: row.notes || '',
     };
@@ -493,6 +498,69 @@ class Database {
   public async deleteCard(id: string): Promise<boolean> {
     const result = this.db.delete(cards).where(eq(cards.id, id)).run();
     return result.changes > 0;
+  }
+
+  // ─── Storage ──────────────────────────────────────────────────────────────────
+
+  public async updateCardStorage(id: string, location: StorageLocation | null): Promise<Card | undefined> {
+    const existing = await this.getCardById(id);
+    if (!existing) return undefined;
+
+    const updatedAt = new Date().toISOString();
+    this.db.update(cards).set({
+      storageLocation: location,
+      updatedAt,
+    }).where(eq(cards.id, id)).run();
+
+    return { ...existing, storageLocation: location, updatedAt };
+  }
+
+  public async bulkUpdateCardStorage(cardIds: string[], location: StorageLocation): Promise<number> {
+    if (cardIds.length === 0) return 0;
+    const updatedAt = new Date().toISOString();
+    const result = this.db.update(cards).set({
+      storageLocation: location,
+      updatedAt,
+    }).where(inArray(cards.id, cardIds)).run();
+    return result.changes;
+  }
+
+  public async getCardsByStorage(filters: { room?: string; shelf?: string; box?: string }): Promise<Card[]> {
+    // Use SQL JSON extraction for filtering
+    const conditions = [];
+    if (filters.room) {
+      conditions.push(sql`json_extract(${cards.storageLocation}, '$.room') = ${filters.room}`);
+    }
+    if (filters.shelf) {
+      conditions.push(sql`json_extract(${cards.storageLocation}, '$.shelf') = ${filters.shelf}`);
+    }
+    if (filters.box) {
+      conditions.push(sql`json_extract(${cards.storageLocation}, '$.box') = ${filters.box}`);
+    }
+
+    const rows = this.db.select().from(cards)
+      .where(conditions.length > 0 ? and(...conditions) : sql`${cards.storageLocation} IS NOT NULL`)
+      .orderBy(desc(cards.createdAt))
+      .all();
+
+    return rows.map(row => this.mapCardRow(row));
+  }
+
+  public getDistinctStorageLocations(): { room: string; shelf: string; box: string; cardCount: number }[] {
+    const rows = this.sqlite.prepare(`
+      SELECT
+        json_extract(storageLocation, '$.room') as room,
+        json_extract(storageLocation, '$.shelf') as shelf,
+        json_extract(storageLocation, '$.box') as box,
+        COUNT(*) as cardCount
+      FROM cards
+      WHERE storageLocation IS NOT NULL
+        AND json_extract(storageLocation, '$.room') IS NOT NULL
+      GROUP BY room, shelf, box
+      ORDER BY room, shelf, box
+    `).all() as { room: string; shelf: string; box: string; cardCount: number }[];
+
+    return rows;
   }
 
   // ─── Users ───────────────────────────────────────────────────────────────────

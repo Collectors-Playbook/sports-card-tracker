@@ -64,6 +64,13 @@
       "when": 1772582400000,
       "tag": "0009_card_image_uploads",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1772668800000,
+      "tag": "0010_storage_locations",
+      "breakpoints": true
     }
   ]
 }
