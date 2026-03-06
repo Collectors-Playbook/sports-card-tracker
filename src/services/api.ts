@@ -1,4 +1,4 @@
-import { Card, User } from '../types';
+import { Card, User, StorageLocation } from '../types';
 import { logDebug, logInfo, logError } from '../utils/logger';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
@@ -848,6 +848,49 @@ class ApiService {
   public async deleteGradingSubmission(id: string): Promise<void> {
     await this.request<void>(`/grading-submissions/${id}`, {
       method: 'DELETE',
+    });
+  }
+
+  // ─── Storage ───────────────────────────────────────────────────────────────
+
+  public async getStorageLocations(): Promise<{ room: string; shelf: string; box: string; cardCount: number }[]> {
+    return this.request('/storage/locations');
+  }
+
+  public async getCardsByStorage(filters: { room?: string; shelf?: string; box?: string }): Promise<Card[]> {
+    const query = new URLSearchParams();
+    if (filters.room) query.append('room', filters.room);
+    if (filters.shelf) query.append('shelf', filters.shelf);
+    if (filters.box) query.append('box', filters.box);
+    const qs = query.toString();
+    const cards = await this.request<Card[]>(`/storage/cards${qs ? `?${qs}` : ''}`);
+    return cards.map(card => ({
+      ...card,
+      purchaseDate: new Date(card.purchaseDate),
+      sellDate: card.sellDate ? new Date(card.sellDate) : undefined,
+      createdAt: new Date(card.createdAt),
+      updatedAt: new Date(card.updatedAt),
+    }));
+  }
+
+  public async updateCardStorage(cardId: string, location: StorageLocation | null): Promise<Card> {
+    const card = await this.request<Card>(`/storage/cards/${cardId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ location }),
+    });
+    return {
+      ...card,
+      purchaseDate: new Date(card.purchaseDate),
+      sellDate: card.sellDate ? new Date(card.sellDate) : undefined,
+      createdAt: new Date(card.createdAt),
+      updatedAt: new Date(card.updatedAt),
+    };
+  }
+
+  public async bulkAssignStorage(cardIds: string[], location: StorageLocation): Promise<{ updated: number }> {
+    return this.request('/storage/bulk-assign', {
+      method: 'POST',
+      body: JSON.stringify({ cardIds, location }),
     });
   }
 }

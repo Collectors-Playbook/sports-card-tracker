@@ -1,5 +1,17 @@
 import { Request } from 'express';
 
+// ─── Storage Location ────────────────────────────────────────────────────────
+
+export interface StorageLocation {
+  room?: string;
+  shelf?: string;
+  box?: string;
+  row?: string;
+  slot?: string;
+  method?: string;
+  notes?: string;
+}
+
 // ─── Card ────────────────────────────────────────────────────────────────────
 
 export interface Card {
@@ -29,6 +41,7 @@ export interface Card {
   sellPrice?: number;
   sellDate?: string;
   currentValue: number;
+  storageLocation?: StorageLocation | null;
   images: string[];
   notes: string;
   createdAt: string;
@@ -61,6 +74,7 @@ export interface CardInput {
   sellPrice?: number;
   sellDate?: string;
   currentValue: number;
+  storageLocation?: StorageLocation | null;
   images: string[];
   notes: string;
 }
@@ -550,6 +564,8 @@ export interface AuditDetailsMap {
   'grading.update_status': { submissionId: string; oldStatus: string; newStatus: string; grade?: string };
   'grading.update': { submissionId: string; fields: string[] };
   'grading.delete': { submissionId: string; cardId: string };
+  'storage.update': { cardId: string; location: StorageLocation };
+  'storage.bulk_assign': { cardIds: string[]; location: StorageLocation };
 }
 
 export type AuditAction = keyof AuditDetailsMap;

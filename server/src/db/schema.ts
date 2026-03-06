@@ -61,6 +61,15 @@ export const cards = sqliteTable('cards', {
   currentValue: real('currentValue').notNull(),
   images: text('images', { mode: 'json' }).$type<string[]>().notNull().default([]),
   notes: text('notes').notNull().default(''),
+  storageLocation: text('storageLocation', { mode: 'json' }).$type<{
+    room?: string;
+    shelf?: string;
+    box?: string;
+    row?: string;
+    slot?: string;
+    method?: string;
+    notes?: string;
+  } | null>(),
   createdAt: text('createdAt').notNull(),
   updatedAt: text('updatedAt').notNull(),
 });

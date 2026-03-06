@@ -167,6 +167,7 @@ project-root/
 - CSS modules for styling
 - Comprehensive error handling
 - No emojis unless requested
+- Do not add Co-Authored-By lines to commit messages
 
 ### Common Commands
 ```bash

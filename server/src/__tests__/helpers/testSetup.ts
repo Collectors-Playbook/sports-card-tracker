@@ -25,6 +25,7 @@ import { createEbayRoutes } from '../../routes/ebay';
 import { createAuditLogRoutes } from '../../routes/auditLogs';
 import { createAdminUserRoutes } from '../../routes/adminUsers';
 import { createGradingSubmissionRoutes } from '../../routes/gradingSubmissions';
+import { createStorageRoutes } from '../../routes/storage';
 import { Config } from '../../config';
 import path from 'path';
 import fs from 'fs';
@@ -113,6 +114,7 @@ export async function createTestApp(): Promise<TestContext> {
   app.use('/api/audit-logs', createAuditLogRoutes(auditService));
   app.use('/api/admin/users', createAdminUserRoutes(db, auditService));
   app.use('/api/grading-submissions', createGradingSubmissionRoutes(db, auditService));
+  app.use('/api/storage', createStorageRoutes(db, auditService));
 
   app.use(errorHandler);
 
