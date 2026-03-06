@@ -170,7 +170,7 @@ describe('Database', () => {
 
       expect(ebay).toBeDefined();
       expect(ebay!.isDefault).toBe(false);
-      expect(ebay!.color).toBe('#22C55E');
+      expect(ebay!.color).toBe('#0064D2');
 
       // Calling again returns the same collections (idempotent)
       const same = await db.initializeUserCollections(userId);
