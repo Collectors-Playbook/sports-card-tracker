@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useCards } from '../../context/ApiCardContext';
 import { exportCardsAsJSON, exportCardsAsCSV } from '../../utils/exportUtils';
 import { exportCardsToPDF } from '../../utils/pdfExport';
+import AlertNotifications from '../AlertNotifications/AlertNotifications';
 import './Layout.css';
 
 type View = 'dashboard' | 'inventory' | 'add-card' | 'holding-pen' | 'processed' | 'admin' | 'profile' | 'reports' | 'ebay' | 'backup' | 'users' | 'collections' | 'about' | 'audit-log' | 'grading' | 'grading-roi' | 'heatmap' | 'storage';
@@ -204,6 +205,8 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, onViewChange }) 
               </span>
             </div>
             
+            <AlertNotifications />
+
             <div className="export-menu">
               <button className="export-btn">
                 Export

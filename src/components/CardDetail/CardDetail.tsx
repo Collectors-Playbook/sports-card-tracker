@@ -4,6 +4,7 @@ import { exportDetailedCardReport } from '../../utils/pdfExport';
 import { EbayListingPreview } from '../EbayListing/EbayListingPreview';
 import { BreakEvenCalculator } from '../BreakEvenCalculator/BreakEvenCalculator';
 import { GradingRoiAnalyzer } from '../GradingRoiAnalyzer/GradingRoiAnalyzer';
+import PriceAlertModal from '../PriceAlertModal/PriceAlertModal';
 import './CardDetail.css';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
@@ -23,6 +24,7 @@ const CardDetail: React.FC<CardDetailProps> = ({ card, onEdit, onClose }) => {
   const [showEbayListing, setShowEbayListing] = useState(false);
   const [showBreakEven, setShowBreakEven] = useState(false);
   const [showGradingRoi, setShowGradingRoi] = useState(false);
+  const [showPriceAlerts, setShowPriceAlerts] = useState(false);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -75,6 +77,9 @@ const CardDetail: React.FC<CardDetailProps> = ({ card, onEdit, onClose }) => {
             </button>
             <button onClick={() => setShowEbayListing(true)} className="ebay-listing-btn" title="Generate eBay Listing">
               🛒 eBay
+            </button>
+            <button onClick={() => setShowPriceAlerts(true)} className="price-alert-btn" title="Price Alerts">
+              Alerts
             </button>
             <button onClick={() => setShowBreakEven(true)} className="break-even-btn" title="Break-Even Calculator">
               Break-Even
@@ -255,6 +260,12 @@ const CardDetail: React.FC<CardDetailProps> = ({ card, onEdit, onClose }) => {
         <GradingRoiAnalyzer
           card={card}
           onClose={() => setShowGradingRoi(false)}
+        />
+      )}
+      {showPriceAlerts && (
+        <PriceAlertModal
+          card={card}
+          onClose={() => setShowPriceAlerts(false)}
         />
       )}
     </div>

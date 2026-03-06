@@ -38,6 +38,8 @@ import { createCollectionRoutes } from './routes/collections';
 import { createAdminUserRoutes } from './routes/adminUsers';
 import { createGradingSubmissionRoutes } from './routes/gradingSubmissions';
 import { createStorageRoutes } from './routes/storage';
+import { createPriceAlertRoutes } from './routes/priceAlerts';
+import PriceAlertService from './services/priceAlertService';
 import { EbayExportOptions, ScpUploadPayload } from './types';
 
 dotenv.config();
@@ -72,6 +74,7 @@ const auditService = new AuditService(db);
 const imageProcessingService = new ImageProcessingService(fileService, db, visionService, imageCropService, auditService);
 const ebayExportService = new EbayExportService(db, fileService);
 const scpUploadService = new ScpUploadService(db, fileService, config);
+const priceAlertService = new PriceAlertService(db, eventService);
 
 // Create Express app
 const app = express();
@@ -101,6 +104,7 @@ app.use('/api/collections', createCollectionRoutes(db, auditService));
 app.use('/api/admin/users', createAdminUserRoutes(db, auditService));
 app.use('/api/grading-submissions', createGradingSubmissionRoutes(db, auditService));
 app.use('/api/storage', createStorageRoutes(db, auditService));
+app.use('/api/price-alerts', createPriceAlertRoutes(db, auditService, priceAlertService));
 
 // Error handling
 app.use(errorHandler);
@@ -194,6 +198,9 @@ if (require.main === module) {
       jobService.start(config.jobPollInterval);
       console.log('Job service started');
 
+      priceAlertService.start();
+      console.log('Price alert service started (hourly checks)');
+
       eventService.startHeartbeat();
 
       const server = app.listen(config.port, '0.0.0.0', () => {
@@ -204,6 +211,7 @@ if (require.main === module) {
       const shutdown = () => {
         console.log('Shutting down...');
         jobService.stop();
+        priceAlertService.stop();
         eventService.stopHeartbeat();
         server.close(async () => {
           if (browserService) {

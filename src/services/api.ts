@@ -1,4 +1,4 @@
-import { Card, User, StorageLocation } from '../types';
+import { Card, User, StorageLocation, PriceAlert, PriceAlertHistoryEntry } from '../types';
 import { logDebug, logInfo, logError } from '../utils/logger';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
@@ -892,6 +892,36 @@ class ApiService {
       method: 'POST',
       body: JSON.stringify({ cardIds, location }),
     });
+  }
+
+  // ─── Price Alerts ─────────────────────────────────────────────────────
+
+  public async getPriceAlerts(): Promise<PriceAlert[]> {
+    return this.request('/price-alerts');
+  }
+
+  public async getPriceAlertsByCard(cardId: string): Promise<PriceAlert[]> {
+    return this.request(`/price-alerts/card/${cardId}`);
+  }
+
+  public async createPriceAlert(data: { cardId: string; type: 'above' | 'below'; thresholdLow?: number; thresholdHigh?: number }): Promise<PriceAlert> {
+    return this.request('/price-alerts', { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  public async updatePriceAlert(id: string, data: Partial<Pick<PriceAlert, 'type' | 'thresholdLow' | 'thresholdHigh' | 'isEnabled'>>): Promise<PriceAlert> {
+    return this.request(`/price-alerts/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  }
+
+  public async deletePriceAlert(id: string): Promise<void> {
+    return this.request(`/price-alerts/${id}`, { method: 'DELETE' });
+  }
+
+  public async checkPriceAlerts(): Promise<{ triggered: number; checked: number }> {
+    return this.request('/price-alerts/check', { method: 'POST' });
+  }
+
+  public async getPriceAlertHistory(): Promise<(PriceAlertHistoryEntry & { player: string })[]> {
+    return this.request('/price-alerts/history');
   }
 }
 

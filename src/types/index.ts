@@ -313,3 +313,32 @@ export const getGradeScale = (company: string): GradeOption[] => {
 };
 
 export const RAW_CONDITIONS = ['Raw', 'Near Mint', 'Excellent', 'Very Good', 'Good', 'Poor'];
+
+export type PriceAlertType = 'above' | 'below';
+
+export interface PriceAlert {
+  id: string;
+  cardId: string;
+  userId: string;
+  type: PriceAlertType;
+  thresholdLow: number | null;
+  thresholdHigh: number | null;
+  isEnabled: boolean;
+  lastCheckedAt: string | null;
+  lastTriggeredAt: string | null;
+  triggerCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PriceAlertHistoryEntry {
+  id: string;
+  alertId: string;
+  cardId: string;
+  previousValue: number;
+  currentValue: number;
+  threshold: number;
+  type: PriceAlertType;
+  createdAt: string;
+  player?: string;
+}

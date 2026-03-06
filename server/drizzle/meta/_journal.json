@@ -71,6 +71,13 @@
       "when": 1772668800000,
       "tag": "0010_storage_locations",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1772755200000,
+      "tag": "0011_price_alerts",
+      "breakpoints": true
     }
   ]
 }

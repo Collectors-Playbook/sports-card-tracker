@@ -1,7 +1,7 @@
 import BetterSqlite3 from 'better-sqlite3';
 import { drizzle, BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { eq, and, like, desc, asc, sql, count, lt, lte, inArray } from 'drizzle-orm';
-import { Card, CardInput, User, UserInput, Collection, CollectionInput, CollectionStats, Job, JobInput, JobStatus, AuditLogEntry, AuditLogInput, AuditLogQuery, GradingSubmission, GradingSubmissionInput, GradingStatus, GradingStats, CompReport, CompSale, CompSource, CompResult, StoredCompReport, PopulationData, EbayExportDraft, EbayExportCardSummary, ImageUpload, StorageLocation } from './types';
+import { Card, CardInput, User, UserInput, Collection, CollectionInput, CollectionStats, Job, JobInput, JobStatus, AuditLogEntry, AuditLogInput, AuditLogQuery, GradingSubmission, GradingSubmissionInput, GradingStatus, GradingStats, CompReport, CompSale, CompSource, CompResult, StoredCompReport, PopulationData, EbayExportDraft, EbayExportCardSummary, ImageUpload, StorageLocation, PriceAlert, PriceAlertInput, PriceAlertHistoryEntry } from './types';
 import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
 import * as schema from './db/schema';
@@ -10,7 +10,7 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 
-const { users, collections, cards, jobs, gradingSubmissions, auditLogs, compCache, cardCompReports, cardCompSources, popReportSnapshots, cardValueSnapshots, ebayExportDrafts, cardImageUploads } = schema;
+const { users, collections, cards, jobs, gradingSubmissions, auditLogs, compCache, cardCompReports, cardCompSources, popReportSnapshots, cardValueSnapshots, ebayExportDrafts, cardImageUploads, priceAlerts, priceAlertHistory } = schema;
 
 // Baseline SQL executed for in-memory databases (no migration journal needed)
 const BASELINE_SQL = `
@@ -229,6 +229,42 @@ CREATE TABLE IF NOT EXISTS ebay_export_drafts (
   createdAt text NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_ebay_drafts_generatedAt ON ebay_export_drafts (generatedAt);
+
+CREATE TABLE IF NOT EXISTS price_alerts (
+  id text PRIMARY KEY NOT NULL,
+  cardId text NOT NULL,
+  userId text NOT NULL,
+  type text NOT NULL,
+  thresholdLow real,
+  thresholdHigh real,
+  isEnabled integer DEFAULT 1,
+  lastCheckedAt text,
+  lastTriggeredAt text,
+  triggerCount integer DEFAULT 0,
+  createdAt text NOT NULL,
+  updatedAt text NOT NULL,
+  FOREIGN KEY (cardId) REFERENCES cards(id) ON UPDATE no action ON DELETE cascade,
+  FOREIGN KEY (userId) REFERENCES users(id) ON UPDATE no action ON DELETE no action
+);
+CREATE INDEX IF NOT EXISTS idx_price_alerts_cardId ON price_alerts (cardId);
+CREATE INDEX IF NOT EXISTS idx_price_alerts_userId ON price_alerts (userId);
+CREATE INDEX IF NOT EXISTS idx_price_alerts_isEnabled ON price_alerts (isEnabled);
+
+CREATE TABLE IF NOT EXISTS price_alert_history (
+  id text PRIMARY KEY NOT NULL,
+  alertId text NOT NULL,
+  cardId text NOT NULL,
+  previousValue real NOT NULL,
+  currentValue real NOT NULL,
+  threshold real NOT NULL,
+  type text NOT NULL,
+  createdAt text NOT NULL,
+  FOREIGN KEY (alertId) REFERENCES price_alerts(id) ON UPDATE no action ON DELETE cascade,
+  FOREIGN KEY (cardId) REFERENCES cards(id) ON UPDATE no action ON DELETE no action
+);
+CREATE INDEX IF NOT EXISTS idx_alert_history_alertId ON price_alert_history (alertId);
+CREATE INDEX IF NOT EXISTS idx_alert_history_cardId ON price_alert_history (cardId);
+CREATE INDEX IF NOT EXISTS idx_alert_history_createdAt ON price_alert_history (createdAt);
 
 `;
 
@@ -1822,6 +1858,160 @@ class Database {
     const [{ synced }] = this.db.select({ synced: count() }).from(cardImageUploads).all();
 
     return { total: totalImages, synced, unsynced: Math.max(0, totalImages - synced) };
+  }
+
+  // ─── Price Alerts ─────────────────────────────────────────────────────────
+
+  public async createPriceAlert(userId: string, input: PriceAlertInput): Promise<PriceAlert> {
+    const id = uuidv4();
+    const now = new Date().toISOString();
+
+    const alert: PriceAlert = {
+      id,
+      cardId: input.cardId,
+      userId,
+      type: input.type,
+      thresholdLow: input.thresholdLow ?? null,
+      thresholdHigh: input.thresholdHigh ?? null,
+      isEnabled: true,
+      lastCheckedAt: null,
+      lastTriggeredAt: null,
+      triggerCount: 0,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    this.db.insert(priceAlerts).values(alert).run();
+    return alert;
+  }
+
+  public async getPriceAlertsByCard(cardId: string): Promise<PriceAlert[]> {
+    return this.db.select().from(priceAlerts)
+      .where(eq(priceAlerts.cardId, cardId))
+      .orderBy(desc(priceAlerts.createdAt))
+      .all() as PriceAlert[];
+  }
+
+  public async getPriceAlertsByUser(userId: string): Promise<PriceAlert[]> {
+    return this.db.select().from(priceAlerts)
+      .where(eq(priceAlerts.userId, userId))
+      .orderBy(desc(priceAlerts.createdAt))
+      .all() as PriceAlert[];
+  }
+
+  public async getPriceAlert(id: string): Promise<PriceAlert | null> {
+    const rows = this.db.select().from(priceAlerts)
+      .where(eq(priceAlerts.id, id))
+      .all() as PriceAlert[];
+    return rows[0] || null;
+  }
+
+  public async updatePriceAlert(id: string, updates: Partial<Pick<PriceAlert, 'type' | 'thresholdLow' | 'thresholdHigh' | 'isEnabled'>>): Promise<PriceAlert | null> {
+    const now = new Date().toISOString();
+    this.db.update(priceAlerts)
+      .set({ ...updates, updatedAt: now })
+      .where(eq(priceAlerts.id, id))
+      .run();
+    return this.getPriceAlert(id);
+  }
+
+  public async deletePriceAlert(id: string): Promise<boolean> {
+    const result = this.db.delete(priceAlerts)
+      .where(eq(priceAlerts.id, id))
+      .run();
+    return result.changes > 0;
+  }
+
+  public async getEnabledAlerts(): Promise<(PriceAlert & { currentValue: number; player: string })[]> {
+    const rows = this.db.select({
+      id: priceAlerts.id,
+      cardId: priceAlerts.cardId,
+      userId: priceAlerts.userId,
+      type: priceAlerts.type,
+      thresholdLow: priceAlerts.thresholdLow,
+      thresholdHigh: priceAlerts.thresholdHigh,
+      isEnabled: priceAlerts.isEnabled,
+      lastCheckedAt: priceAlerts.lastCheckedAt,
+      lastTriggeredAt: priceAlerts.lastTriggeredAt,
+      triggerCount: priceAlerts.triggerCount,
+      createdAt: priceAlerts.createdAt,
+      updatedAt: priceAlerts.updatedAt,
+      currentValue: cards.currentValue,
+      player: cards.player,
+    })
+      .from(priceAlerts)
+      .innerJoin(cards, eq(priceAlerts.cardId, cards.id))
+      .where(eq(priceAlerts.isEnabled, true))
+      .all();
+    return rows as (PriceAlert & { currentValue: number; player: string })[];
+  }
+
+  public async recordAlertTrigger(alertId: string, cardId: string, previousValue: number, currentValue: number, threshold: number, type: 'above' | 'below'): Promise<PriceAlertHistoryEntry> {
+    const id = uuidv4();
+    const now = new Date().toISOString();
+
+    const entry: PriceAlertHistoryEntry = {
+      id,
+      alertId,
+      cardId,
+      previousValue,
+      currentValue,
+      threshold,
+      type,
+      createdAt: now,
+    };
+
+    this.db.insert(priceAlertHistory).values(entry).run();
+
+    // Update the alert's lastTriggeredAt and triggerCount
+    this.db.update(priceAlerts)
+      .set({
+        lastTriggeredAt: now,
+        lastCheckedAt: now,
+        triggerCount: sql`${priceAlerts.triggerCount} + 1`,
+        updatedAt: now,
+      })
+      .where(eq(priceAlerts.id, alertId))
+      .run();
+
+    return entry;
+  }
+
+  public async recordAlertCheck(alertId: string): Promise<void> {
+    const now = new Date().toISOString();
+    this.db.update(priceAlerts)
+      .set({ lastCheckedAt: now, updatedAt: now })
+      .where(eq(priceAlerts.id, alertId))
+      .run();
+  }
+
+  public async getAlertHistory(alertId: string): Promise<PriceAlertHistoryEntry[]> {
+    return this.db.select().from(priceAlertHistory)
+      .where(eq(priceAlertHistory.alertId, alertId))
+      .orderBy(desc(priceAlertHistory.createdAt))
+      .all() as PriceAlertHistoryEntry[];
+  }
+
+  public async getRecentAlertHistory(userId: string, limit: number = 50): Promise<(PriceAlertHistoryEntry & { player: string })[]> {
+    const rows = this.db.select({
+      id: priceAlertHistory.id,
+      alertId: priceAlertHistory.alertId,
+      cardId: priceAlertHistory.cardId,
+      previousValue: priceAlertHistory.previousValue,
+      currentValue: priceAlertHistory.currentValue,
+      threshold: priceAlertHistory.threshold,
+      type: priceAlertHistory.type,
+      createdAt: priceAlertHistory.createdAt,
+      player: cards.player,
+    })
+      .from(priceAlertHistory)
+      .innerJoin(priceAlerts, eq(priceAlertHistory.alertId, priceAlerts.id))
+      .innerJoin(cards, eq(priceAlertHistory.cardId, cards.id))
+      .where(eq(priceAlerts.userId, userId))
+      .orderBy(desc(priceAlertHistory.createdAt))
+      .limit(limit)
+      .all();
+    return rows as (PriceAlertHistoryEntry & { player: string })[];
   }
 
   // ─── Lifecycle ───────────────────────────────────────────────────────────────
