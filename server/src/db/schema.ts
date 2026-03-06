@@ -248,3 +248,39 @@ export const cardValueSnapshots = sqliteTable('card_value_snapshots', {
   index('idx_value_snapshots_snapshotAt').on(table.snapshotAt),
   index('idx_value_snapshots_cardId_snapshotAt').on(table.cardId, table.snapshotAt),
 ]);
+
+// ─── Price Alerts ─────────────────────────────────────────────────────────
+
+export const priceAlerts = sqliteTable('price_alerts', {
+  id: text('id').primaryKey(),
+  cardId: text('cardId').notNull().references(() => cards.id, { onDelete: 'cascade' }),
+  userId: text('userId').notNull().references(() => users.id),
+  type: text('type').notNull().$type<'above' | 'below'>(),
+  thresholdLow: real('thresholdLow'),
+  thresholdHigh: real('thresholdHigh'),
+  isEnabled: integer('isEnabled', { mode: 'boolean' }).default(true),
+  lastCheckedAt: text('lastCheckedAt'),
+  lastTriggeredAt: text('lastTriggeredAt'),
+  triggerCount: integer('triggerCount').default(0),
+  createdAt: text('createdAt').notNull(),
+  updatedAt: text('updatedAt').notNull(),
+}, (table) => [
+  index('idx_price_alerts_cardId').on(table.cardId),
+  index('idx_price_alerts_userId').on(table.userId),
+  index('idx_price_alerts_isEnabled').on(table.isEnabled),
+]);
+
+export const priceAlertHistory = sqliteTable('price_alert_history', {
+  id: text('id').primaryKey(),
+  alertId: text('alertId').notNull().references(() => priceAlerts.id, { onDelete: 'cascade' }),
+  cardId: text('cardId').notNull().references(() => cards.id),
+  previousValue: real('previousValue').notNull(),
+  currentValue: real('currentValue').notNull(),
+  threshold: real('threshold').notNull(),
+  type: text('type').notNull().$type<'above' | 'below'>(),
+  createdAt: text('createdAt').notNull(),
+}, (table) => [
+  index('idx_alert_history_alertId').on(table.alertId),
+  index('idx_alert_history_cardId').on(table.cardId),
+  index('idx_alert_history_createdAt').on(table.createdAt),
+]);

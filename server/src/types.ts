@@ -482,6 +482,43 @@ export interface GradingStats {
   avgGrade: number | null;
 }
 
+// ─── Price Alerts ────────────────────────────────────────────────────────────
+
+export type PriceAlertType = 'above' | 'below';
+
+export interface PriceAlert {
+  id: string;
+  cardId: string;
+  userId: string;
+  type: PriceAlertType;
+  thresholdLow: number | null;
+  thresholdHigh: number | null;
+  isEnabled: boolean;
+  lastCheckedAt: string | null;
+  lastTriggeredAt: string | null;
+  triggerCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PriceAlertInput {
+  cardId: string;
+  type: PriceAlertType;
+  thresholdLow?: number;
+  thresholdHigh?: number;
+}
+
+export interface PriceAlertHistoryEntry {
+  id: string;
+  alertId: string;
+  cardId: string;
+  previousValue: number;
+  currentValue: number;
+  threshold: number;
+  type: PriceAlertType;
+  createdAt: string;
+}
+
 // ─── Audit Log ──────────────────────────────────────────────────────────────
 
 export interface AuditLogEntry {
@@ -566,6 +603,9 @@ export interface AuditDetailsMap {
   'grading.delete': { submissionId: string; cardId: string };
   'storage.update': { cardId: string; location: StorageLocation };
   'storage.bulk_assign': { cardIds: string[]; location: StorageLocation };
+  'price_alert.create': { cardId: string; type: string };
+  'price_alert.update': Record<string, unknown>;
+  'price_alert.delete': { cardId: string };
 }
 
 export type AuditAction = keyof AuditDetailsMap;
