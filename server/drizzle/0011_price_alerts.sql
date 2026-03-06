@@ -14,10 +14,13 @@ CREATE TABLE IF NOT EXISTS price_alerts (
   FOREIGN KEY (cardId) REFERENCES cards(id) ON UPDATE no action ON DELETE cascade,
   FOREIGN KEY (userId) REFERENCES users(id) ON UPDATE no action ON DELETE no action
 );
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_price_alerts_cardId ON price_alerts (cardId);
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_price_alerts_userId ON price_alerts (userId);
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_price_alerts_isEnabled ON price_alerts (isEnabled);
-
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS price_alert_history (
   id text PRIMARY KEY NOT NULL,
   alertId text NOT NULL,
@@ -30,6 +33,9 @@ CREATE TABLE IF NOT EXISTS price_alert_history (
   FOREIGN KEY (alertId) REFERENCES price_alerts(id) ON UPDATE no action ON DELETE cascade,
   FOREIGN KEY (cardId) REFERENCES cards(id) ON UPDATE no action ON DELETE no action
 );
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_alert_history_alertId ON price_alert_history (alertId);
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_alert_history_cardId ON price_alert_history (cardId);
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_alert_history_createdAt ON price_alert_history (createdAt);
