@@ -26,6 +26,8 @@ import { createAuditLogRoutes } from '../../routes/auditLogs';
 import { createAdminUserRoutes } from '../../routes/adminUsers';
 import { createGradingSubmissionRoutes } from '../../routes/gradingSubmissions';
 import { createStorageRoutes } from '../../routes/storage';
+import { createPriceAlertRoutes } from '../../routes/priceAlerts';
+import PriceAlertService from '../../services/priceAlertService';
 import { Config } from '../../config';
 import path from 'path';
 import fs from 'fs';
@@ -115,6 +117,8 @@ export async function createTestApp(): Promise<TestContext> {
   app.use('/api/admin/users', createAdminUserRoutes(db, auditService));
   app.use('/api/grading-submissions', createGradingSubmissionRoutes(db, auditService));
   app.use('/api/storage', createStorageRoutes(db, auditService));
+  const priceAlertService = new PriceAlertService(db, eventService);
+  app.use('/api/price-alerts', createPriceAlertRoutes(db, auditService, priceAlertService));
 
   app.use(errorHandler);
 
