@@ -32,7 +32,7 @@ export interface EnhancedCard extends Card {
   
   // Inventory Management
   quantity?: number; // Default 1
-  storageLocation?: string; // e.g., "Safe", "Display Case A"
+  storageLocationLabel?: string; // e.g., "Safe", "Display Case A"
   storageType?: 'raw' | 'toploader' | 'one-touch' | 'slab' | 'binder';
   
   // Market Data

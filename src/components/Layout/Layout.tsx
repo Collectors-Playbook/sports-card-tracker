@@ -5,7 +5,7 @@ import { exportCardsAsJSON, exportCardsAsCSV } from '../../utils/exportUtils';
 import { exportCardsToPDF } from '../../utils/pdfExport';
 import './Layout.css';
 
-type View = 'dashboard' | 'inventory' | 'add-card' | 'holding-pen' | 'processed' | 'admin' | 'profile' | 'reports' | 'ebay' | 'backup' | 'users' | 'collections' | 'about' | 'audit-log' | 'grading' | 'grading-roi' | 'heatmap';
+type View = 'dashboard' | 'inventory' | 'add-card' | 'holding-pen' | 'processed' | 'admin' | 'profile' | 'reports' | 'ebay' | 'backup' | 'users' | 'collections' | 'about' | 'audit-log' | 'grading' | 'grading-roi' | 'heatmap' | 'storage';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -257,6 +257,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, onViewChange }) 
             items={[
               { view: 'inventory', label: 'Inventory' },
               { view: 'collections', label: 'Collections' },
+              { view: 'storage', label: 'Storage' },
               { view: 'add-card', label: 'Add Card' },
             ]}
             currentView={currentView}

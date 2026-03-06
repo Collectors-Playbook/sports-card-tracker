@@ -6,6 +6,16 @@ export interface User {
   profilePhoto?: string | null;
 }
 
+export interface StorageLocation {
+  room?: string;
+  shelf?: string;
+  box?: string;
+  row?: string;
+  slot?: string;
+  method?: string;
+  notes?: string;
+}
+
 export type CollectionType = 'PC' | 'Inventory' | 'Pending';
 
 export const COLLECTION_TYPES: { value: CollectionType; label: string }[] = [
@@ -41,6 +51,7 @@ export interface Card {
   sellPrice?: number;
   sellDate?: Date;
   currentValue: number;
+  storageLocation?: StorageLocation | null;
   images: string[];
   notes: string;
   createdAt: Date;

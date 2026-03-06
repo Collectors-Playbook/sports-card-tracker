@@ -22,13 +22,14 @@ import ProcessedGallery from './components/ProcessedGallery/ProcessedGallery';
 import GradingTracker from './components/GradingTracker/GradingTracker';
 import { GradingRoiBatch } from './components/GradingRoiBatch/GradingRoiBatch';
 import PortfolioHeatmap from './components/PortfolioHeatmap/PortfolioHeatmap';
+import StorageManager from './components/StorageManager/StorageManager';
 import ErrorBoundary from './components/ErrorBoundary/ErrorBoundary';
 import { Card } from './types';
 import { saveEnhancedCard, mergeCardWithEnhanced } from './utils/enhancedCardIntegration';
 import { logInfo } from './utils/logger';
 import './App.css';
 
-type View = 'dashboard' | 'inventory' | 'add-card' | 'holding-pen' | 'processed' | 'admin' | 'profile' | 'reports' | 'ebay' | 'backup' | 'users' | 'collections' | 'about' | 'audit-log' | 'grading' | 'grading-roi' | 'heatmap';
+type View = 'dashboard' | 'inventory' | 'add-card' | 'holding-pen' | 'processed' | 'admin' | 'profile' | 'reports' | 'ebay' | 'backup' | 'users' | 'collections' | 'about' | 'audit-log' | 'grading' | 'grading-roi' | 'heatmap' | 'storage';
 type FormType = 'classic' | 'enhanced';
 
 const AppContent: React.FC = () => {
@@ -223,6 +224,8 @@ const AppContent: React.FC = () => {
         return <GradingRoiBatch />;
       case 'heatmap':
         return <PortfolioHeatmap onCardSelect={handleCardSelect} />;
+      case 'storage':
+        return <StorageManager />;
       case 'about':
         return <About />;
       default:
